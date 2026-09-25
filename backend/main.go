@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
+	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
 	"github.com/shiraku/vinaire/backend/internal/api"
 	"github.com/shiraku/vinaire/backend/internal/config"
@@ -51,15 +52,29 @@ func main() {
 		}
 	}
 
-	workloadsHandler := api.NewHandler(clientset, metricsClientset)
+	var gatewayClientset *gatewayclientset.Clientset
+	if restConfig != nil {
+		gatewayClientset, err = gatewayclientset.NewForConfig(restConfig)
+		if err != nil {
+			// Non-fatal: the Network page's Gateway API tab just reports
+			// "unavailable" without it. Whether the CRDs themselves are
+			// installed is checked per-request (see GatewayRoutes).
+			slog.Warn("gateway API client unavailable", "error", err)
+			gatewayClientset = nil
+		}
+	}
+
+	workloadsHandler := api.NewHandler(clientset, metricsClientset, gatewayClientset)
 
 	hub := stream.NewHub()
 	streamHandler := unavailableWSHandler
 	logsHandler := unavailableWSHandler
+	execHandler := unavailableWSHandler
 	if clientset != nil {
 		go stream.StartWorkloadInformers(ctx, clientset, hub)
 		streamHandler = stream.ServeWS(hub, cfg.CORSAllowedOrigins)
 		logsHandler = stream.ServeLogs(clientset, cfg.CORSAllowedOrigins)
+		execHandler = stream.ServeExec(clientset, restConfig, cfg.CORSAllowedOrigins)
 	}
 
 	r := chi.NewRouter()
@@ -83,13 +98,17 @@ func main() {
 	r.Get("/api/v1/stream/workloads", streamHandler)
 	r.Get("/api/v1/pods/{namespace}/{name}", workloadsHandler.PodDetail)
 	r.Get("/api/v1/pods/{namespace}/{name}/logs", logsHandler)
+	r.Get("/api/v1/pods/{namespace}/{name}/exec", execHandler)
+	r.Get("/api/v1/configmaps", workloadsHandler.ConfigMaps)
+	r.Get("/api/v1/secrets", workloadsHandler.Secrets)
+	r.Post("/api/v1/secrets/{namespace}/{name}/reveal", workloadsHandler.RevealSecretKey)
+	r.Get("/api/v1/topology", workloadsHandler.Topology)
+	r.Get("/api/v1/ingresses", workloadsHandler.Ingresses)
+	r.Get("/api/v1/gateway-routes", workloadsHandler.GatewayRoutes)
 
 	// TODO(vinaire): read-only REST endpoints, backed by internal/k8s
 	// (later roadmap phases):
 	//   GET /api/v1/deployments/{namespace}/{name}
-	//   GET /api/v1/configmaps?namespace=
-	//   GET /api/v1/secrets?namespace=        (metadata only)
-	//   GET /api/v1/ingresses?namespace=
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,

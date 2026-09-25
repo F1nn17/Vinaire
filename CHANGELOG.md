@@ -78,6 +78,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   k3d pod emitting timestamped ticks every 2s: compared side-by-side with
   `kubectl logs -f`, confirmed Pause genuinely stops new lines and Follow
   resumes them, zero console errors.
+- **Roadmap Phase 5 (Terminal/exec):** new
+  `GET /api/v1/pods/{namespace}/{name}/exec` — a WebSocket bridge
+  (`internal/stream.ServeExec`) to a real TTY shell inside the container via
+  `remotecommand.NewSPDYExecutor`, with small adapters translating between
+  the WebSocket and the exec stream's stdin/stdout/stderr/resize. Frontend's
+  `TerminalTab` replaces the old scripted `TerminalPane` demo with a real
+  `xterm.js` terminal (`@xterm/xterm` + `@xterm/addon-fit`), forwarding
+  keystrokes and resize events over the socket. Verified end-to-end against
+  a real k3d pod: `whoami` and `ls /` in the UI matched `kubectl exec`
+  byte-for-byte, and a distroless/no-shell pod
+  (`registry.k8s.io/pause:3.9`) surfaces a clear "no such file or directory"
+  error in the terminal instead of hanging. Shipped without an auth gate —
+  deliberate, accepted for local-dev-only use (see ⚠ note in ROADMAP.md);
+  Phase 10 needs to close this properly before any non-local use.
+- **Roadmap Phase 6 (ConfigMaps & Secrets):** new
+  `GET /api/v1/configmaps?namespace=` (values included — ConfigMap data
+  isn't sensitive) and `GET /api/v1/secrets?namespace=` (metadata + key
+  *names* only, values never included, not even masked) endpoints, plus
+  `POST /api/v1/secrets/{namespace}/{name}/reveal` — the only path that
+  ever returns a decoded secret value, audit-logged on every call
+  (namespace/secret/key/remote address — never the value) with
+  `Cache-Control: no-store`. Frontend's ConfigMaps/Secrets pages swap mock
+  data for real fetches; Secrets' "Show" button now calls the reveal
+  endpoint per key with a loading state, keeping decoded values in local
+  component state only (never the SWR cache) so switching secrets re-masks
+  them. Both pages gained a namespace filter. Verified end-to-end against a
+  real k3d cluster: confirmed via the raw network response body that
+  `GET /api/v1/secrets` contains no plaintext anywhere (checked against
+  real cluster secrets too — TLS keys, Helm release data, node-password
+  hash — not just the test one), watched the audit log line appear the
+  instant "Show" was clicked, and confirmed the revealed value matches what
+  was actually stored.
+- **Roadmap Phase 7 (Topology graph):** new `GET /api/v1/topology?namespace=`
+  computes the whole graph server-side from owner references and label
+  selectors — Ingress→Service (backend service name match), Service→Pod and
+  Deployment→Pod (selector match, skipping the ReplicaSet hop),
+  Deployment→ConfigMap/Secret (scanned from the pod template's envFrom/
+  env/volumes). ConfigMap/Secret nodes get an "In use"/"Unused" status from
+  a post-pass over the collected edges. Frontend's `TopologyNode`/
+  `TopologyData` types changed from a fixed 7-node shape to a real
+  `nodes[]`/`edges[]` graph; the Topology page got a full rewrite with a
+  manual layered-column layout (one row per node kind, empty rows
+  skipped, nodes spread evenly within a row) instead of 7 hardcoded pixel
+  positions, plus a namespace input replacing the decorative "namespace:
+  auth" button. Verified end-to-end against a real k3d namespace with a
+  full Ingress→Service→Deployment(2 pods)→ConfigMap+Secret chain — traefik
+  picked up the Ingress and reported it Active, and the auto-created
+  per-namespace `kube-root-ca.crt` ConfigMap correctly showed "Unused"
+  (nothing references it) right next to the real ConfigMap/Secret showing
+  "In use" — then switched to `kube-system` and confirmed a completely
+  different shape rendered correctly (no Ingress row at all, 3 services, 4
+  deployments, 7 pods), zero console errors either time.
+- **Roadmap Phase 8 (Ingress / Gateway API):** new
+  `GET /api/v1/ingresses?namespace=` with *real* TLS validity checking —
+  fetches each referenced Secret, parses the actual `tls.crt` certificate,
+  and reports "Valid" / "Expiring in Nd" / "Expired" from its real
+  `NotAfter`, not just "a tls block exists". New
+  `GET /api/v1/gateway-routes?namespace=` via `sigs.k8s.io/gateway-api`'s
+  typed client, returning `{ available: false, reason }` instead of a 500
+  or empty list when the CRDs aren't installed (detected via
+  `apierrors.IsNotFound` on the `List()` call). Frontend's `NetworkPage`
+  swaps mock data for real fetches on both tabs, with a namespace filter
+  and a dedicated "Gateway API isn't available" panel for the unavailable
+  case. Verified end-to-end: two self-signed certs (365-day and 5-day) came
+  back "Valid" and "Expiring in 4d" respectively; and — since this cluster
+  turned out to already have Gateway API CRDs installed — spun up a second,
+  genuinely vanilla throwaway k3d cluster specifically to verify the
+  "not installed" path for real, then tore it down.
 
 ### Changed
 
@@ -85,3 +153,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plan organized as vertical slices (one working end-to-end feature per
   phase, each with a concrete Definition of done, dependency list, and
   complexity/risk notes) instead of a horizontal frontend/backend split.
+- **Architecture pivot (project owner decision):** ROADMAP.md's Phase 9
+  (Restart/Delete/Rollback) no longer goes through a GitOps-PR flow —
+  it's now direct `client-go` writes (annotation/template patches and a
+  plain `Delete()`) against the live cluster, scoped to exactly those
+  three Deployment actions. AGENTS.md's core rule was updated to match:
+  the UI is still read-only by default, but these three actions are now
+  named as the explicit, audited exception. Not yet implemented — this is
+  a planning/rule change only.

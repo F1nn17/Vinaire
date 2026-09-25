@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
+	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 )
@@ -32,16 +33,18 @@ type WorkloadRow struct {
 
 // Handler holds the dependencies HTTP handlers need. Clientset may be nil
 // if the backend booted without a reachable cluster (see main.go) — every
-// handler must check requireClientset before using it. MetricsClientset may
-// be nil even when Clientset isn't (no metrics-server installed) — handlers
-// using it must degrade gracefully rather than fail the whole request.
+// handler must check requireClientset before using it. MetricsClientset and
+// GatewayClientset may be nil even when Clientset isn't (no metrics-server /
+// no Gateway API CRDs) — handlers using them must degrade gracefully
+// rather than fail the whole request.
 type Handler struct {
 	Clientset        *kubernetes.Clientset
 	MetricsClientset *metricsclientset.Clientset
+	GatewayClientset *gatewayclientset.Clientset
 }
 
-func NewHandler(clientset *kubernetes.Clientset, metricsClientset *metricsclientset.Clientset) *Handler {
-	return &Handler{Clientset: clientset, MetricsClientset: metricsClientset}
+func NewHandler(clientset *kubernetes.Clientset, metricsClientset *metricsclientset.Clientset, gatewayClientset *gatewayclientset.Clientset) *Handler {
+	return &Handler{Clientset: clientset, MetricsClientset: metricsClientset, GatewayClientset: gatewayClientset}
 }
 
 func (h *Handler) requireClientset(w http.ResponseWriter) bool {

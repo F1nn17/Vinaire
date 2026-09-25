@@ -8,8 +8,8 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { EventRow } from "@/components/ui/EventRow";
-import { TerminalPane } from "@/components/ui/TerminalPane";
 import { LogsTab } from "./LogsTab";
+import { TerminalTab } from "./TerminalTab";
 
 type Tab = "overview" | "logs" | "terminal" | "events" | "yaml";
 
@@ -166,13 +166,10 @@ export default function PodDetailPage() {
       )}
 
       {tab === "terminal" && (
-        <TerminalPane
-          connectedTo={pod.name}
-          container={pod.containers[0]?.name ?? "—"}
-          seedLines={[
-            { text: "$ ls /app", color: "var(--ok)" },
-            { text: "bin  config  logs  node_modules" },
-          ]}
+        <TerminalTab
+          namespace={pod.namespace}
+          name={pod.name}
+          containers={pod.containers}
         />
       )}
 

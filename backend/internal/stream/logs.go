@@ -12,8 +12,6 @@ import (
 	"github.com/gorilla/websocket"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/shiraku/vinaire/backend/internal/k8s"
 )
 
 // logLine matches the frontend's LogLine type (frontend/src/lib/types.ts).
@@ -39,13 +37,7 @@ func ServeLogs(clientset *kubernetes.Clientset, allowedOrigins []string) http.Ha
 	return func(w http.ResponseWriter, r *http.Request) {
 		namespace := chi.URLParam(r, "namespace")
 		name := chi.URLParam(r, "name")
-		container := r.URL.Query().Get("container")
-
-		if container == "" {
-			if pod, err := k8s.GetPod(r.Context(), clientset, namespace, name); err == nil && len(pod.Spec.Containers) > 0 {
-				container = pod.Spec.Containers[0].Name
-			}
-		}
+		container := resolveContainer(r.Context(), clientset, namespace, name, r.URL.Query().Get("container"))
 
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {

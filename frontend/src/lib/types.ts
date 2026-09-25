@@ -98,10 +98,12 @@ export type ConfigMapDetail = {
   keys: ConfigMapKey[];
 };
 
+// Note: no `value` field — the list/get endpoints never return secret
+// values (see AGENTS.md's read-only/secrets rule). Use revealSecretKey()
+// (lib/api/secrets.ts) to fetch one key's decoded value on demand.
 export type SecretKey = {
   id: string;
   label: string;
-  value: string;
 };
 
 export type SecretDetail = {
@@ -130,6 +132,13 @@ export type GatewayRow = {
   statusColor: StatusColor;
 };
 
+// Gateway API CRDs aren't installed on every cluster (stock k3s/k3d don't
+// ship them) — the backend reports that explicitly instead of an empty
+// list or a 500, so the UI can show a clear "not installed" state.
+export type GatewayResourcesResult =
+  | { available: true; rows: GatewayRow[] }
+  | { available: false; reason: string };
+
 export type StatCardData = {
   title: string;
   dotColor: StatusColor;
@@ -150,21 +159,33 @@ export type DashboardData = {
   namespaces: NamespacePodCount[];
 };
 
-export type TopologyNodeId =
-  "ingress" | "svc" | "deploy" | "secret" | "cm" | "pod1" | "pod2";
+// Real graph shape (Roadmap Phase 7) — node count and edges vary per
+// namespace, computed server-side from owner references and selectors.
+export type TopologyNodeKind =
+  | "ingress"
+  | "service"
+  | "deployment"
+  | "pod"
+  | "configmap"
+  | "secret";
 
 export type TopologyNode = {
-  id: TopologyNodeId;
-  kind: string;
+  id: string;
+  kind: TopologyNodeKind;
   name: string;
   namespace: string;
   statusText: string;
   statusColor: StatusColor;
   extra: [string, string][];
-  warn?: boolean;
+};
+
+export type TopologyEdge = {
+  from: string;
+  to: string;
 };
 
 export type TopologyData = {
   namespace: string;
-  nodes: Record<TopologyNodeId, TopologyNode>;
+  nodes: TopologyNode[];
+  edges: TopologyEdge[];
 };

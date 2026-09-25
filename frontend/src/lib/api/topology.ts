@@ -1,9 +1,10 @@
-import { topologyMock } from "@/lib/mock/topology";
 import type { TopologyData } from "@/lib/types";
-import { simulatedDelay } from "./config";
+import { apiFetch } from "./http";
 
-// TODO(vinaire): replace with `fetch(`${API_BASE}/api/v1/topology?namespace=`)`.
-export async function getTopology(): Promise<TopologyData> {
-  await simulatedDelay();
-  return topologyMock;
+// Real endpoint (Roadmap Phase 7) — the backend computes the whole graph
+// (nodes + edges) server-side; this just fetches it for one namespace.
+export function getTopology(namespace: string): Promise<TopologyData> {
+  return apiFetch<TopologyData>(
+    `/api/v1/topology?namespace=${encodeURIComponent(namespace)}`,
+  );
 }

@@ -86,9 +86,17 @@ const gatewayColumns: DataTableColumn<GatewayRow>[] = [
 
 export default function NetworkPage() {
   const [tab, setTab] = useState<Tab>("ingress");
-  const { data: ingressRows, isLoading: ingressLoading } = useIngresses();
-  const { data: gatewayRows, isLoading: gatewayLoading } =
-    useGatewayResources();
+  const [namespace, setNamespace] = useState("");
+  const {
+    data: ingressRows,
+    isLoading: ingressLoading,
+    error: ingressError,
+  } = useIngresses(namespace);
+  const {
+    data: gatewayResult,
+    isLoading: gatewayLoading,
+    error: gatewayError,
+  } = useGatewayResources(namespace);
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
@@ -103,27 +111,54 @@ export default function NetworkPage() {
         </button>
       </div>
 
-      <PillTabs items={tabs} active={tab} onChange={setTab} />
+      <div className="flex items-center justify-between gap-3">
+        <PillTabs items={tabs} active={tab} onChange={setTab} />
+
+        <label className="flex items-center gap-2">
+          <span className="sr-only">Filter by namespace</span>
+          <input
+            type="text"
+            value={namespace}
+            onChange={(e) => setNamespace(e.target.value)}
+            placeholder="All namespaces"
+            className="rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint"
+          />
+        </label>
+      </div>
 
       {tab === "ingress" &&
-        (ingressLoading || !ingressRows ? (
+        (ingressError ? (
+          <div className="text-sm text-err">
+            Failed to load Ingresses: {ingressError.message}
+          </div>
+        ) : ingressLoading || !ingressRows ? (
           <div className="text-sm text-text-muted">Loading…</div>
         ) : (
           <DataTable
             columns={ingressColumns}
             rows={ingressRows}
-            rowKey={(r) => r.name}
+            rowKey={(r) => `${r.namespace}/${r.name}`}
+            emptyLabel="No Ingresses found."
           />
         ))}
 
       {tab === "gateway" &&
-        (gatewayLoading || !gatewayRows ? (
+        (gatewayError ? (
+          <div className="text-sm text-err">
+            Failed to load Gateway API resources: {gatewayError.message}
+          </div>
+        ) : gatewayLoading || !gatewayResult ? (
           <div className="text-sm text-text-muted">Loading…</div>
+        ) : !gatewayResult.available ? (
+          <div className="rounded-[10px] border border-border bg-surface p-5 text-sm text-text-muted">
+            Gateway API isn&rsquo;t available on this cluster: {gatewayResult.reason}
+          </div>
         ) : (
           <DataTable
             columns={gatewayColumns}
-            rows={gatewayRows}
-            rowKey={(r) => r.name}
+            rows={gatewayResult.rows}
+            rowKey={(r) => `${r.namespace}/${r.kind}/${r.name}`}
+            emptyLabel="No Gateway API resources found."
           />
         ))}
     </div>

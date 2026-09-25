@@ -1,15 +1,18 @@
-import { gatewayMock, ingressMock } from "@/lib/mock/network";
-import type { GatewayRow, IngressRow } from "@/lib/types";
-import { simulatedDelay } from "./config";
+import type { GatewayResourcesResult, IngressRow } from "@/lib/types";
+import { apiFetch } from "./http";
 
-// TODO(vinaire): replace with `fetch(`${API_BASE}/api/v1/ingresses`)`.
-export async function getIngresses(): Promise<IngressRow[]> {
-  await simulatedDelay();
-  return ingressMock;
+// Real endpoint (Roadmap Phase 8).
+export function getIngresses(namespace = ""): Promise<IngressRow[]> {
+  const query = namespace ? `?namespace=${encodeURIComponent(namespace)}` : "";
+  return apiFetch<IngressRow[]>(`/api/v1/ingresses${query}`);
 }
 
-// TODO(vinaire): replace with `fetch(`${API_BASE}/api/v1/gateway-routes`)`.
-export async function getGatewayResources(): Promise<GatewayRow[]> {
-  await simulatedDelay();
-  return gatewayMock;
+// Real endpoint (Roadmap Phase 8) — reports `{ available: false, reason }`
+// instead of an empty list or an error when Gateway API CRDs aren't
+// installed on the target cluster (stock k3s/k3d don't ship them).
+export function getGatewayResources(
+  namespace = "",
+): Promise<GatewayResourcesResult> {
+  const query = namespace ? `?namespace=${encodeURIComponent(namespace)}` : "";
+  return apiFetch<GatewayResourcesResult>(`/api/v1/gateway-routes${query}`);
 }
