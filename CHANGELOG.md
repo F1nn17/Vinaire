@@ -50,6 +50,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   real k3d cluster: scaled a test Deployment up/down live and watched the
   Ready column and Pods table update within ~1s with zero page reloads,
   including catching a newly created pod mid-"Pending".
+- **Roadmap Phase 3 (Pod detail: Overview + Events):** new
+  `GET /api/v1/pods/{namespace}/{name}` returns real metadata, labels,
+  per-container status, and CPU/memory usage — metrics-server was already
+  installed on the target k3d cluster, so real `k8s.io/metrics` usage is
+  wired directly (degrades to `"—"` if a cluster has no metrics-server,
+  rather than failing the request). Real pod events now come from
+  `clientset.CoreV1().Events()` with an `involvedObject` field selector,
+  newest first. The YAML tab is also real (free once the pod object is
+  fetched, via `sigs.k8s.io/yaml`); Logs/Terminal stay on mock/empty data
+  until Phases 4/5. `NewClientset` now also returns the `*rest.Config` it
+  built, so `internal/api` can construct the metrics client against the
+  same cluster without re-resolving kubeconfig. Verified end-to-end against
+  a real k3d pod with resource limits, including confirming non-ASCII
+  characters (event metadata's "·" separator) render correctly end-to-end.
 
 ### Changed
 

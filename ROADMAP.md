@@ -251,9 +251,21 @@ tab (just the one open WS connection).
 
 ---
 
-## Phase 3 — Pod detail: Overview + Events
+## Phase 3 — Pod detail: Overview + Events ✅ done
 
 **Goal:** clicking a real pod shows its real metadata and real events.
+
+> **Outcome note:** `kubectl top pods` worked out of the box on this k3d
+> cluster (metrics-server was already installed) — wired the real
+> `k8s.io/metrics` client directly instead of shipping the
+> always-unavailable stub first. `Handler.MetricsClientset` can still be
+> `nil` (no metrics-server) and every usage call degrades to `"—"` rather
+> than failing the request, so the graceful-degradation path described below
+> is implemented, just not the default on this particular cluster. YAML also
+> turned out to be effectively free once the real `corev1.Pod` was already
+> in hand (via `sigs.k8s.io/yaml`, already an indirect dependency), so the
+> YAML tab is real too, ahead of schedule — Logs/Terminal stay mock-only
+> until Phases 4/5.
 
 **Backend**
 - `GET /api/v1/pods/{namespace}/{name}` — `clientset.CoreV1().Pods(ns).Get()`,

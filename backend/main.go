@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/shiraku/vinaire/backend/internal/api"
 	"github.com/shiraku/vinaire/backend/internal/config"
@@ -31,7 +32,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	clientset, err := k8s.NewClientset(cfg.KubeconfigPath)
+	clientset, restConfig, err := k8s.NewClientset(cfg.KubeconfigPath)
 	if err != nil {
 		// Non-fatal: the server can still boot (e.g. /healthz) without a
 		// reachable cluster during local frontend development.
@@ -39,7 +40,18 @@ func main() {
 	} else {
 		slog.Info("kubernetes client initialized")
 	}
-	workloadsHandler := api.NewHandler(clientset)
+
+	var metricsClientset *metricsclientset.Clientset
+	if restConfig != nil {
+		metricsClientset, err = metricsclientset.NewForConfig(restConfig)
+		if err != nil {
+			// Non-fatal: pod CPU/memory usage just degrades to "—" without it.
+			slog.Warn("metrics client unavailable", "error", err)
+			metricsClientset = nil
+		}
+	}
+
+	workloadsHandler := api.NewHandler(clientset, metricsClientset)
 
 	hub := stream.NewHub()
 	streamHandler := unavailableWSHandler
@@ -67,9 +79,11 @@ func main() {
 	r.Get("/api/v1/daemonsets", workloadsHandler.DaemonSets)
 	r.Get("/api/v1/jobs", workloadsHandler.Jobs)
 	r.Get("/api/v1/stream/workloads", streamHandler)
+	r.Get("/api/v1/pods/{namespace}/{name}", workloadsHandler.PodDetail)
 
 	// TODO(vinaire): read-only REST endpoints, backed by internal/k8s
 	// (later roadmap phases):
+	//   GET /api/v1/deployments/{namespace}/{name}
 	//   GET /api/v1/configmaps?namespace=
 	//   GET /api/v1/secrets?namespace=        (metadata only)
 	//   GET /api/v1/ingresses?namespace=

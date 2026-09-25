@@ -25,8 +25,14 @@ export default function PodDetailPage() {
   const { namespace, name } = useParams<{ namespace: string; name: string }>();
   const podNamespace = decodeURIComponent(namespace);
   const podName = decodeURIComponent(name);
-  const { data: pod, isLoading } = usePod(podNamespace, podName);
+  const { data: pod, isLoading, error } = usePod(podNamespace, podName);
   const [tab, setTab] = useState<Tab>("overview");
+
+  if (error) {
+    return (
+      <div className="p-8 text-sm text-err">Failed to load pod: {error.message}</div>
+    );
+  }
 
   if (isLoading) {
     return <div className="p-8 text-sm text-text-muted">Loading…</div>;
@@ -35,7 +41,7 @@ export default function PodDetailPage() {
   if (!pod) {
     return (
       <div className="p-8 text-sm text-text-muted">
-        Pod &ldquo;{podNamespace}/{podName}&rdquo; not found in mock data.
+        Pod &ldquo;{podNamespace}/{podName}&rdquo; not found.
       </div>
     );
   }

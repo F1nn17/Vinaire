@@ -18,29 +18,33 @@ import (
 // back to kubeconfigPath, or ~/.kube/config if kubeconfigPath is empty.
 // The caller (main, via internal/config) owns reading KUBECONFIG from the
 // environment — this function just takes the resolved path.
-func NewClientset(kubeconfigPath string) (*kubernetes.Clientset, error) {
+//
+// The *rest.Config is also returned so callers can build other typed
+// clients against the same cluster (e.g. the metrics-server client in
+// internal/api) without re-resolving kubeconfig/in-cluster config again.
+func NewClientset(kubeconfigPath string) (*kubernetes.Clientset, *rest.Config, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		if kubeconfigPath == "" {
 			home, herr := os.UserHomeDir()
 			if herr != nil {
-				return nil, fmt.Errorf("resolve home dir: %w", herr)
+				return nil, nil, fmt.Errorf("resolve home dir: %w", herr)
 			}
 			kubeconfigPath = filepath.Join(home, ".kube", "config")
 		}
 
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 		if err != nil {
-			return nil, fmt.Errorf("load kubeconfig from %s: %w", kubeconfigPath, err)
+			return nil, nil, fmt.Errorf("load kubeconfig from %s: %w", kubeconfigPath, err)
 		}
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("create clientset: %w", err)
+		return nil, nil, fmt.Errorf("create clientset: %w", err)
 	}
 
-	return clientset, nil
+	return clientset, config, nil
 }
 
 // Pods/Deployments/StatefulSets/DaemonSets/Jobs listers live in
