@@ -1,0 +1,34 @@
+# --- Go (backend) ---
+/backend/bin/
+/backend/vendor/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+
+# --- Node / Next.js (root orchestrator + frontend) ---
+/node_modules/
+/frontend/node_modules/
+/frontend/.next/
+/frontend/out/
+/frontend/build/
+/frontend/.env
+/frontend/.env.*
+!/frontend/.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# --- IDE ---
+.vscode/
+.idea/
+
+# --- OS ---
+.DS_Store
+Thumbs.db

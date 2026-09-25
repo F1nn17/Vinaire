@@ -1,0 +1,15 @@
+{
+  "name": "vinaire",
+  "private": true,
+  "description": "Root orchestrator scripts for the Vinaire monorepo (frontend + backend). See README.md.",
+  "scripts": {
+    "dev": "concurrently -k -n BACKEND,FRONTEND -c blue,magenta \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "cd backend && go run .",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:backend": "cd backend && go build ./...",
+    "build:frontend": "cd frontend && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

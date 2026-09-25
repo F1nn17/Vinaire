@@ -1,0 +1,244 @@
+type IconProps = {
+  size?: number;
+  className?: string;
+};
+
+const base = {
+  fill: "none",
+  stroke: "currentColor",
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+
+export function GrapeLogo({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.6}
+      className={className}
+    >
+      <path d="M12 2v3.2" />
+      <circle cx="12" cy="7.3" r="2" />
+      <circle cx="9" cy="10.6" r="2" />
+      <circle cx="15" cy="10.6" r="2" />
+      <circle cx="6.3" cy="14" r="2" />
+      <circle cx="12" cy="14" r="2" />
+      <circle cx="17.7" cy="14" r="2" />
+      <circle cx="9" cy="17.4" r="2" />
+      <circle cx="15" cy="17.4" r="2" />
+      <circle cx="12" cy="20.6" r="2" />
+    </svg>
+  );
+}
+
+export function GridIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  );
+}
+
+export function TopologyIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <circle cx="5" cy="6" r="2.4" />
+      <circle cx="19" cy="6" r="2.4" />
+      <circle cx="12" cy="18" r="2.4" />
+      <path d="M6.9 7.6L10.2 16.4M17.1 7.6L13.8 16.4M7.4 6H16.6" />
+    </svg>
+  );
+}
+
+export function LayersIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <path d="M12 3l9 5-9 5-9-5z" />
+      <path d="M3 13l9 5 9-5" />
+    </svg>
+  );
+}
+
+export function ConfigMapIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <path d="M7 3h7l4 4v14H7z" />
+      <path d="M14 3v4h4M10 12h6M10 16h6" />
+    </svg>
+  );
+}
+
+export function SecretIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <rect x="5" y="11" width="14" height="9" rx="1.5" />
+      <path d="M8 11V7a4 4 0 018 0v4" />
+    </svg>
+  );
+}
+
+export function NetworkIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <circle cx="12" cy="12" r="8" />
+      <path d="M4 12h16M12 4c2.5 2.6 2.5 13.4 0 16M12 4c-2.5 2.6-2.5 13.4 0 16" />
+    </svg>
+  );
+}
+
+export function SettingsIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19.4 13.5a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.9 2.9l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.6V20a2 2 0 11-4 0v-.2a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.9-2.9l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.6-1H4a2 2 0 110-4h.2a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.9-2.9l.1.1a1.7 1.7 0 001.9.3H10a1.7 1.7 0 001-1.6V4a2 2 0 114 0v.2a1.7 1.7 0 001 1.6 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.9 2.9l-.1.1a1.7 1.7 0 00-.3 1.9V10a1.7 1.7 0 001.6 1H20a2 2 0 110 4h-.2a1.7 1.7 0 00-1.6 1z" />
+    </svg>
+  );
+}
+
+export function SearchIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.3-4.3" />
+    </svg>
+  );
+}
+
+export function ChevronDownIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={2}
+      className={className}
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+export function BellIcon({ size = 19, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.7 21a2 2 0 01-3.4 0" />
+    </svg>
+  );
+}
+
+export function PlusIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={2.2}
+      className={className}
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+export function ServiceIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z" />
+    </svg>
+  );
+}
+
+export function PodIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" />
+      <path d="M4 7.5L12 12l8-4.5M12 12v9" />
+    </svg>
+  );
+}

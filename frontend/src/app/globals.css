@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0e0f13;
+  --surface: #16181d;
+  --surface-2: #1c1f26;
+  --border: #262a33;
+  --text: #edeff3;
+  --text-muted: #9ba3b7;
+  --text-faint: #767f96;
+  --ok: #3fd98a;
+  --warn: #f0a83d;
+  --err: #f1665c;
+  --accent: #8b5fbf;
+  --accent-text: color-mix(in oklch, var(--accent) 65%, white 35%);
+  --code-bg: #0a0b0e;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-code-bg: var(--code-bg);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+}
+
+input::placeholder {
+  color: var(--text-faint);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--bg);
+}
