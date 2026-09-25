@@ -11,10 +11,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+
+	"github.com/shiraku/vinaire/backend/internal/authz"
+	"github.com/shiraku/vinaire/backend/internal/clusters"
 )
 
 // shell is the command exec'd into the container. Distroless/scratch images
@@ -37,12 +38,33 @@ type execControlMessage struct {
 // ServeExec upgrades to a WebSocket and bridges it to a TTY exec session
 // inside a container (the `kubectl exec -it ... -- /bin/sh` equivalent),
 // using client-go's SPDY executor against the pod's exec subresource. Route
-// params: {namespace}/{name}; optional `?container=` query param.
-func ServeExec(clientset *kubernetes.Clientset, restConfig *rest.Config, allowedOrigins []string) http.HandlerFunc {
+// params: {namespace}/{name}; optional `?container=` and `?cluster=`
+// (Roadmap Phase 11) query params, and `?access_token=` for the caller's
+// token (see ServeWS). Gated on "write" access to the pod's namespace, not
+// just "read" — a shell inside a container is a far more invasive
+// capability than viewing it, and Phase 10's own risk note calls out
+// closing Phase 5's previously-unauthenticated exec window specifically.
+func ServeExec(registry *clusters.Registry, verifier *authz.Verifier, policy *authz.Policy, allowedOrigins []string) http.HandlerFunc {
 	upgrader := websocket.Upgrader{CheckOrigin: originChecker(allowedOrigins)}
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		claims, err := verifier.VerifyRequest(r)
+		if err != nil {
+			http.Error(w, "unauthorized: "+err.Error(), http.StatusUnauthorized)
+			return
+		}
 		namespace := chi.URLParam(r, "namespace")
+		if !policy.Allowed(claims, namespace, "write") {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		cluster, ok := registry.Resolve(r.URL.Query().Get("cluster"))
+		if !ok || cluster == nil || cluster.Clientset == nil {
+			http.Error(w, "unknown or unreachable cluster", http.StatusBadRequest)
+			return
+		}
+		clientset, restConfig := cluster.Clientset, cluster.RESTConfig
+
 		name := chi.URLParam(r, "name")
 		container := resolveContainer(r.Context(), clientset, namespace, name, r.URL.Query().Get("container"))
 

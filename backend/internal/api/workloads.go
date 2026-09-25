@@ -7,14 +7,14 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"slices"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
-	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
-	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
+	"github.com/shiraku/vinaire/backend/internal/authz"
+	"github.com/shiraku/vinaire/backend/internal/clusters"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 )
 
@@ -31,36 +31,93 @@ type WorkloadRow struct {
 	Href        string `json:"href"`
 }
 
-// Handler holds the dependencies HTTP handlers need. Clientset may be nil
-// if the backend booted without a reachable cluster (see main.go) — every
-// handler must check requireClientset before using it. MetricsClientset and
-// GatewayClientset may be nil even when Clientset isn't (no metrics-server /
-// no Gateway API CRDs) — handlers using them must degrade gracefully
-// rather than fail the whole request.
+// Handler holds the dependencies HTTP handlers need. Clusters may be empty
+// if the backend booted without a single reachable cluster (see main.go) —
+// every handler must go through resolveCluster before using one. A given
+// Entry's MetricsClientset/GatewayClientset may still be nil even when its
+// Clientset isn't (no metrics-server / no Gateway API CRDs) — handlers
+// using them must degrade gracefully rather than fail the whole request.
 type Handler struct {
-	Clientset        *kubernetes.Clientset
-	MetricsClientset *metricsclientset.Clientset
-	GatewayClientset *gatewayclientset.Clientset
+	Clusters *clusters.Registry
+	Policy   *authz.Policy
 }
 
-func NewHandler(clientset *kubernetes.Clientset, metricsClientset *metricsclientset.Clientset, gatewayClientset *gatewayclientset.Clientset) *Handler {
-	return &Handler{Clientset: clientset, MetricsClientset: metricsClientset, GatewayClientset: gatewayClientset}
+func NewHandler(registry *clusters.Registry, policy *authz.Policy) *Handler {
+	return &Handler{Clusters: registry, Policy: policy}
 }
 
-func (h *Handler) requireClientset(w http.ResponseWriter) bool {
-	if h.Clientset == nil {
-		respondError(w, http.StatusServiceUnavailable, "kubernetes client unavailable")
-		return false
+// clusterHeader is how the frontend picks which configured cluster a
+// request targets (Roadmap Phase 11). Empty/absent means "the default
+// cluster" (the first one configured).
+const clusterHeader = "X-Cluster"
+
+// resolveCluster picks the cluster.Entry this request targets. It writes
+// the response itself and returns ok=false if the named cluster doesn't
+// exist, or no cluster is configured/reachable at all.
+func (h *Handler) resolveCluster(w http.ResponseWriter, r *http.Request) (*clusters.Entry, bool) {
+	name := r.Header.Get(clusterHeader)
+	entry, ok := h.Clusters.Resolve(name)
+	if !ok {
+		respondError(w, http.StatusBadRequest, fmt.Sprintf("unknown cluster %q", name))
+		return nil, false
 	}
-	return true
+	if entry == nil || entry.Clientset == nil {
+		respondError(w, http.StatusServiceUnavailable, "kubernetes client unavailable")
+		return nil, false
+	}
+	return entry, true
+}
+
+// authorize checks the authenticated caller (Roadmap Phase 10) may perform
+// `action` given the requested namespace ("" = all namespaces). For a
+// specific namespace it enforces access directly (403 if denied). For an
+// all-namespaces request it doesn't deny outright — it returns the
+// caller's allowed namespace set so the handler can filter results down to
+// just those, per ROADMAP.md's "scoped view, not an error" Phase 10 design.
+// ok is false (response already written) only when the request should stop.
+func (h *Handler) authorize(w http.ResponseWriter, r *http.Request, namespace, action string) (allowed []string, allowAll bool, ok bool) {
+	claims, authenticated := authz.FromContext(r.Context())
+	if !authenticated {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return nil, false, false
+	}
+	allowed, allowAll = h.Policy.AllowedNamespaces(claims, action)
+	if namespace != "" && !allowAll && !slices.Contains(allowed, namespace) {
+		respondError(w, http.StatusForbidden, fmt.Sprintf("not authorized for namespace %q", namespace))
+		return nil, false, false
+	}
+	return allowed, allowAll, true
+}
+
+// filterByAllowedNamespace narrows rows down to the caller's allowed
+// namespaces when the request didn't pin a specific one (namespace == ""),
+// so an all-namespaces query still only returns what the caller's groups
+// permit — mirrors authorize's "scoped view" behavior for list endpoints.
+func filterByAllowedNamespace[T any](rows []T, namespace string, allowed []string, allowAll bool, namespaceOf func(T) string) []T {
+	if namespace != "" || allowAll {
+		return rows
+	}
+	filtered := make([]T, 0, len(rows))
+	for _, row := range rows {
+		if slices.Contains(allowed, namespaceOf(row)) {
+			filtered = append(filtered, row)
+		}
+	}
+	return filtered
 }
 
 func (h *Handler) Pods(w http.ResponseWriter, r *http.Request) {
-	if !h.requireClientset(w) {
+	cluster, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	namespace := r.URL.Query().Get("namespace")
+	allowed, allowAll, ok := h.authorize(w, r, namespace, "read")
+	if !ok {
 		return
 	}
 
-	pods, err := k8s.ListPods(r.Context(), h.Clientset, r.URL.Query().Get("namespace"))
+	pods, err := k8s.ListPods(r.Context(), cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return
@@ -70,6 +127,7 @@ func (h *Handler) Pods(w http.ResponseWriter, r *http.Request) {
 	for _, pod := range pods {
 		rows = append(rows, PodRow(pod))
 	}
+	rows = filterByAllowedNamespace(rows, namespace, allowed, allowAll, func(row WorkloadRow) string { return row.Namespace })
 	respondJSON(w, rows)
 }
 
@@ -92,11 +150,17 @@ func PodRow(pod corev1.Pod) WorkloadRow {
 }
 
 func (h *Handler) Deployments(w http.ResponseWriter, r *http.Request) {
-	if !h.requireClientset(w) {
+	cluster, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	namespace := r.URL.Query().Get("namespace")
+	allowed, allowAll, ok := h.authorize(w, r, namespace, "read")
+	if !ok {
 		return
 	}
 
-	deployments, err := k8s.ListDeployments(r.Context(), h.Clientset, r.URL.Query().Get("namespace"))
+	deployments, err := k8s.ListDeployments(r.Context(), cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return
@@ -106,6 +170,7 @@ func (h *Handler) Deployments(w http.ResponseWriter, r *http.Request) {
 	for _, d := range deployments {
 		rows = append(rows, DeploymentRow(d))
 	}
+	rows = filterByAllowedNamespace(rows, namespace, allowed, allowAll, func(row WorkloadRow) string { return row.Namespace })
 	respondJSON(w, rows)
 }
 
@@ -131,11 +196,17 @@ func DeploymentRow(d appsv1.Deployment) WorkloadRow {
 }
 
 func (h *Handler) StatefulSets(w http.ResponseWriter, r *http.Request) {
-	if !h.requireClientset(w) {
+	cluster, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	namespace := r.URL.Query().Get("namespace")
+	allowed, allowAll, ok := h.authorize(w, r, namespace, "read")
+	if !ok {
 		return
 	}
 
-	sets, err := k8s.ListStatefulSets(r.Context(), h.Clientset, r.URL.Query().Get("namespace"))
+	sets, err := k8s.ListStatefulSets(r.Context(), cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return
@@ -145,6 +216,7 @@ func (h *Handler) StatefulSets(w http.ResponseWriter, r *http.Request) {
 	for _, s := range sets {
 		rows = append(rows, StatefulSetRow(s))
 	}
+	rows = filterByAllowedNamespace(rows, namespace, allowed, allowAll, func(row WorkloadRow) string { return row.Namespace })
 	respondJSON(w, rows)
 }
 
@@ -171,11 +243,17 @@ func StatefulSetRow(s appsv1.StatefulSet) WorkloadRow {
 }
 
 func (h *Handler) DaemonSets(w http.ResponseWriter, r *http.Request) {
-	if !h.requireClientset(w) {
+	cluster, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	namespace := r.URL.Query().Get("namespace")
+	allowed, allowAll, ok := h.authorize(w, r, namespace, "read")
+	if !ok {
 		return
 	}
 
-	sets, err := k8s.ListDaemonSets(r.Context(), h.Clientset, r.URL.Query().Get("namespace"))
+	sets, err := k8s.ListDaemonSets(r.Context(), cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return
@@ -185,6 +263,7 @@ func (h *Handler) DaemonSets(w http.ResponseWriter, r *http.Request) {
 	for _, ds := range sets {
 		rows = append(rows, DaemonSetRow(ds))
 	}
+	rows = filterByAllowedNamespace(rows, namespace, allowed, allowAll, func(row WorkloadRow) string { return row.Namespace })
 	respondJSON(w, rows)
 }
 
@@ -207,11 +286,17 @@ func DaemonSetRow(ds appsv1.DaemonSet) WorkloadRow {
 }
 
 func (h *Handler) Jobs(w http.ResponseWriter, r *http.Request) {
-	if !h.requireClientset(w) {
+	cluster, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	namespace := r.URL.Query().Get("namespace")
+	allowed, allowAll, ok := h.authorize(w, r, namespace, "read")
+	if !ok {
 		return
 	}
 
-	jobs, err := k8s.ListJobs(r.Context(), h.Clientset, r.URL.Query().Get("namespace"))
+	jobs, err := k8s.ListJobs(r.Context(), cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return
@@ -221,6 +306,7 @@ func (h *Handler) Jobs(w http.ResponseWriter, r *http.Request) {
 	for _, j := range jobs {
 		rows = append(rows, JobRow(j))
 	}
+	rows = filterByAllowedNamespace(rows, namespace, allowed, allowAll, func(row WorkloadRow) string { return row.Namespace })
 	respondJSON(w, rows)
 }
 

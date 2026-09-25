@@ -11,7 +11,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
+
+	"github.com/shiraku/vinaire/backend/internal/authz"
+	"github.com/shiraku/vinaire/backend/internal/clusters"
 )
 
 // logLine matches the frontend's LogLine type (frontend/src/lib/types.ts).
@@ -29,13 +31,32 @@ const tailLines = 200
 // ServeLogs upgrades to a WebSocket and streams one container's log lines
 // (the `kubectl logs -f` equivalent) to the client as they're written,
 // until the client disconnects or the pod's log stream ends. Route params:
-// {namespace}/{name}; optional `?container=` query param (required if the
-// pod has more than one container, same as `kubectl logs`).
-func ServeLogs(clientset *kubernetes.Clientset, allowedOrigins []string) http.HandlerFunc {
+// {namespace}/{name}; optional `?container=` and `?cluster=` (Roadmap
+// Phase 11) query params. The caller's token travels as `?access_token=`
+// (see ServeWS) since a browser can't attach it as a header to a WebSocket
+// handshake; Phase 10 gates this on "read" access to the pod's namespace —
+// the same level as viewing the pod itself, since logs are read-only.
+func ServeLogs(registry *clusters.Registry, verifier *authz.Verifier, policy *authz.Policy, allowedOrigins []string) http.HandlerFunc {
 	upgrader := websocket.Upgrader{CheckOrigin: originChecker(allowedOrigins)}
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		claims, err := verifier.VerifyRequest(r)
+		if err != nil {
+			http.Error(w, "unauthorized: "+err.Error(), http.StatusUnauthorized)
+			return
+		}
 		namespace := chi.URLParam(r, "namespace")
+		if !policy.Allowed(claims, namespace, "read") {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		cluster, ok := registry.Resolve(r.URL.Query().Get("cluster"))
+		if !ok || cluster == nil || cluster.Clientset == nil {
+			http.Error(w, "unknown or unreachable cluster", http.StatusBadRequest)
+			return
+		}
+		clientset := cluster.Clientset
+
 		name := chi.URLParam(r, "name")
 		container := resolveContainer(r.Context(), clientset, namespace, name, r.URL.Query().Get("container"))
 

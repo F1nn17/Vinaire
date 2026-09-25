@@ -1,0 +1,78 @@
+{
+  "realm": "vinaire-dev",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "clients": [
+    {
+      "clientId": "vinaire-frontend",
+      "name": "Vinaire Frontend",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "vinaire-frontend-dev-secret",
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3100/*"],
+      "webOrigins": ["http://localhost:3100"],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:3100/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "groups"
+          }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "vinaire-frontend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "groups": [
+    { "name": "auth-viewers", "path": "/auth-viewers" },
+    { "name": "platform-admins", "path": "/platform-admins" }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "alice@vinaire.dev",
+      "firstName": "Alice",
+      "lastName": "Viewer",
+      "credentials": [{ "type": "password", "value": "alice", "temporary": false }],
+      "groups": ["/auth-viewers"]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "bob@vinaire.dev",
+      "firstName": "Bob",
+      "lastName": "Admin",
+      "credentials": [{ "type": "password", "value": "bob", "temporary": false }],
+      "groups": ["/platform-admins"]
+    }
+  ]
+}

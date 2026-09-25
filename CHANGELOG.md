@@ -165,6 +165,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   triggered a real rollout, Rollback reverted `spec.template` to revision
   1's image, and Delete removed the object — all three confirmed via the
   backend's audit log and `kubectl`, with zero browser console errors.
+- **Roadmap Phase 10 (Authorization):** new `internal/authz` package —
+  OIDC bearer-token verification (`github.com/coreos/go-oidc/v3`) plus a
+  flat, config-backed group→namespace/action allow-list
+  (`backend/policy.yaml`), gating every `/api/v1/*` handler. A specific
+  namespace outside the caller's groups gets `403`; an all-namespaces list
+  request instead comes back filtered to what the caller can see, rather
+  than erroring outright. Every existing handler from Phases 1–9 was
+  updated to authorize before touching the cluster, and Phase 9's audit
+  log / Phase 6's secret-reveal audit log now record the caller's real
+  username instead of just a source IP. Frontend: `next-auth`/Auth.js with
+  a Keycloak provider, `src/proxy.ts` protecting every route (redirects to
+  sign-in when logged out), a real Topbar user menu with sign-out, and a
+  new throwaway, fully isolated dev Keycloak instance under `/keycloak`
+  (docker-compose, pre-seeded realm/groups/`alice`+`bob` users) for local
+  login testing. Verified end-to-end over curl with real Keycloak-issued
+  tokens against the real `k3d-vinaire-dev` cluster: `alice`
+  (`auth-viewers`, read-only) sees only the `auth` namespace and gets `403`
+  on any other namespace or any write action; `bob` (`platform-admins`,
+  read+write) sees everything and can restart a real Deployment. A live
+  browser login couldn't be verified on this dev machine — a local,
+  unrelated app (Proxifier) breaks Node's outbound connections including
+  to `localhost`, unrelated to Vinaire's code (see AGENTS.md's frontend
+  "Known local issue" and ROADMAP.md's Phase 10 outcome note for the full
+  diagnosis and what to redo once it's fixed).
+- **Roadmap Phase 11 (Multi-cluster):** new `internal/clusters.Registry` —
+  one client set per configured kubeconfig context (`CLUSTER_CONTEXTS`),
+  selected per-request via an `X-Cluster` header (`Handler.resolveCluster`,
+  defaulting to the first configured cluster). New `GET /api/v1/clusters`
+  lists them. Chose to start a live-update informer hub eagerly for every
+  configured cluster (not lazily per-selection) per the phase's own risk
+  note. Frontend: a real Topbar cluster dropdown backed by that endpoint,
+  a `lib/clusterStore.ts` (localStorage-backed) read synchronously by
+  `apiFetch`/`buildStreamURL` outside of React, every SWR hook's cache key
+  and every WebSocket URL (workload stream, logs, exec) now includes the
+  selected cluster so switching it refetches/reconnects cleanly. Verified
+  over curl against two real clusters (`k3d-vinaire-dev` and a second
+  `k3d-vinaire-dev-2` created for this phase): the same user's
+  all-namespaces pod list correctly differs between clusters with no
+  cross-cluster data leakage. Live-browser confirmation of the dropdown
+  itself is blocked by the same local Proxifier issue as Phase 10.
 
 ### Changed
 

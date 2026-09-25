@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { useSWRConfig } from "swr";
-import { API_BASE } from "@/lib/api/config";
+import { buildStreamURL } from "@/lib/api/wsUrl";
+import { useCurrentCluster } from "@/lib/clusterStore";
 import type { WorkloadKind, WorkloadRow } from "@/lib/types";
 
 type StreamEvent = {
@@ -39,6 +40,7 @@ export function useWorkloadsStream(kind: WorkloadKind, namespace: string) {
   const { mutate } = useSWRConfig();
   const kindRef = useRef(kind);
   const namespaceRef = useRef(namespace);
+  const cluster = useCurrentCluster();
 
   useEffect(() => {
     kindRef.current = kind;
@@ -46,33 +48,43 @@ export function useWorkloadsStream(kind: WorkloadKind, namespace: string) {
   }, [kind, namespace]);
 
   useEffect(() => {
-    const wsUrl = `${API_BASE.replace(/^http/, "ws")}/api/v1/stream/workloads`;
-    const ws = new WebSocket(wsUrl);
+    let ws: WebSocket | undefined;
+    let cancelled = false;
 
-    ws.onmessage = (message) => {
-      let event: StreamEvent;
-      try {
-        event = JSON.parse(message.data);
-      } catch {
-        return;
-      }
+    (async () => {
+      const wsUrl = await buildStreamURL("/api/v1/stream/workloads");
+      if (cancelled) return;
+      ws = new WebSocket(wsUrl);
 
-      const activeKind = kindRef.current;
-      const activeNamespace = namespaceRef.current;
-      if (event.kind !== activeKind) return;
-      if (activeNamespace && event.row.namespace !== activeNamespace) return;
+      ws.onmessage = (message) => {
+        let event: StreamEvent;
+        try {
+          event = JSON.parse(message.data);
+        } catch {
+          return;
+        }
 
-      mutate(
-        ["workloads", activeKind, activeNamespace],
-        (current: WorkloadRow[] | undefined) =>
-          applyEvent(current ?? [], event),
-        { revalidate: false },
-      );
+        const activeKind = kindRef.current;
+        const activeNamespace = namespaceRef.current;
+        if (event.kind !== activeKind) return;
+        if (activeNamespace && event.row.namespace !== activeNamespace) return;
+
+        mutate(
+          ["workloads", activeKind, activeNamespace, cluster],
+          (current: WorkloadRow[] | undefined) =>
+            applyEvent(current ?? [], event),
+          { revalidate: false },
+        );
+      };
+    })();
+
+    return () => {
+      cancelled = true;
+      ws?.close();
     };
-
-    return () => ws.close();
-    // Connect once per mount; kind/namespace are read live from refs above
-    // (kept current by the effect above) rather than reconnecting the
-    // socket on every filter change.
-  }, [mutate]);
+    // Reconnect when the selected cluster changes (a different cluster's
+    // hub entirely) — kind/namespace are read live from refs above (kept
+    // current by the effect above) rather than reconnecting on every
+    // filter change.
+  }, [mutate, cluster]);
 }

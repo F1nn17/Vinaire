@@ -1,6 +1,10 @@
 import useSWR from "swr";
 import { getConfigMaps } from "@/lib/api/configmaps";
+import { useCurrentCluster } from "@/lib/clusterStore";
 
 export function useConfigMaps(namespace = "") {
-  return useSWR(["configmaps", namespace], () => getConfigMaps(namespace));
+  const cluster = useCurrentCluster();
+  return useSWR(["configmaps", namespace, cluster], () =>
+    getConfigMaps(namespace),
+  );
 }

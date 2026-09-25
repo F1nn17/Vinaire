@@ -49,6 +49,27 @@ If a request conflicts with this — asks for a write action on a resource
 kind or verb not already covered above — stop and flag it rather than
 silently extending write access.
 
+## Authorization (Phase 10) and multi-cluster (Phase 11)
+
+Every `/api/v1/*` request requires a verified OIDC bearer token (Keycloak —
+see `/keycloak` at the repo root for the dev instance) — `internal/authz`
+does the verification and the group→namespace/action authorization check.
+The policy is a flat, config-backed allow-list
+(`backend/policy.yaml`: group name → allowed namespaces + `read`/`write`
+actions), deliberately not a full policy engine. A request for a specific
+namespace the caller's groups don't cover gets `403`; an all-namespaces
+list request instead gets silently filtered down to what the caller can
+see (see `internal/api`'s `authorize`/`filterByAllowedNamespace`). Adding a
+new action beyond `read`/`write`, or a per-resource-kind policy, is the
+kind of change that should be raised first, same spirit as the core rule
+above.
+
+Multi-cluster (Phase 11) lives in `internal/clusters` (`Registry`/`Entry`
+per configured kubeconfig context, via `CLUSTER_CONTEXTS`). Every handler
+resolves its target cluster from the `X-Cluster` request header (or the
+first configured cluster if absent) before doing anything else — see
+`Handler.resolveCluster`.
+
 ## Repository structure
 
 ```text
@@ -57,11 +78,17 @@ silently extending write access.
 │   └── src/app/            Pages, layouts, route handlers
 ├── backend/                Go module: github.com/shiraku/vinaire/backend
 │   ├── main.go             HTTP server (chi), route wiring, graceful shutdown
-│   ├── internal/config/    env-driven config (PORT, KUBECONFIG, CORS)
+│   ├── internal/config/    env-driven config (PORT, KUBECONFIG, CORS, OIDC,
+│   │                       CLUSTER_CONTEXTS)
 │   ├── internal/k8s/       client-go clientset + listers, read-only except
 │   │                       Phase 9's Deployment restart/delete/rollback
+│   ├── internal/authz/     OIDC token verification + group->namespace/
+│   │                       action policy (Phase 10)
+│   ├── internal/clusters/  per-kubeconfig-context client registry (Phase 11)
 │   ├── internal/api/       HTTP handlers: response shaping, status/color logic
 │   └── internal/stream/    informers + WebSocket fan-out for live updates
+├── keycloak/               Throwaway dev-only Keycloak (docker-compose) for
+│                           local OIDC login — see its README
 ├── package.json            Root orchestrator only (`npm run dev` = both apps)
 ├── ROADMAP.md              Staged plan
 ├── CHANGELOG.md            Keep a Changelog format
@@ -104,6 +131,22 @@ silently extending write access.
   hit a Turbopack panic mentioning `evaluate_webpack_loader` or "node process
   exited before we could connect to it", that's this issue — don't spend time
   debugging the CSS, just confirm the `--webpack` flag is still in place.
+- **Known local issue:** on this dev machine, Proxifier (a running background
+  app, unrelated to this project) intercepts `node.exe`'s outbound TCP
+  connections and appears to break them even to `localhost` — this shows up
+  as next-auth's server-side calls to Keycloak (`/keycloak`) failing with
+  `SocketError: other side closed` / `UND_ERR_SOCKET`, even though `curl` and
+  real browsers reach the exact same URL fine (they aren't intercepted the
+  same way). Confirmed via `tasklist` and by testing plain Node `fetch`/
+  `http`/raw `net.Socket` against multiple local targets (Docker-published
+  ports and native Windows processes alike) — all fail the same way,
+  regardless of target. Don't chase this as a Keycloak, Docker-networking, or
+  Vinaire-code bug again; it needs Proxifier's rules adjusted (exclude
+  `node.exe`, or add a direct/no-proxy rule for `localhost`/`127.0.0.1`) or
+  the app closed, which only the machine's owner can do. Backend-side
+  verification (curl, or Go's own `net/http`, both unaffected) stays a valid
+  way to verify OIDC/auth work on this machine even when a live
+  browser-driven Playwright login can't be completed end-to-end.
 
 ## Running tests / checks
 

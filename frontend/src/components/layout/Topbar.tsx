@@ -1,16 +1,12 @@
-import { BellIcon, ChevronDownIcon, SearchIcon } from "@/components/icons";
+import { BellIcon, SearchIcon } from "@/components/icons";
 import { BackendStatus } from "@/components/layout/BackendStatus";
+import { ClusterPicker } from "@/components/layout/ClusterPicker";
+import { UserMenu } from "@/components/layout/UserMenu";
 
 export function Topbar() {
   return (
     <div className="flex h-[60px] shrink-0 items-center gap-4 border-b border-border px-6">
-      <button
-        type="button"
-        className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2"
-      >
-        <span className="font-mono text-[13px] font-semibold">prod-msk-01</span>
-        <ChevronDownIcon />
-      </button>
+      <ClusterPicker />
 
       <label htmlFor="global-search" className="sr-only">
         Search resources
@@ -41,10 +37,7 @@ export function Topbar() {
             className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2 border-bg bg-err"
           />
         </button>
-        <div
-          aria-hidden="true"
-          className="h-[30px] w-[30px] rounded-full border border-border bg-surface-2"
-        />
+        <UserMenu />
       </div>
     </div>
   );

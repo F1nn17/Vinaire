@@ -1,21 +1,28 @@
-time=2026-09-25T20:25:54.524+04:00 level=INFO msg="kubernetes client initialized"
-time=2026-09-25T20:25:54.563+04:00 level=INFO msg="vinaire backend listening" addr=:8080 cors_allowed_origins=[http://localhost:3100]
-time=2026-09-25T20:25:54.665+04:00 level=INFO msg="stream: informer caches synced, watching for live updates"
-time=2026-09-25T20:26:04.858+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000001
-time=2026-09-25T20:26:04.946+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000002
-time=2026-09-25T20:26:56.519+04:00 level=INFO msg=request method=GET path=/api/v1/deployments status=200 bytes=173 duration_ms=4 request_id=Shiraku/9AW1HbqkdP-000003
-time=2026-09-25T20:27:04.958+04:00 level=INFO msg=request method=GET path=/api/v1/deployments/phase9-test/demo status=405 bytes=0 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000004
-time=2026-09-25T20:27:05.029+04:00 level=INFO msg=request method=GET path=/api/v1/deployments/phase9-test/demo status=405 bytes=0 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000005
-time=2026-09-25T20:29:38.678+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000006
-time=2026-09-25T20:29:39.779+04:00 level=WARN msg="write action" action=restart namespace=auth name=keycloak remote_addr=[::1]:30713
-time=2026-09-25T20:29:39.823+04:00 level=INFO msg=request method=POST path=/api/v1/deployments/auth/keycloak/restart status=200 bytes=16 duration_ms=126 request_id=Shiraku/9AW1HbqkdP-000007
-time=2026-09-25T20:29:43.114+04:00 level=INFO msg=request method=OPTIONS path=/api/v1/deployments/auth/keycloak/rollback status=200 bytes=0 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000008
-time=2026-09-25T20:29:43.232+04:00 level=WARN msg="write action" action=rollback namespace=auth name=keycloak remote_addr=[::1]:30713 revision=1
-time=2026-09-25T20:29:43.246+04:00 level=INFO msg=request method=POST path=/api/v1/deployments/auth/keycloak/rollback status=200 bytes=16 duration_ms=129 request_id=Shiraku/9AW1HbqkdP-000009
-time=2026-09-25T20:29:43.694+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000010
-time=2026-09-25T20:29:46.113+04:00 level=INFO msg=request method=OPTIONS path=/api/v1/deployments/auth/keycloak status=200 bytes=0 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000011
-time=2026-09-25T20:29:46.174+04:00 level=WARN msg="write action" action=delete namespace=auth name=keycloak remote_addr=[::1]:30713
-time=2026-09-25T20:29:46.266+04:00 level=INFO msg=request method=DELETE path=/api/v1/deployments/auth/keycloak status=200 bytes=16 duration_ms=99 request_id=Shiraku/9AW1HbqkdP-000012
-time=2026-09-25T20:29:47.442+04:00 level=INFO msg=request method=GET path=/api/v1/deployments status=200 bytes=758 duration_ms=6 request_id=Shiraku/9AW1HbqkdP-000013
-time=2026-09-25T20:29:47.453+04:00 level=INFO msg=request method=GET path=/api/v1/stream/workloads status=0 bytes=0 duration_ms=2 request_id=Shiraku/9AW1HbqkdP-000014
-time=2026-09-25T20:29:47.674+04:00 level=INFO msg=request method=GET path=/api/v1/stream/workloads status=0 bytes=0 duration_ms=211 request_id=Shiraku/9AW1HbqkdP-000015
+time=2026-09-25T20:56:31.966+04:00 level=INFO msg="kubernetes client initialized" cluster=k3d-vinaire-dev
+time=2026-09-25T20:56:31.998+04:00 level=INFO msg="kubernetes client initialized" cluster=k3d-vinaire-dev-2
+time=2026-09-25T20:56:32.113+04:00 level=INFO msg="oidc verifier initialized" issuer=http://localhost:8081/realms/vinaire-dev
+time=2026-09-25T20:56:32.144+04:00 level=INFO msg="vinaire backend listening" addr=:8080 cors_allowed_origins=[http://localhost:3100] clusters="[k3d-vinaire-dev k3d-vinaire-dev-2]"
+time=2026-09-25T20:56:32.345+04:00 level=INFO msg="stream: informer caches synced, watching for live updates"
+time=2026-09-25T20:56:32.345+04:00 level=INFO msg="stream: informer caches synced, watching for live updates"
+time=2026-09-25T20:56:38.882+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000001
+time=2026-09-25T20:56:51.261+04:00 level=INFO msg=request method=GET path=/api/v1/pods status=401 bytes=35 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000002
+time=2026-09-25T20:56:52.123+04:00 level=INFO msg=request method=GET path=/api/v1/pods status=401 bytes=64 duration_ms=65 request_id=Shiraku/GlSwEZz92s-000003
+time=2026-09-25T20:56:52.479+04:00 level=INFO msg=request method=GET path=/api/v1/pods status=401 bytes=64 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000004
+time=2026-09-25T20:56:52.535+04:00 level=INFO msg=request method=POST path=/api/v1/deployments/default/other/restart status=401 bytes=64 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000005
+time=2026-09-25T20:56:52.591+04:00 level=INFO msg=request method=GET path=/api/v1/pods status=401 bytes=64 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000006
+time=2026-09-25T20:56:52.868+04:00 level=INFO msg=request method=POST path=/api/v1/deployments/default/other/restart status=401 bytes=64 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000007
+time=2026-09-25T20:56:52.914+04:00 level=INFO msg=request method=GET path=/api/v1/clusters status=401 bytes=64 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000008
+time=2026-09-25T20:56:53.184+04:00 level=INFO msg=request method=GET path=/api/v1/pods status=401 bytes=64 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000009
+time=2026-09-25T20:57:10.332+04:00 level=INFO msg=request method=GET path=/api/v1/pods status=401 bytes=64 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000010
+time=2026-09-25T20:59:07.975+04:00 level=INFO msg=request method=GET path=/api/v1/pods status=200 bytes=186 duration_ms=42 request_id=Shiraku/GlSwEZz92s-000011
+time=2026-09-25T20:59:20.908+04:00 level=INFO msg=request method=GET path=/api/v1/pods status=403 bytes=53 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000012
+time=2026-09-25T20:59:20.958+04:00 level=INFO msg=request method=POST path=/api/v1/deployments/default/other/restart status=403 bytes=53 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000013
+time=2026-09-25T20:59:21.017+04:00 level=INFO msg=request method=POST path=/api/v1/deployments/auth/probe/restart status=403 bytes=50 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000014
+time=2026-09-25T20:59:21.083+04:00 level=INFO msg=request method=GET path=/api/v1/pods status=200 bytes=1863 duration_ms=7 request_id=Shiraku/GlSwEZz92s-000015
+time=2026-09-25T20:59:21.314+04:00 level=WARN msg="write action" action=restart namespace=default name=other user=bob remote_addr=[::1]:15982
+time=2026-09-25T20:59:21.314+04:00 level=INFO msg=request method=POST path=/api/v1/deployments/default/other/restart status=200 bytes=16 duration_ms=7 request_id=Shiraku/GlSwEZz92s-000016
+time=2026-09-25T20:59:21.370+04:00 level=INFO msg=request method=GET path=/api/v1/clusters status=200 bytes=89 duration_ms=0 request_id=Shiraku/GlSwEZz92s-000017
+time=2026-09-25T20:59:21.479+04:00 level=INFO msg=request method=GET path=/api/v1/pods status=200 bytes=1690 duration_ms=52 request_id=Shiraku/GlSwEZz92s-000018
+time=2026-09-25T21:01:46.181+04:00 level=INFO msg=request method=GET path=/api/v1/pods status=200 bytes=186 duration_ms=291 request_id=Shiraku/GlSwEZz92s-000019
+time=2026-09-25T21:19:42.251+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=2 request_id=Shiraku/GlSwEZz92s-000020
+time=2026-09-25T21:55:14.149+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=3 request_id=Shiraku/GlSwEZz92s-000021

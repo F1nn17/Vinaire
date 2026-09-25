@@ -45,7 +45,8 @@ type TopologyGraph struct {
 // the frontend just lays out and draws whatever graph it's given. See
 // ROADMAP.md Phase 7 for the (deliberately simplified) matching rules.
 func (h *Handler) Topology(w http.ResponseWriter, r *http.Request) {
-	if !h.requireClientset(w) {
+	cluster, ok := h.resolveCluster(w, r)
+	if !ok {
 		return
 	}
 
@@ -53,35 +54,38 @@ func (h *Handler) Topology(w http.ResponseWriter, r *http.Request) {
 	if namespace == "" {
 		namespace = "default"
 	}
+	if _, _, ok := h.authorize(w, r, namespace, "read"); !ok {
+		return
+	}
 
 	ctx := r.Context()
 
-	ingresses, err := k8s.ListIngresses(ctx, h.Clientset, namespace)
+	ingresses, err := k8s.ListIngresses(ctx, cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	services, err := k8s.ListServices(ctx, h.Clientset, namespace)
+	services, err := k8s.ListServices(ctx, cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	deployments, err := k8s.ListDeployments(ctx, h.Clientset, namespace)
+	deployments, err := k8s.ListDeployments(ctx, cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	pods, err := k8s.ListPods(ctx, h.Clientset, namespace)
+	pods, err := k8s.ListPods(ctx, cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	configMaps, err := k8s.ListConfigMaps(ctx, h.Clientset, namespace)
+	configMaps, err := k8s.ListConfigMaps(ctx, cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	secrets, err := k8s.ListSecrets(ctx, h.Clientset, namespace)
+	secrets, err := k8s.ListSecrets(ctx, cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return

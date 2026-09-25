@@ -15,6 +15,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/shiraku/vinaire/backend/internal/k8s"
@@ -37,11 +38,17 @@ type IngressRow struct {
 
 // Ingresses handles GET /api/v1/ingresses?namespace=.
 func (h *Handler) Ingresses(w http.ResponseWriter, r *http.Request) {
-	if !h.requireClientset(w) {
+	cluster, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	namespace := r.URL.Query().Get("namespace")
+	allowed, allowAll, ok := h.authorize(w, r, namespace, "read")
+	if !ok {
 		return
 	}
 
-	ingresses, err := k8s.ListIngresses(r.Context(), h.Clientset, r.URL.Query().Get("namespace"))
+	ingresses, err := k8s.ListIngresses(r.Context(), cluster.Clientset, namespace)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, err.Error())
 		return
@@ -49,12 +56,13 @@ func (h *Handler) Ingresses(w http.ResponseWriter, r *http.Request) {
 
 	rows := make([]IngressRow, 0, len(ingresses))
 	for _, ing := range ingresses {
-		rows = append(rows, h.ingressRow(r.Context(), ing))
+		rows = append(rows, h.ingressRow(r.Context(), cluster.Clientset, ing))
 	}
+	rows = filterByAllowedNamespace(rows, namespace, allowed, allowAll, func(row IngressRow) string { return row.Namespace })
 	respondJSON(w, rows)
 }
 
-func (h *Handler) ingressRow(ctx context.Context, ing networkingv1.Ingress) IngressRow {
+func (h *Handler) ingressRow(ctx context.Context, clientset *kubernetes.Clientset, ing networkingv1.Ingress) IngressRow {
 	hosts := uniqueOrdered(func(yield func(string)) {
 		for _, rule := range ing.Spec.Rules {
 			if rule.Host != "" {
@@ -89,7 +97,7 @@ func (h *Handler) ingressRow(ctx context.Context, ing networkingv1.Ingress) Ingr
 		backendStr = "—"
 	}
 
-	tlsText, tlsColor := h.ingressTLSStatus(ctx, ing)
+	tlsText, tlsColor := h.ingressTLSStatus(ctx, clientset, ing)
 
 	return IngressRow{
 		Name:      ing.Name,
@@ -104,7 +112,7 @@ func (h *Handler) ingressRow(ctx context.Context, ing networkingv1.Ingress) Ingr
 // ingressTLSStatus fetches every Secret an Ingress's spec.tls references,
 // parses the certificate, and reports the nearest expiry — real validity
 // checking, not just "a tls block exists".
-func (h *Handler) ingressTLSStatus(ctx context.Context, ing networkingv1.Ingress) (string, StatusColor) {
+func (h *Handler) ingressTLSStatus(ctx context.Context, clientset *kubernetes.Clientset, ing networkingv1.Ingress) (string, StatusColor) {
 	if len(ing.Spec.TLS) == 0 {
 		return "None", StatusWarn
 	}
@@ -114,7 +122,7 @@ func (h *Handler) ingressTLSStatus(ctx context.Context, ing networkingv1.Ingress
 		if tls.SecretName == "" {
 			continue
 		}
-		secret, err := k8s.GetSecret(ctx, h.Clientset, ing.Namespace, tls.SecretName)
+		secret, err := k8s.GetSecret(ctx, clientset, ing.Namespace, tls.SecretName)
 		if err != nil {
 			slog.Warn("ingress TLS secret unavailable", "namespace", ing.Namespace, "secret", tls.SecretName, "error", err)
 			continue
@@ -173,10 +181,16 @@ type GatewayResourcesResponse struct {
 
 // GatewayRoutes handles GET /api/v1/gateway-routes?namespace=.
 func (h *Handler) GatewayRoutes(w http.ResponseWriter, r *http.Request) {
-	if !h.requireClientset(w) {
+	cluster, ok := h.resolveCluster(w, r)
+	if !ok {
 		return
 	}
-	if h.GatewayClientset == nil {
+	namespace := r.URL.Query().Get("namespace")
+	allowed, allowAll, ok := h.authorize(w, r, namespace, "read")
+	if !ok {
+		return
+	}
+	if cluster.GatewayClientset == nil {
 		respondJSON(w, GatewayResourcesResponse{
 			Available: false,
 			Reason:    "Gateway API client is not configured on this backend",
@@ -184,10 +198,9 @@ func (h *Handler) GatewayRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	namespace := r.URL.Query().Get("namespace")
 	ctx := r.Context()
 
-	gateways, err := h.GatewayClientset.GatewayV1().Gateways(namespace).List(ctx, metav1.ListOptions{})
+	gateways, err := cluster.GatewayClientset.GatewayV1().Gateways(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		if isGatewayAPIUnavailable(err) {
 			respondJSON(w, GatewayResourcesResponse{
@@ -200,7 +213,7 @@ func (h *Handler) GatewayRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpRoutes, err := h.GatewayClientset.GatewayV1().HTTPRoutes(namespace).List(ctx, metav1.ListOptions{})
+	httpRoutes, err := cluster.GatewayClientset.GatewayV1().HTTPRoutes(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		if isGatewayAPIUnavailable(err) {
 			respondJSON(w, GatewayResourcesResponse{
@@ -220,6 +233,7 @@ func (h *Handler) GatewayRoutes(w http.ResponseWriter, r *http.Request) {
 	for _, hr := range httpRoutes.Items {
 		rows = append(rows, httpRouteRow(hr))
 	}
+	rows = filterByAllowedNamespace(rows, namespace, allowed, allowAll, func(row GatewayRow) string { return row.Namespace })
 
 	respondJSON(w, GatewayResourcesResponse{Available: true, Rows: rows})
 }

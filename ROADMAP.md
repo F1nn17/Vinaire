@@ -688,10 +688,37 @@ visible in `kubectl get deployments`.
 
 ---
 
-## Phase 10 — Authorization
+## Phase 10 — Authorization ✅ done
 
 **Goal:** Keycloak-backed login, with group membership limiting which
 namespaces/actions a user can see and do.
+
+> **Outcome note:** implemented in full — `internal/authz` (OIDC token
+> verification via `go-oidc` + a flat `backend/policy.yaml` group→
+> namespace/action allow-list), every `/api/v1/*` handler gated through it,
+> and `next-auth`/Auth.js on the frontend with a real Keycloak login,
+> protected routes (`src/proxy.ts` — Next.js 16 renamed the middleware
+> convention), and sign-out. A throwaway, fully isolated dev Keycloak
+> (`/keycloak`, docker-compose + a pre-seeded realm/groups/users) backs all
+> of this locally. Verified end-to-end **against the real backend with
+> real Keycloak-issued tokens over curl**: no token → `401`; `alice`
+> (`auth-viewers`, read-only, namespace `auth`) → an all-namespaces list
+> request comes back scoped to just `auth`, an explicit `?namespace=default`
+> request gets `403`, and a restart/delete/rollback attempt gets `403` even
+> on her own namespace (read ≠ write); `bob` (`platform-admins`,
+> read+write, every namespace) → sees every namespace and a restart
+> succeeds (`200`), logged in the audit trail with his real username.
+>
+> **Known gap:** a live, browser-driven login (next-auth's actual OAuth
+> redirect dance through a real browser) could not be verified end-to-end
+> on this dev machine — a local, unrelated app (Proxifier) intercepts
+> Node's outbound TCP connections and breaks next-auth's server-side calls
+> to Keycloak even though curl and real browsers are unaffected (see
+> AGENTS.md's frontend "Known local issue" and the saved memory note on
+> this). The frontend code itself builds, lints, and type-checks cleanly.
+> This should be re-verified with a real browser login once that's fixed —
+> whoever picks this up next shouldn't need to re-diagnose the Proxifier
+> issue, just redo the browser-driven part of the check.
 
 **Backend**
 - OIDC middleware validating Keycloak-issued tokens —
@@ -732,10 +759,31 @@ the backend (not just a hidden UI element — the API itself enforces it).
 
 ---
 
-## Phase 11 — Multi-cluster
+## Phase 11 — Multi-cluster ✅ done
 
 **Goal:** the Topbar's cluster picker (currently a static "prod-msk-01"
 label) is real.
+
+> **Outcome note:** `internal/clusters.Registry` builds one `Entry`
+> (clientset + REST config + metrics/Gateway clients) per configured
+> kubeconfig context (`CLUSTER_CONTEXTS` env var); every handler resolves
+> its target from the `X-Cluster` header via `Handler.resolveCluster`,
+> defaulting to the first configured cluster when absent — chose "start an
+> informer hub eagerly per configured cluster" over lazy startup, per this
+> phase's own risk note, since the dev setup only ever has 2 clusters
+> configured. New `GET /api/v1/clusters` lists them with a `default` flag.
+> Frontend: `lib/clusterStore.ts` (localStorage-backed selection, read
+> synchronously by `apiFetch`/`buildStreamURL` outside of React) + a real
+> Topbar dropdown sourced from that endpoint; every SWR hook's key and every
+> WebSocket URL (`stream/workloads`, pod logs, exec) includes the selected
+> cluster so switching it refetches/reconnects instead of showing stale
+> data. Verified end-to-end over curl against two real clusters
+> (`k3d-vinaire-dev` and a second `k3d-vinaire-dev-2` created for this):
+> `bob`'s all-namespaces pod list differs correctly between the default
+> cluster and `X-Cluster: k3d-vinaire-dev-2`, with each cluster's own,
+> distinct real data (no cross-cluster leakage). The frontend dropdown/hook
+> wiring builds and lints clean; live-browser confirmation of the dropdown
+> itself is blocked by the same local Proxifier issue noted in Phase 10.
 
 **Backend**
 - Config: a named list of kubeconfig contexts (or separate kubeconfig

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, JetBrains_Mono } from "next/font/google";
+import { Providers } from "@/components/providers/Providers";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -26,7 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${plexSans.variable} ${jetBrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-bg text-text font-sans text-[14px]">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

@@ -47,6 +47,32 @@ func NewClientset(kubeconfigPath string) (*kubernetes.Clientset, *rest.Config, e
 	return clientset, config, nil
 }
 
+// NewClientsetForContext builds a clientset for one named kubeconfig
+// context, ignoring whatever the kubeconfig's own current-context is set
+// to. Used for Roadmap Phase 11 (multi-cluster): one call per configured
+// context name, each producing an independent internal/clusters.Entry.
+// kubeconfigPath empty means the default loading rules (KUBECONFIG env var,
+// then ~/.kube/config).
+func NewClientsetForContext(kubeconfigPath, contextName string) (*kubernetes.Clientset, *rest.Config, error) {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if kubeconfigPath != "" {
+		loadingRules.ExplicitPath = kubeconfigPath
+	}
+	overrides := &clientcmd.ConfigOverrides{CurrentContext: contextName}
+
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides).ClientConfig()
+	if err != nil {
+		return nil, nil, fmt.Errorf("load kubeconfig context %s: %w", contextName, err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create clientset for context %s: %w", contextName, err)
+	}
+
+	return clientset, config, nil
+}
+
 // Pods/Deployments/StatefulSets/DaemonSets/Jobs listers live in
 // workloads.go (wired up as HTTP handlers in internal/api, Phase 1).
 //

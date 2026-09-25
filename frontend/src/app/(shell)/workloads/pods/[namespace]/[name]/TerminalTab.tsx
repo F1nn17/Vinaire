@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { API_BASE } from "@/lib/api/config";
+import { buildStreamURL } from "@/lib/api/wsUrl";
 import type { ContainerSummary } from "@/lib/types";
 
 type Status = "connecting" | "connected" | "disconnected";
@@ -42,28 +42,19 @@ export function TerminalTab({
     term.open(el);
     fitAddon.fit();
 
-    const query = container ? `?container=${encodeURIComponent(container)}` : "";
-    const wsUrl = `${API_BASE.replace(/^http/, "ws")}/api/v1/pods/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/exec${query}`;
-    const ws = new WebSocket(wsUrl);
+    let ws: WebSocket | undefined;
+    let cancelled = false;
 
     function sendResize() {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }),
+        );
       }
     }
 
-    ws.onopen = () => {
-      setStatus("connected");
-      sendResize();
-    };
-    ws.onclose = () => setStatus("disconnected");
-    ws.onerror = () => setStatus("disconnected");
-    ws.onmessage = (event) => {
-      if (typeof event.data === "string") term.write(event.data);
-    };
-
     const dataDisposable = term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws?.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "stdin", data }));
       }
     });
@@ -74,10 +65,32 @@ export function TerminalTab({
     });
     resizeObserver.observe(el);
 
+    (async () => {
+      const query = container
+        ? `?container=${encodeURIComponent(container)}`
+        : "";
+      const wsUrl = await buildStreamURL(
+        `/api/v1/pods/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/exec${query}`,
+      );
+      if (cancelled) return;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        setStatus("connected");
+        sendResize();
+      };
+      ws.onclose = () => setStatus("disconnected");
+      ws.onerror = () => setStatus("disconnected");
+      ws.onmessage = (event) => {
+        if (typeof event.data === "string") term.write(event.data);
+      };
+    })();
+
     return () => {
+      cancelled = true;
       dataDisposable.dispose();
       resizeObserver.disconnect();
-      ws.close();
+      ws?.close();
       term.dispose();
     };
   }, [namespace, name, container]);

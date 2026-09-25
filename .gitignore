@@ -25,6 +25,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# --- Local dev server logs (repo root, from ad hoc `npm run dev`/`go run` runs) ---
+*.log
+
 # --- IDE ---
 .vscode/
 .idea/

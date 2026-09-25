@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 )
@@ -65,30 +66,34 @@ type PodDetailResponse struct {
 
 // PodDetail handles GET /api/v1/pods/{namespace}/{name}.
 func (h *Handler) PodDetail(w http.ResponseWriter, r *http.Request) {
-	if !h.requireClientset(w) {
+	cluster, ok := h.resolveCluster(w, r)
+	if !ok {
 		return
 	}
 
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
+	if _, _, ok := h.authorize(w, r, namespace, "read"); !ok {
+		return
+	}
 
-	pod, err := k8s.GetPod(r.Context(), h.Clientset, namespace, name)
+	pod, err := k8s.GetPod(r.Context(), cluster.Clientset, namespace, name)
 	if err != nil {
 		respondError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
-	events, err := k8s.ListEventsForObject(r.Context(), h.Clientset, namespace, name)
+	events, err := k8s.ListEventsForObject(r.Context(), cluster.Clientset, namespace, name)
 	if err != nil {
 		// Non-fatal: still show pod metadata even if events can't be listed.
 		slog.Warn("list events failed", "namespace", namespace, "name", name, "error", err)
 		events = nil
 	}
 
-	respondJSON(w, h.buildPodDetail(r.Context(), *pod, events))
+	respondJSON(w, h.buildPodDetail(r.Context(), cluster.MetricsClientset, *pod, events))
 }
 
-func (h *Handler) buildPodDetail(ctx context.Context, pod corev1.Pod, events []corev1.Event) PodDetailResponse {
+func (h *Handler) buildPodDetail(ctx context.Context, metricsClientset *metricsclientset.Clientset, pod corev1.Pod, events []corev1.Event) PodDetailResponse {
 	status, color := podStatus(pod)
 
 	image := ""
@@ -101,7 +106,7 @@ func (h *Handler) buildPodDetail(ctx context.Context, pod corev1.Pod, events []c
 		labels = map[string]string{}
 	}
 
-	cpu, memory := h.podResourceUsage(ctx, pod)
+	cpu, memory := h.podResourceUsage(ctx, metricsClientset, pod)
 
 	sortEventsNewestFirst(events)
 	eventRows := make([]PodEventRow, 0, len(events))
@@ -175,18 +180,18 @@ func containerStatusColor(cs corev1.ContainerStatus) StatusColor {
 // installed, or hasn't scraped this pod yet, Used degrades to "—" rather
 // than failing the whole request — metrics are a nice-to-have overlay on
 // metadata that's already known to be correct.
-func (h *Handler) podResourceUsage(ctx context.Context, pod corev1.Pod) (cpu, memory ResourceUsage) {
+func (h *Handler) podResourceUsage(ctx context.Context, metricsClientset *metricsclientset.Clientset, pod corev1.Pod) (cpu, memory ResourceUsage) {
 	cpuLimit := sumResourceLimits(pod, corev1.ResourceCPU)
 	memLimit := sumResourceLimits(pod, corev1.ResourceMemory)
 
 	cpu = ResourceUsage{Used: "—", Limit: formatQuantity(cpuLimit, formatMilli)}
 	memory = ResourceUsage{Used: "—", Limit: formatQuantity(memLimit, formatMebibytes)}
 
-	if h.MetricsClientset == nil {
+	if metricsClientset == nil {
 		return cpu, memory
 	}
 
-	metrics, err := h.MetricsClientset.MetricsV1beta1().PodMetricses(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+	metrics, err := metricsClientset.MetricsV1beta1().PodMetricses(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
 	if err != nil {
 		slog.Warn("pod metrics unavailable", "namespace", pod.Namespace, "name", pod.Name, "error", err)
 		return cpu, memory

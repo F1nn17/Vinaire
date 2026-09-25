@@ -1,5 +1,11 @@
 export type StatusColor = "ok" | "warn" | "err";
 
+// Matches the backend's api.ClusterRow (Roadmap Phase 11).
+export type Cluster = {
+  name: string;
+  default: boolean;
+};
+
 export type WorkloadRow = {
   name: string;
   namespace: string;
@@ -162,12 +168,7 @@ export type DashboardData = {
 // Real graph shape (Roadmap Phase 7) — node count and edges vary per
 // namespace, computed server-side from owner references and selectors.
 export type TopologyNodeKind =
-  | "ingress"
-  | "service"
-  | "deployment"
-  | "pod"
-  | "configmap"
-  | "secret";
+  "ingress" | "service" | "deployment" | "pod" | "configmap" | "secret";
 
 export type TopologyNode = {
   id: string;

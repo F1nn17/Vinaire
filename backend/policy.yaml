@@ -1,0 +1,20 @@
+# Group -> namespace/action allow-list (Roadmap Phase 10). Group names must
+# match the `groups` claim Keycloak puts in the token — see
+# keycloak/realm-export.json for how those groups/users are set up in the
+# dev Keycloak instance.
+#
+# A "*" namespace entry means every namespace, not one literally named "*".
+# This intentionally stays a flat allow-list, not a policy engine — see
+# AGENTS.md's core rule and ROADMAP.md's Phase 10 for why.
+groups:
+  auth-viewers:
+    namespaces:
+      - auth
+    actions:
+      - read
+  platform-admins:
+    namespaces:
+      - "*"
+    actions:
+      - read
+      - write
