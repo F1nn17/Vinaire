@@ -315,9 +315,18 @@ K8s event-propagation delay.
 
 ---
 
-## Phase 4 — Logs
+## Phase 4 — Logs ✅ done
 
 **Goal:** the Logs tab is a real live tail, not a static mock.
+
+> **Outcome note:** shipped as a dedicated point-to-point WebSocket
+> (`GET /api/v1/pods/{namespace}/{name}/logs`), not multiplexed through
+> Phase 2's `Hub` — that pub/sub broadcasts the same event to every
+> subscriber, which doesn't fit "one client tailing one container." Real
+> per-line timestamps came for free by requesting `PodLogOptions.Timestamps`
+> and parsing kubelet's prepended RFC3339 prefix; log *level* has no
+> equivalent structure in arbitrary container output, so it's a best-effort
+> keyword heuristic (`error`/`warn`/default-info) called out in code as such.
 
 **Backend**
 - `GET /api/v1/pods/{namespace}/{name}/logs?container=&follow=true` —

@@ -13,21 +13,7 @@ import (
 // WebSocket handshake bypasses chi's CORS middleware, so origin-checking
 // happens here instead, via the Upgrader.
 func ServeWS(hub *Hub, allowedOrigins []string) http.HandlerFunc {
-	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			origin := r.Header.Get("Origin")
-			if origin == "" {
-				// Non-browser clients (curl, tests) don't send Origin.
-				return true
-			}
-			for _, allowed := range allowedOrigins {
-				if origin == allowed {
-					return true
-				}
-			}
-			return false
-		},
-	}
+	upgrader := websocket.Upgrader{CheckOrigin: originChecker(allowedOrigins)}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)

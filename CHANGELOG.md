@@ -64,6 +64,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same cluster without re-resolving kubeconfig. Verified end-to-end against
   a real k3d pod with resource limits, including confirming non-ASCII
   characters (event metadata's "·" separator) render correctly end-to-end.
+- **Roadmap Phase 4 (live logs):** new
+  `GET /api/v1/pods/{namespace}/{name}/logs` — a dedicated point-to-point
+  WebSocket (`internal/stream.ServeLogs`, separate from Phase 2's broadcast
+  `Hub`) streaming one container's `kubectl logs -f` equivalent output live.
+  Requests `PodLogOptions.Timestamps` so each line gets a real per-line
+  time; log level is a best-effort `error`/`warn`/info keyword heuristic
+  (arbitrary container output has no structured level to parse). Frontend's
+  `useLogsStream()` hook + new `LogsTab` component add a container picker
+  (for multi-container pods) and a Follow/Pause toggle that actually
+  opens/closes the WebSocket, with autoscroll that backs off once the user
+  scrolls up and a 1000-line render cap. Verified end-to-end against a real
+  k3d pod emitting timestamped ticks every 2s: compared side-by-side with
+  `kubectl logs -f`, confirmed Pause genuinely stops new lines and Follow
+  resumes them, zero console errors.
 
 ### Changed
 

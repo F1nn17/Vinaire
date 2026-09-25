@@ -7,9 +7,9 @@ import { usePod } from "@/lib/hooks/useWorkloads";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { CodeBlock } from "@/components/ui/CodeBlock";
-import { LogLine } from "@/components/ui/LogLine";
 import { EventRow } from "@/components/ui/EventRow";
 import { TerminalPane } from "@/components/ui/TerminalPane";
+import { LogsTab } from "./LogsTab";
 
 type Tab = "overview" | "logs" | "terminal" | "events" | "yaml";
 
@@ -158,16 +158,11 @@ export default function PodDetailPage() {
       )}
 
       {tab === "logs" && (
-        <div className="flex flex-col gap-2.5">
-          <div className="font-mono text-xs text-text-faint">
-            Container: {pod.containers[0]?.name ?? "—"} · following live
-          </div>
-          <div className="max-h-[440px] overflow-auto rounded-[10px] border border-border bg-code-bg p-4">
-            {pod.logs.map((line, i) => (
-              <LogLine key={i} {...line} />
-            ))}
-          </div>
-        </div>
+        <LogsTab
+          namespace={pod.namespace}
+          name={pod.name}
+          containers={pod.containers}
+        />
       )}
 
       {tab === "terminal" && (

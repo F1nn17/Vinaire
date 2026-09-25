@@ -41,8 +41,9 @@ type PodEventRow struct {
 }
 
 // PodDetailResponse matches the frontend's PodDetail type
-// (frontend/src/lib/types.ts). `Logs` is always empty here — the Logs tab
-// stays on mock data until Roadmap Phase 4 (live log streaming).
+// (frontend/src/lib/types.ts). Logs aren't part of this response — the Logs
+// tab is a separate live WebSocket stream (see internal/stream.ServeLogs,
+// Roadmap Phase 4), not a one-shot fetch.
 type PodDetailResponse struct {
 	Name        string                `json:"name"`
 	Namespace   string                `json:"namespace"`
@@ -58,7 +59,6 @@ type PodDetailResponse struct {
 	CPU         ResourceUsage         `json:"cpu"`
 	Memory      ResourceUsage         `json:"memory"`
 	Containers  []PodContainerSummary `json:"containers"`
-	Logs        []any                 `json:"logs"`
 	Events      []PodEventRow         `json:"events"`
 	YAML        string                `json:"yaml"`
 }
@@ -127,7 +127,6 @@ func (h *Handler) buildPodDetail(ctx context.Context, pod corev1.Pod, events []c
 		CPU:         cpu,
 		Memory:      memory,
 		Containers:  containerSummaries(pod),
-		Logs:        []any{},
 		Events:      eventRows,
 		YAML:        yaml,
 	}

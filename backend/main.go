@@ -55,9 +55,11 @@ func main() {
 
 	hub := stream.NewHub()
 	streamHandler := unavailableWSHandler
+	logsHandler := unavailableWSHandler
 	if clientset != nil {
 		go stream.StartWorkloadInformers(ctx, clientset, hub)
 		streamHandler = stream.ServeWS(hub, cfg.CORSAllowedOrigins)
+		logsHandler = stream.ServeLogs(clientset, cfg.CORSAllowedOrigins)
 	}
 
 	r := chi.NewRouter()
@@ -80,6 +82,7 @@ func main() {
 	r.Get("/api/v1/jobs", workloadsHandler.Jobs)
 	r.Get("/api/v1/stream/workloads", streamHandler)
 	r.Get("/api/v1/pods/{namespace}/{name}", workloadsHandler.PodDetail)
+	r.Get("/api/v1/pods/{namespace}/{name}/logs", logsHandler)
 
 	// TODO(vinaire): read-only REST endpoints, backed by internal/k8s
 	// (later roadmap phases):

@@ -48,7 +48,6 @@ export type PodDetail = {
   cpu: { used: string; limit: string; pct: number };
   memory: { used: string; limit: string; pct: number };
   containers: ContainerSummary[];
-  logs: LogLine[];
   events: ClusterEvent[];
   yaml: string;
   deploymentName?: string;
