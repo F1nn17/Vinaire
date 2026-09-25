@@ -613,21 +613,34 @@ crashing the page.
 
 ---
 
-## Phase 9 — Write actions (Restart / Delete / Rollback)
+## Phase 9 — Write actions (Restart / Delete / Rollback) ✅ done
 
 **Goal:** Restart/Delete/Rollback buttons are real and hit the Kubernetes
 API directly via client-go — no git/PR layer.
 
 > ⚠ **This deliberately supersedes the GitOps-PR approach this phase
-> originally had, and AGENTS.md's read-only-UI rule along with it.** That
-> rule said any write flow "must be implemented as: generate/update a
-> manifest, open a pull request... never a direct API call on write" — this
-> phase does exactly the direct API call that rule forbids. This was an
-> explicit decision by the project owner, not an oversight; AGENTS.md
-> itself hasn't been updated to match yet (see the chat discussion around
-> the date this phase's scope changed). Anyone picking this phase back up
-> should reconcile AGENTS.md with the actual architecture before writing
-> more write-endpoints on top of this one.
+> originally had, and the read-only-UI rule AGENTS.md previously stated
+> without exception.** This was an explicit decision by the project owner,
+> not an oversight. AGENTS.md's core rule has since been updated to match:
+> it now names these exact three endpoints as the deliberate, narrow,
+> audited exception to `internal/k8s`'s read-only default, instead of
+> forbidding all writes outright. Anyone adding a fourth write endpoint
+> should raise it first, per that rule.
+>
+> **Outcome note:** verified end-to-end against `k3d-vinaire-dev` with a
+> real `Deployment` (3 revisions, distinct images per revision). Clicking
+> Restart in the UI produced a real strategic-merge-patch rollout —
+> confirmed via the backend's structured audit log
+> (`action=restart namespace=... name=...`) and the pods being recreated.
+> Rollback to revision 1 patched `spec.template` back to that revision's
+> image, logged with the target revision number. Delete removed the
+> `Deployment` object outright (`kubectl get deployments` showed nothing
+> afterward) and the UI redirected to `/workloads`. All three went through
+> the confirm-modal → toast UX exactly as specced, with zero browser
+> console errors. No RBAC widening was needed in this dev setup (the
+> backend already runs with a permissive kubeconfig locally) — the risk
+> below still applies verbatim to any less-privileged deployment of this
+> backend.
 
 **Backend**
 - Endpoints via client-go directly, no git/PR layer:

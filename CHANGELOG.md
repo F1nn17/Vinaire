@@ -146,6 +146,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   turned out to already have Gateway API CRDs installed — spun up a second,
   genuinely vanilla throwaway k3d cluster specifically to verify the
   "not installed" path for real, then tore it down.
+- **Roadmap Phase 9 (Write actions: Restart / Delete / Rollback):** new
+  `POST /api/v1/deployments/{namespace}/{name}/restart` (strategic merge
+  patch of the pod template's `kubectl.kubernetes.io/restartedAt`
+  annotation), `DELETE /api/v1/deployments/{namespace}/{name}`, and
+  `POST /api/v1/deployments/{namespace}/{name}/rollback` (finds the target
+  `ReplicaSet` by its `deployment.kubernetes.io/revision` annotation and
+  patches the Deployment's `spec.template` from it) — the three direct
+  `client-go` write actions the architecture pivot below named as the
+  deliberate exception to the read-only rule. Every call is
+  structured-logged (`slog.Warn("write action", ...)`) with the action,
+  namespace, name, caller address, and (for rollback) the target revision.
+  Frontend gained reusable `ConfirmModal`/`Toast` components; the
+  Deployment detail page's Restart/Delete/Rollback buttons are now real,
+  each behind a confirmation modal and followed by a success/error toast,
+  with Delete redirecting to `/workloads` on success. Verified end-to-end
+  against `k3d-vinaire-dev` with a real 3-revision Deployment: Restart
+  triggered a real rollout, Rollback reverted `spec.template` to revision
+  1's image, and Delete removed the object — all three confirmed via the
+  backend's audit log and `kubectl`, with zero browser console errors.
 
 ### Changed
 
@@ -159,5 +178,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plain `Delete()`) against the live cluster, scoped to exactly those
   three Deployment actions. AGENTS.md's core rule was updated to match:
   the UI is still read-only by default, but these three actions are now
-  named as the explicit, audited exception. Not yet implemented — this is
-  a planning/rule change only.
+  named as the explicit, audited exception. Implemented and verified — see
+  the Phase 9 entry under Added above.

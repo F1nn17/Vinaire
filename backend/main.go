@@ -83,7 +83,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: cfg.CORSAllowedOrigins,
-		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowedMethods: []string{"GET", "POST", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Content-Type"},
 		MaxAge:         300,
 	}))
@@ -105,6 +105,13 @@ func main() {
 	r.Get("/api/v1/topology", workloadsHandler.Topology)
 	r.Get("/api/v1/ingresses", workloadsHandler.Ingresses)
 	r.Get("/api/v1/gateway-routes", workloadsHandler.GatewayRoutes)
+
+	// Write actions (Roadmap Phase 9) — the deliberate, narrow, audited
+	// exception to the read-only rule. See AGENTS.md's core rule and
+	// internal/k8s/deployment_actions.go before adding another one.
+	r.Post("/api/v1/deployments/{namespace}/{name}/restart", workloadsHandler.RestartDeployment)
+	r.Delete("/api/v1/deployments/{namespace}/{name}", workloadsHandler.DeleteDeployment)
+	r.Post("/api/v1/deployments/{namespace}/{name}/rollback", workloadsHandler.RollbackDeployment)
 
 	// TODO(vinaire): read-only REST endpoints, backed by internal/k8s
 	// (later roadmap phases):

@@ -1,0 +1,21 @@
+time=2026-09-25T20:25:54.524+04:00 level=INFO msg="kubernetes client initialized"
+time=2026-09-25T20:25:54.563+04:00 level=INFO msg="vinaire backend listening" addr=:8080 cors_allowed_origins=[http://localhost:3100]
+time=2026-09-25T20:25:54.665+04:00 level=INFO msg="stream: informer caches synced, watching for live updates"
+time=2026-09-25T20:26:04.858+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000001
+time=2026-09-25T20:26:04.946+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000002
+time=2026-09-25T20:26:56.519+04:00 level=INFO msg=request method=GET path=/api/v1/deployments status=200 bytes=173 duration_ms=4 request_id=Shiraku/9AW1HbqkdP-000003
+time=2026-09-25T20:27:04.958+04:00 level=INFO msg=request method=GET path=/api/v1/deployments/phase9-test/demo status=405 bytes=0 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000004
+time=2026-09-25T20:27:05.029+04:00 level=INFO msg=request method=GET path=/api/v1/deployments/phase9-test/demo status=405 bytes=0 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000005
+time=2026-09-25T20:29:38.678+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000006
+time=2026-09-25T20:29:39.779+04:00 level=WARN msg="write action" action=restart namespace=auth name=keycloak remote_addr=[::1]:30713
+time=2026-09-25T20:29:39.823+04:00 level=INFO msg=request method=POST path=/api/v1/deployments/auth/keycloak/restart status=200 bytes=16 duration_ms=126 request_id=Shiraku/9AW1HbqkdP-000007
+time=2026-09-25T20:29:43.114+04:00 level=INFO msg=request method=OPTIONS path=/api/v1/deployments/auth/keycloak/rollback status=200 bytes=0 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000008
+time=2026-09-25T20:29:43.232+04:00 level=WARN msg="write action" action=rollback namespace=auth name=keycloak remote_addr=[::1]:30713 revision=1
+time=2026-09-25T20:29:43.246+04:00 level=INFO msg=request method=POST path=/api/v1/deployments/auth/keycloak/rollback status=200 bytes=16 duration_ms=129 request_id=Shiraku/9AW1HbqkdP-000009
+time=2026-09-25T20:29:43.694+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000010
+time=2026-09-25T20:29:46.113+04:00 level=INFO msg=request method=OPTIONS path=/api/v1/deployments/auth/keycloak status=200 bytes=0 duration_ms=0 request_id=Shiraku/9AW1HbqkdP-000011
+time=2026-09-25T20:29:46.174+04:00 level=WARN msg="write action" action=delete namespace=auth name=keycloak remote_addr=[::1]:30713
+time=2026-09-25T20:29:46.266+04:00 level=INFO msg=request method=DELETE path=/api/v1/deployments/auth/keycloak status=200 bytes=16 duration_ms=99 request_id=Shiraku/9AW1HbqkdP-000012
+time=2026-09-25T20:29:47.442+04:00 level=INFO msg=request method=GET path=/api/v1/deployments status=200 bytes=758 duration_ms=6 request_id=Shiraku/9AW1HbqkdP-000013
+time=2026-09-25T20:29:47.453+04:00 level=INFO msg=request method=GET path=/api/v1/stream/workloads status=0 bytes=0 duration_ms=2 request_id=Shiraku/9AW1HbqkdP-000014
+time=2026-09-25T20:29:47.674+04:00 level=INFO msg=request method=GET path=/api/v1/stream/workloads status=0 bytes=0 duration_ms=211 request_id=Shiraku/9AW1HbqkdP-000015

@@ -1,0 +1,17 @@
+
+> frontend@0.1.0 dev
+> next dev --webpack -p 3100
+
+▲ Next.js 16.3.6 (webpack)
+- Local:         http://localhost:3100
+- Network:       http://192.168.88.254:3100
+✓ Ready in 5.3s
+✓ Running next.config.ts took 3.4s
+
+○ Compiling / ...
+ GET / 200 in 2.1s (next.js: 1319ms, application-code: 811ms)
+ GET / 200 in 57ms (next.js: 5ms, application-code: 53ms)
+ GET /workloads/deployments/auth/keycloak 200 in 7.0s (next.js: 6.9s, application-code: 124ms)
+ GET /workloads 200 in 1062ms (next.js: 1035ms, application-code: 27ms)
+ GET /workloads 200 in 45ms (next.js: 6ms, application-code: 38ms)
+[?25h

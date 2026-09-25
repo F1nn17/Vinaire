@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useDeployment } from "@/lib/hooks/useWorkloads";
 import type { DeploymentPodRow } from "@/lib/types";
@@ -9,6 +9,18 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { Toast, type ToastState } from "@/components/ui/Toast";
+import {
+  deleteDeployment,
+  restartDeployment,
+  rollbackDeployment,
+} from "@/lib/api/deploymentActions";
+
+type PendingAction =
+  | { kind: "restart" }
+  | { kind: "delete" }
+  | { kind: "rollback"; revision: number };
 
 type Tab = "overview" | "pods" | "revisions" | "yaml";
 
@@ -57,14 +69,54 @@ const podColumns: DataTableColumn<DeploymentPodRow>[] = [
 ];
 
 export default function DeploymentDetailPage() {
+  const router = useRouter();
   const { namespace, name } = useParams<{ namespace: string; name: string }>();
   const deploymentNamespace = decodeURIComponent(namespace);
   const deploymentName = decodeURIComponent(name);
-  const { data: deployment, isLoading } = useDeployment(
-    deploymentNamespace,
-    deploymentName,
-  );
+  const {
+    data: deployment,
+    isLoading,
+    mutate,
+  } = useDeployment(deploymentNamespace, deploymentName);
   const [tab, setTab] = useState<Tab>("overview");
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<ToastState>(null);
+
+  async function handleConfirm() {
+    if (!pending) return;
+    setBusy(true);
+    try {
+      if (pending.kind === "restart") {
+        await restartDeployment(deploymentNamespace, deploymentName);
+        setToast({ type: "success", message: "Rollout restarted." });
+        await mutate();
+      } else if (pending.kind === "delete") {
+        await deleteDeployment(deploymentNamespace, deploymentName);
+        setToast({ type: "success", message: "Deployment deleted." });
+        router.push("/workloads");
+      } else {
+        await rollbackDeployment(
+          deploymentNamespace,
+          deploymentName,
+          pending.revision,
+        );
+        setToast({
+          type: "success",
+          message: `Rolled back to revision ${pending.revision}.`,
+        });
+        await mutate();
+      }
+      setPending(null);
+    } catch (err) {
+      setToast({
+        type: "error",
+        message: err instanceof Error ? err.message : "Action failed.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (isLoading) {
     return <div className="p-8 text-sm text-text-muted">Loading…</div>;
@@ -100,14 +152,14 @@ export default function DeploymentDetailPage() {
         <div className="flex shrink-0 gap-2.5">
           <button
             type="button"
-            title="TODO: wire up to backend — proposes a GitOps PR, does not call the Kubernetes API directly"
+            onClick={() => setPending({ kind: "restart" })}
             className="rounded-lg border border-border bg-surface px-3.5 py-2 text-[12.5px]"
           >
             Restart rollout
           </button>
           <button
             type="button"
-            title="TODO: wire up to backend — proposes a GitOps PR, does not call the Kubernetes API directly"
+            onClick={() => setPending({ kind: "delete" })}
             className="rounded-lg border border-err px-3.5 py-2 text-[12.5px] text-err"
           >
             Delete
@@ -167,7 +219,9 @@ export default function DeploymentDetailPage() {
               {!rev.current && (
                 <button
                   type="button"
-                  title="TODO: wire up to backend — proposes a GitOps PR reverting the manifest, does not call the Kubernetes API directly"
+                  onClick={() =>
+                    setPending({ kind: "rollback", revision: rev.revision })
+                  }
                   className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs"
                 >
                   Rollback
@@ -179,8 +233,38 @@ export default function DeploymentDetailPage() {
       )}
 
       {tab === "yaml" && <CodeBlock code={deployment.yaml} />}
+
+      <ConfirmModal
+        open={pending !== null}
+        title={confirmTitle(pending)}
+        message={confirmMessage(pending, deploymentName)}
+        confirmLabel={pending?.kind === "delete" ? "Delete" : "Confirm"}
+        danger={pending?.kind === "delete"}
+        busy={busy}
+        onConfirm={handleConfirm}
+        onCancel={() => setPending(null)}
+      />
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
+}
+
+function confirmTitle(pending: PendingAction | null): string {
+  if (!pending) return "";
+  if (pending.kind === "restart") return "Restart rollout?";
+  if (pending.kind === "delete") return "Delete deployment?";
+  return "Rollback deployment?";
+}
+
+function confirmMessage(pending: PendingAction | null, name: string): string {
+  if (!pending) return "";
+  if (pending.kind === "restart") {
+    return `This will trigger a rolling restart of "${name}". Pods will be recreated one by one.`;
+  }
+  if (pending.kind === "delete") {
+    return `This permanently deletes "${name}" and all its pods. This cannot be undone.`;
+  }
+  return `This will roll "${name}" back to revision ${pending.revision}, replacing its current pod template.`;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
