@@ -247,6 +247,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   real Pod detail page. Verified end-to-end against `k3d-vinaire-dev`,
   including a live browser click-through from the PVC list through to a
   mounting pod's own detail page.
+- **Roadmap Phase 14 (RBAC viewer, read-only):** new
+  `GET /api/v1/{roles,clusterroles,rolebindings,clusterrolebindings,serviceaccounts}`
+  list endpoints and `GET /api/v1/rbac/summary?namespace=` — a static
+  "what's configured" rollup correlating each namespace's RoleBindings
+  against the rules their referenced Role/ClusterRole actually grants
+  (never a live SubjectAccessReview). Role/RoleBinding/ServiceAccount are
+  namespaced; ClusterRole/ClusterRoleBinding are cluster-scoped, so those
+  two tabs correctly have no namespace filter. Frontend: a new sidebar
+  "Access control" section with six tabs (five list tabs plus "Who can do
+  what"). Verified end-to-end against `k3d-vinaire-dev` with a throwaway
+  Role/RoleBinding/ServiceAccount and the real `vinaire-viewer` ClusterRole/
+  ClusterRoleBinding from Phase 10 — the summary correctly resolved a test
+  binding down to its role's exact rule.
 
 ### Changed
 

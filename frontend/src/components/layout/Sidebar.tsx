@@ -11,6 +11,7 @@ import {
   NetworkIcon,
   SecretIcon,
   SettingsIcon,
+  ShieldIcon,
   StorageIcon,
   TopologyIcon,
 } from "@/components/icons";
@@ -92,6 +93,17 @@ const groups: NavGroup[] = [
         label: "Services & Ingress",
         icon: <NetworkIcon />,
         isActive: (p) => p.startsWith("/network"),
+      },
+    ],
+  },
+  {
+    label: "Access control",
+    items: [
+      {
+        href: "/access-control",
+        label: "RBAC",
+        icon: <ShieldIcon />,
+        isActive: (p) => p.startsWith("/access-control"),
       },
     ],
   },

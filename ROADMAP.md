@@ -1053,11 +1053,33 @@ PVC's detail page lists exactly the pods that mount it, verified against
 
 ---
 
-## Phase 14 — RBAC viewer (read-only)
+## Phase 14 — RBAC viewer (read-only) ✅ done
 
 **Goal:** an Access control section shows real Roles, ClusterRoles,
 RoleBindings, ClusterRoleBindings, and ServiceAccounts, with a simple
 "who can do what" summary for a selected namespace.
+
+> **Outcome note:** the summary endpoint (`GET /api/v1/rbac/summary`)
+> correlates every RoleBinding in scope against a pre-fetched map of
+> Roles (by `namespace/name`) and ClusterRoles (by `name`, since a
+> RoleBinding can reference either kind via `roleRef.kind`) — one List()
+> call per kind, not a Get() per binding, matching this codebase's existing
+> "list once, correlate in memory" style (Phase 7's topology graph,
+> Phase 13's PVC-mount scan). ClusterRoleBindings deliberately aren't
+> folded into the per-namespace summary — they already have their own tab,
+> and duplicating every cluster-wide binding into each namespace's summary
+> would bury the namespace-specific bindings the summary exists to
+> highlight; the UI says so explicitly. Resolved this phase's own
+> scope-mixing risk the same way Phase 13 did: ClusterRole/
+> ClusterRoleBinding tabs simply have no namespace filter. Verified
+> end-to-end against `k3d-vinaire-dev` with a throwaway Role/RoleBinding/
+> ServiceAccount (a `pods: get/list/watch` Role bound to a ServiceAccount)
+> plus the real `vinaire-viewer`/`vinaire-viewer-binding` ClusterRole/
+> ClusterRoleBinding created for Phase 10 — all six tabs (five list tabs
+> plus the summary) showed correct real data over curl and in a live
+> Chromium click-through, and the summary correctly resolved the test
+> RoleBinding down to its Role's exact rule
+> (`core pods → get, list, watch`).
 
 **Backend**
 - `GET /api/v1/roles?namespace=`, `GET /api/v1/clusterroles`,

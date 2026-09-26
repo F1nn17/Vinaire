@@ -204,6 +204,77 @@ export type PVCDetail = {
   yaml: string;
 };
 
+// Matches the backend's api.RoleRow (Roadmap Phase 14).
+export type RoleRow = {
+  name: string;
+  namespace: string;
+  rules: number;
+  age: string;
+};
+
+// Matches the backend's api.ClusterRoleRow (Roadmap Phase 14).
+// ClusterRoles are cluster-scoped.
+export type ClusterRoleRow = {
+  name: string;
+  rules: number;
+  age: string;
+};
+
+// Matches the backend's api.RoleBindingRow (Roadmap Phase 14).
+export type RoleBindingRow = {
+  name: string;
+  namespace: string;
+  roleKind: string;
+  roleName: string;
+  subjects: string;
+  age: string;
+};
+
+// Matches the backend's api.ClusterRoleBindingRow (Roadmap Phase 14).
+// ClusterRoleBindings are cluster-scoped.
+export type ClusterRoleBindingRow = {
+  name: string;
+  roleKind: string;
+  roleName: string;
+  subjects: string;
+  age: string;
+};
+
+// Matches the backend's api.ServiceAccountRow (Roadmap Phase 14).
+export type ServiceAccountRow = {
+  name: string;
+  namespace: string;
+  secrets: number;
+  age: string;
+};
+
+// Matches the backend's api.RBACSubject (Roadmap Phase 14).
+export type RBACSubject = {
+  kind: string;
+  name: string;
+  namespace?: string;
+};
+
+// Matches the backend's api.RBACRule (Roadmap Phase 14).
+export type RBACRule = {
+  apiGroups: string;
+  resources: string;
+  verbs: string;
+};
+
+// Matches the backend's api.RBACBindingSummary (Roadmap Phase 14) — a
+// static "what's configured" rollup, never a live SubjectAccessReview/
+// "can I do X" check.
+export type RBACBindingSummary = {
+  namespace: string;
+  bindingKind: string;
+  bindingName: string;
+  roleKind: string;
+  roleName: string;
+  subjects: RBACSubject[];
+  rules: RBACRule[];
+};
+
 export type ConfigMapKey = {
   label: string;
   value: string;
