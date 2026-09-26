@@ -688,7 +688,76 @@ visible in `kubectl get deployments`.
 
 ---
 
-## Phase 10 — Authorization (token-first, with optional Keycloak) + a single image
+## Phase 10 — Authorization (token-first, with optional Keycloak) + a single image ✅ done
+
+> **Outcome note:** this phase's design changed mid-implementation — an
+> earlier version used a Keycloak-only OIDC bearer-token flow with an
+> app-level group→namespace/action policy (`internal/authz`,
+> `backend/policy.yaml`) and `next-auth` on the frontend. The project owner
+> replaced that with what's described below: token-first login, a real
+> Kubernetes RBAC pass-through (no app-level policy at all), and OIDC moved
+> entirely server-side into the Go backend. That switch also happened to
+> eliminate a local environment problem (a Proxifier install on this dev
+> machine breaking Node's outbound connections — see AGENTS.md's frontend
+> notes) simply by removing the only code path that needed Node to make an
+> outbound call at all — the frontend is a static export now, doing
+> nothing but `fetch`/WebSocket calls from the browser.
+>
+> Implemented and verified in full:
+> - **Token mode** (`internal/authn`): verified end-to-end with a real,
+>   RBAC-scoped ServiceAccount (`list`/`get`/`watch` only, bound to one
+>   namespace via a plain `RoleBinding`, not cluster-admin) against
+>   `k3d-vinaire-dev`. Login sets the session cookie; a request for that
+>   namespace succeeds, a cluster-wide (no-namespace) list or a write
+>   action both come back as a real `403` from the Kubernetes API itself
+>   (`internal/api.respondK8sError` maps `apierrors.IsForbidden`/
+>   `IsUnauthorized`/`IsNotFound` to the right HTTP status — this needed
+>   fixing along the way, since every K8s error was originally flattened to
+>   `502`). Session TTL syncs exactly to the pasted token's own JWT `exp`
+>   claim (verified both with a 1-hour and a 10-minute token). Logout
+>   invalidates the session immediately (`401` afterward).
+> - **OIDC mode**: a real Authorization Code + PKCE exchange against the
+>   dev Keycloak in `/keycloak`, entirely in the Go backend
+>   (`internal/authn/oidc.go`) — verified with a real browser login (`curl`
+>   for the code-exchange mechanics, then a real Chromium session for the
+>   full redirect chain). The resulting session correctly gets a real `401`
+>   from the Kubernetes API, since `k3d-vinaire-dev`'s API server isn't
+>   itself configured with `--oidc-issuer-url` to trust this realm — that
+>   cluster-side RBAC wiring is the "basic scaffold" this phase's spec
+>   asked for, not a full production OIDC-to-RBAC setup.
+> - **Cross-origin session cookie**: the frontend (a static export, no
+>   server of its own) always calls this backend cross-origin, including in
+>   local dev. `SameSite=None; Secure=true` is required for a cross-origin
+>   `fetch(..., {credentials:"include"})` to carry the cookie at all —
+>   confirmed working in a real Chromium browser even over plain
+>   `http://localhost` (browsers treat `localhost` as a secure context, so
+>   `Secure` doesn't require real TLS there). `COOKIE_SAMESITE=strict` is
+>   available for a same-origin deployment instead.
+> - **Single combined image**: `docker build .` at the repo root produces
+>   one ~50 MB image (multi-stage: `node:22-alpine` builds the frontend,
+>   `golang:1.27-alpine` builds the backend, the final layer is
+>   `gcr.io/distroless/static-debian12:nonroot` — no shell, no Node/npm, a
+>   non-root user by default). `docker run` of that image serves the API
+>   and the static frontend from the same port (`STATIC_DIR`, see
+>   `backend/static.go`) — verified directly: `/`, `/workloads`, a clean
+>   extension-less route, a `/_next/static/...` asset, and
+>   `/api/v1/auth/config` all resolved correctly from one running
+>   container, and `docker exec ... sh` failed with "no such file" —
+>   confirming no shell (let alone Node/npm) exists in the final layer.
+> - **Static export routing**: `[namespace]/[name]` dynamic route segments
+>   don't work with `output: "export"` (pod/deployment names aren't known
+>   at build time), so the two detail pages moved to
+>   `/workloads/{pods,deployments}/detail?namespace=&name=` — every `Href`
+>   the backend generates (`internal/api.detailHref`) and the one
+>   frontend-side link (the deployment detail page's pod-rows table)
+>   updated to match. `next dev` still runs as a normal dev server with hot
+>   reload — `output: "export"`'s constraints only bind at `next build`.
+> - Also removed as part of this rework: `next-auth`, the old
+>   `internal/authz` package, `backend/policy.yaml`, and the
+>   `frontend/docker-compose.dev.yml` container-workaround this phase
+>   briefly needed before OIDC moved server-side — see AGENTS.md's
+>   "Authentication (Phase 10)" and "Rendering model" sections for the
+>   current design.
 
 **Backend**
 - An `AuthProvider` interface with implementations switched via `AUTH_MODE`:
@@ -806,9 +875,11 @@ label) is real.
 > (`k3d-vinaire-dev` and a second `k3d-vinaire-dev-2` created for this):
 > `bob`'s all-namespaces pod list differs correctly between the default
 > cluster and `X-Cluster: k3d-vinaire-dev-2`, with each cluster's own,
-> distinct real data (no cross-cluster leakage). The frontend dropdown/hook
-> wiring builds and lints clean; live-browser confirmation of the dropdown
-> itself is blocked by the same local Proxifier issue noted in Phase 10.
+> distinct real data (no cross-cluster leakage). Also confirmed live in a
+> real browser after Phase 10's rework: the Topbar dropdown correctly shows
+> both configured clusters, and switching from `k3d-vinaire-dev` to
+> `k3d-vinaire-dev-2` swaps the Workloads table over to that cluster's own
+> real data with no stale rows lingering from the previous one.
 
 **Backend**
 - Config: a named list of kubeconfig contexts (or separate kubeconfig

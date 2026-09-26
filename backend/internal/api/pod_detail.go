@@ -66,24 +66,21 @@ type PodDetailResponse struct {
 
 // PodDetail handles GET /api/v1/pods/{namespace}/{name}.
 func (h *Handler) PodDetail(w http.ResponseWriter, r *http.Request) {
-	cluster, ok := h.resolveCluster(w, r)
+	cluster, clientset, ok := h.resolveCluster(w, r)
 	if !ok {
 		return
 	}
 
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if _, _, ok := h.authorize(w, r, namespace, "read"); !ok {
-		return
-	}
 
-	pod, err := k8s.GetPod(r.Context(), cluster.Clientset, namespace, name)
+	pod, err := k8s.GetPod(r.Context(), clientset, namespace, name)
 	if err != nil {
 		respondError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
-	events, err := k8s.ListEventsForObject(r.Context(), cluster.Clientset, namespace, name)
+	events, err := k8s.ListEventsForObject(r.Context(), clientset, namespace, name)
 	if err != nil {
 		// Non-fatal: still show pod metadata even if events can't be listed.
 		slog.Warn("list events failed", "namespace", namespace, "name", name, "error", err)

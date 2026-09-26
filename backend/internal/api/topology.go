@@ -45,7 +45,7 @@ type TopologyGraph struct {
 // the frontend just lays out and draws whatever graph it's given. See
 // ROADMAP.md Phase 7 for the (deliberately simplified) matching rules.
 func (h *Handler) Topology(w http.ResponseWriter, r *http.Request) {
-	cluster, ok := h.resolveCluster(w, r)
+	_, clientset, ok := h.resolveCluster(w, r)
 	if !ok {
 		return
 	}
@@ -54,40 +54,37 @@ func (h *Handler) Topology(w http.ResponseWriter, r *http.Request) {
 	if namespace == "" {
 		namespace = "default"
 	}
-	if _, _, ok := h.authorize(w, r, namespace, "read"); !ok {
-		return
-	}
 
 	ctx := r.Context()
 
-	ingresses, err := k8s.ListIngresses(ctx, cluster.Clientset, namespace)
+	ingresses, err := k8s.ListIngresses(ctx, clientset, namespace)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, err.Error())
+		respondK8sError(w, err)
 		return
 	}
-	services, err := k8s.ListServices(ctx, cluster.Clientset, namespace)
+	services, err := k8s.ListServices(ctx, clientset, namespace)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, err.Error())
+		respondK8sError(w, err)
 		return
 	}
-	deployments, err := k8s.ListDeployments(ctx, cluster.Clientset, namespace)
+	deployments, err := k8s.ListDeployments(ctx, clientset, namespace)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, err.Error())
+		respondK8sError(w, err)
 		return
 	}
-	pods, err := k8s.ListPods(ctx, cluster.Clientset, namespace)
+	pods, err := k8s.ListPods(ctx, clientset, namespace)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, err.Error())
+		respondK8sError(w, err)
 		return
 	}
-	configMaps, err := k8s.ListConfigMaps(ctx, cluster.Clientset, namespace)
+	configMaps, err := k8s.ListConfigMaps(ctx, clientset, namespace)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, err.Error())
+		respondK8sError(w, err)
 		return
 	}
-	secrets, err := k8s.ListSecrets(ctx, cluster.Clientset, namespace)
+	secrets, err := k8s.ListSecrets(ctx, clientset, namespace)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, err.Error())
+		respondK8sError(w, err)
 		return
 	}
 

@@ -12,7 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/shiraku/vinaire/backend/internal/authz"
+	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/clusters"
 )
 
@@ -32,30 +32,27 @@ const tailLines = 200
 // (the `kubectl logs -f` equivalent) to the client as they're written,
 // until the client disconnects or the pod's log stream ends. Route params:
 // {namespace}/{name}; optional `?container=` and `?cluster=` (Roadmap
-// Phase 11) query params. The caller's token travels as `?access_token=`
-// (see ServeWS) since a browser can't attach it as a header to a WebSocket
-// handshake; Phase 10 gates this on "read" access to the pod's namespace —
-// the same level as viewing the pod itself, since logs are read-only.
-func ServeLogs(registry *clusters.Registry, verifier *authz.Verifier, policy *authz.Policy, allowedOrigins []string) http.HandlerFunc {
+// Phase 11) query params. The session cookie (Roadmap Phase 10) rides
+// along on the WebSocket handshake automatically, same as any other HTTP
+// request — no query-param token needed. The resulting clientset
+// authenticates as the caller's own logged-in identity, so an
+// unauthorized pod/namespace fails with a real 403 from the Kubernetes API
+// itself when GetLogs is called below, same as `kubectl logs` would.
+func ServeLogs(registry *clusters.Registry, auth *authn.Manager, allowedOrigins []string) http.HandlerFunc {
 	upgrader := websocket.Upgrader{CheckOrigin: originChecker(allowedOrigins)}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		claims, err := verifier.VerifyRequest(r)
-		if err != nil {
-			http.Error(w, "unauthorized: "+err.Error(), http.StatusUnauthorized)
+		sess, ok := auth.Authenticate(r)
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		namespace := chi.URLParam(r, "namespace")
-		if !policy.Allowed(claims, namespace, "read") {
-			http.Error(w, "forbidden", http.StatusForbidden)
+		clientset, err := clientsetFor(registry, auth, sess, r.URL.Query().Get("cluster"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		cluster, ok := registry.Resolve(r.URL.Query().Get("cluster"))
-		if !ok || cluster == nil || cluster.Clientset == nil {
-			http.Error(w, "unknown or unreachable cluster", http.StatusBadRequest)
-			return
-		}
-		clientset := cluster.Clientset
 
 		name := chi.URLParam(r, "name")
 		container := resolveContainer(r.Context(), clientset, namespace, name, r.URL.Query().Get("container"))

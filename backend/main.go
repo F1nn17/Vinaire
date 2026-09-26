@@ -20,7 +20,7 @@ import (
 	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
 	"github.com/shiraku/vinaire/backend/internal/api"
-	"github.com/shiraku/vinaire/backend/internal/authz"
+	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/clusters"
 	"github.com/shiraku/vinaire/backend/internal/config"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
@@ -39,21 +39,24 @@ func main() {
 
 	registry := buildClusterRegistry(cfg)
 
-	verifier, err := authz.NewVerifier(ctx, cfg.OIDCIssuerURL, cfg.OIDCClientID)
+	// Unlike the per-cluster clients below, a misconfigured AUTH_MODE=oidc
+	// is fatal at boot — this phase's own risk note: fail loudly here, not
+	// silently break every login later.
+	auth, err := authn.NewManager(ctx, authn.ManagerConfig{
+		AuthMode:         cfg.AuthMode,
+		CookieSecure:     cfg.CookieSecure,
+		CookieSameSite:   cfg.CookieSameSite,
+		FrontendURL:      cfg.FrontendURL,
+		OIDCIssuerURL:    cfg.OIDCIssuerURL,
+		OIDCClientID:     cfg.OIDCClientID,
+		OIDCClientSecret: cfg.OIDCClientSecret,
+		OIDCRedirectURL:  cfg.OIDCRedirectURL,
+	})
 	if err != nil {
-		// Non-fatal like the per-cluster clients below, but security-critical:
-		// authMiddleware (see below) fails every /api/v1 request closed
-		// rather than letting them through unauthenticated.
-		slog.Warn("oidc provider unavailable — all /api/v1 requests will be rejected until it's reachable", "issuer", cfg.OIDCIssuerURL, "error", err)
-	} else {
-		slog.Info("oidc verifier initialized", "issuer", cfg.OIDCIssuerURL)
+		slog.Error("auth provider initialization failed", "auth_mode", cfg.AuthMode, "error", err)
+		os.Exit(1)
 	}
-
-	policy, err := authz.LoadPolicy(cfg.PolicyPath)
-	if err != nil {
-		slog.Warn("policy file unavailable — denying all namespace access until it's fixed", "path", cfg.PolicyPath, "error", err)
-		policy = &authz.Policy{Groups: map[string]authz.GroupPolicy{}}
-	}
+	slog.Info("auth provider initialized", "mode", auth.Mode)
 
 	hubs := make(map[string]*stream.Hub, len(registry.Names()))
 	for _, name := range registry.Names() {
@@ -63,24 +66,15 @@ func main() {
 		go stream.StartWorkloadInformers(ctx, entry.Clientset, hub)
 	}
 
-	workloadsHandler := api.NewHandler(registry, policy)
+	workloadsHandler := api.NewHandler(registry, auth)
 
 	streamHandler := unavailableWSHandler
 	logsHandler := unavailableWSHandler
 	execHandler := unavailableWSHandler
-	if !registry.Empty() && verifier != nil {
-		streamHandler = stream.ServeWS(hubs, registry.Default().Name, cfg.CORSAllowedOrigins, verifier, policy)
-		logsHandler = stream.ServeLogs(registry, verifier, policy, cfg.CORSAllowedOrigins)
-		execHandler = stream.ServeExec(registry, verifier, policy, cfg.CORSAllowedOrigins)
-	}
-
-	authMiddleware := func(next http.Handler) http.Handler {
-		if verifier == nil {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				http.Error(w, "authentication unavailable", http.StatusServiceUnavailable)
-			})
-		}
-		return verifier.Middleware(next)
+	if !registry.Empty() {
+		streamHandler = stream.ServeWS(hubs, registry.Default().Name, cfg.CORSAllowedOrigins, auth)
+		logsHandler = stream.ServeLogs(registry, auth, cfg.CORSAllowedOrigins)
+		execHandler = stream.ServeExec(registry, auth, cfg.CORSAllowedOrigins)
 	}
 
 	r := chi.NewRouter()
@@ -88,43 +82,66 @@ func main() {
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: cfg.CORSAllowedOrigins,
-		AllowedMethods: []string{"GET", "POST", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Content-Type", "X-Cluster"},
-		MaxAge:         300,
+		AllowedOrigins:   cfg.CORSAllowedOrigins,
+		AllowedMethods:   []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "X-Cluster"},
+		AllowCredentials: true, // the session cookie (Roadmap Phase 10) needs this
+		MaxAge:           300,
 	}))
 
 	r.Get("/healthz", handleHealthz)
 
-	// Every /api/v1 route requires a verified OIDC token (Roadmap Phase 10)
-	// — see AGENTS.md's core rule and internal/authz for what that gates.
-	r.Route("/api/v1", func(api chi.Router) {
-		api.Use(authMiddleware)
+	// Unprotected — these ARE the login flow (Roadmap Phase 10).
+	r.Get("/api/v1/auth/config", auth.HandleConfig)
+	r.Post("/api/v1/auth/login", auth.HandleTokenLogin)
+	r.Post("/api/v1/auth/logout", auth.HandleLogout)
+	r.Get("/api/v1/auth/oidc/login", auth.HandleOIDCLogin)
+	r.Get("/api/v1/auth/oidc/callback", auth.HandleOIDCCallback)
 
-		api.Get("/pods", workloadsHandler.Pods)
-		api.Get("/deployments", workloadsHandler.Deployments)
-		api.Get("/statefulsets", workloadsHandler.StatefulSets)
-		api.Get("/daemonsets", workloadsHandler.DaemonSets)
-		api.Get("/jobs", workloadsHandler.Jobs)
-		api.Get("/stream/workloads", streamHandler)
-		api.Get("/pods/{namespace}/{name}", workloadsHandler.PodDetail)
-		api.Get("/pods/{namespace}/{name}/logs", logsHandler)
-		api.Get("/pods/{namespace}/{name}/exec", execHandler)
-		api.Get("/configmaps", workloadsHandler.ConfigMaps)
-		api.Get("/secrets", workloadsHandler.Secrets)
-		api.Post("/secrets/{namespace}/{name}/reveal", workloadsHandler.RevealSecretKey)
-		api.Get("/topology", workloadsHandler.Topology)
-		api.Get("/ingresses", workloadsHandler.Ingresses)
-		api.Get("/gateway-routes", workloadsHandler.GatewayRoutes)
-		api.Get("/clusters", workloadsHandler.ListClusters)
+	// Every other /api/v1 route requires a session (Roadmap Phase 10) — see
+	// internal/authn.Manager.Middleware. Authorization itself is whatever
+	// the caller's own Kubernetes RBAC decides on each call (their own
+	// pasted token or OIDC identity), not a separate check in this backend.
+	r.Route("/api/v1", func(protected chi.Router) {
+		protected.Use(auth.Middleware)
+
+		protected.Get("/pods", workloadsHandler.Pods)
+		protected.Get("/deployments", workloadsHandler.Deployments)
+		protected.Get("/statefulsets", workloadsHandler.StatefulSets)
+		protected.Get("/daemonsets", workloadsHandler.DaemonSets)
+		protected.Get("/jobs", workloadsHandler.Jobs)
+		protected.Get("/stream/workloads", streamHandler)
+		protected.Get("/pods/{namespace}/{name}", workloadsHandler.PodDetail)
+		protected.Get("/pods/{namespace}/{name}/logs", logsHandler)
+		protected.Get("/pods/{namespace}/{name}/exec", execHandler)
+		protected.Get("/configmaps", workloadsHandler.ConfigMaps)
+		protected.Get("/secrets", workloadsHandler.Secrets)
+		protected.Post("/secrets/{namespace}/{name}/reveal", workloadsHandler.RevealSecretKey)
+		protected.Get("/topology", workloadsHandler.Topology)
+		protected.Get("/ingresses", workloadsHandler.Ingresses)
+		protected.Get("/gateway-routes", workloadsHandler.GatewayRoutes)
+		protected.Get("/clusters", workloadsHandler.ListClusters)
 
 		// Write actions (Roadmap Phase 9) — the deliberate, narrow, audited
 		// exception to the read-only rule. See AGENTS.md's core rule and
 		// internal/k8s/deployment_actions.go before adding another one.
-		api.Post("/deployments/{namespace}/{name}/restart", workloadsHandler.RestartDeployment)
-		api.Delete("/deployments/{namespace}/{name}", workloadsHandler.DeleteDeployment)
-		api.Post("/deployments/{namespace}/{name}/rollback", workloadsHandler.RollbackDeployment)
+		protected.Post("/deployments/{namespace}/{name}/restart", workloadsHandler.RestartDeployment)
+		protected.Delete("/deployments/{namespace}/{name}", workloadsHandler.DeleteDeployment)
+		protected.Post("/deployments/{namespace}/{name}/rollback", workloadsHandler.RollbackDeployment)
 	})
+
+	// Single combined image (Roadmap Phase 10's second half — see
+	// AGENTS.md's "Rendering model"): if a static export was built into
+	// this directory, serve it for everything else. Absent in local dev
+	// (STATIC_DIR unset), which behaves exactly as every phase before this.
+	if cfg.StaticDir != "" {
+		if info, err := os.Stat(cfg.StaticDir); err == nil && info.IsDir() {
+			r.Handle("/*", staticFileHandler(cfg.StaticDir))
+			slog.Info("serving frontend static export", "dir", cfg.StaticDir)
+		} else {
+			slog.Warn("STATIC_DIR set but not a usable directory", "dir", cfg.StaticDir, "error", err)
+		}
+	}
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -216,10 +233,9 @@ func handleHealthz(w http.ResponseWriter, r *http.Request) {
 }
 
 // unavailableWSHandler is used in place of a real stream handler when the
-// backend booted without a reachable cluster or a working OIDC verifier —
-// mirrors api.Handler's resolveCluster behavior for the REST endpoints.
+// backend booted without a single reachable cluster.
 func unavailableWSHandler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "kubernetes client or authentication unavailable", http.StatusServiceUnavailable)
+	http.Error(w, "kubernetes client unavailable", http.StatusServiceUnavailable)
 }
 
 // requestLogger logs one structured line per request via slog, replacing

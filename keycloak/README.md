@@ -36,23 +36,25 @@ in docker-compose.yml plus every `8180` reference below.
 - Realm `vinaire-dev`, `sslRequired: none` (plain HTTP is fine for local dev).
 - Client `vinaire-frontend`: **confidential** client (`vinaire-frontend-dev-secret`
   — a throwaway dev-only secret, fine to commit since this Keycloak instance
-  never holds anything real). Confidential rather than public+PKCE because
-  next-auth/Auth.js does the authorization-code exchange server-side, in
-  the Next.js server process, never in the browser — the standard pattern
-  for a server-rendered app, not a pure SPA. `directAccessGrantsEnabled`
-  stays on for quick `curl`-based token testing below. Redirect/web-origin
-  locked to `http://localhost:3100`.
-- A `groups` claim (group *names*, not full paths) and an `aud` (audience)
-  claim naming `vinaire-frontend` are both added to the access token via
-  protocol mappers on that client — the backend's OIDC verifier
-  (`internal/authz`) checks the audience, and Keycloak doesn't include it
-  by default.
-- Two groups with no attributes of their own — the actual
-  group → namespace/action policy lives in the **backend's own config**
-  (`backend/policy.yaml`, see Phase 10 in ROADMAP.md), not in Keycloak,
-  matching the "config-backed allow-list, not a policy engine" design:
-  - `auth-viewers` — user `alice` / `alice` (namespace `auth`, read-only)
-  - `platform-admins` — user `bob` / `bob` (every namespace, read+write)
+  never holds anything real). Confidential because the whole Authorization
+  Code + PKCE exchange happens **server-side in the Go backend**
+  (`internal/authn`, `AUTH_MODE=oidc` — see ROADMAP.md's Phase 10), never in
+  the browser or in any frontend JS — the redirect URI Keycloak sends the
+  browser back to is the backend's own
+  `http://localhost:8080/api/v1/auth/oidc/callback`, not the frontend.
+  `directAccessGrantsEnabled` stays on for quick `curl`-based token testing
+  below.
+- A `groups` claim (group *names*, not full paths) is added to tokens via a
+  protocol mapper — a scaffold for mapping Keycloak groups to Kubernetes
+  RBAC (`ClusterRoleBinding`, see AGENTS.md's example), not consumed by
+  Vinaire's own code directly: authorization is whatever the target
+  cluster's real RBAC decides once configured to trust this realm
+  (`--oidc-issuer-url` etc. on the API server), same as `token` mode's
+  pasted ServiceAccount tokens.
+- Two groups, used only as an example for that RBAC mapping — not wired to
+  anything in this repo by default:
+  - `auth-viewers` — user `alice` / `alice`
+  - `platform-admins` — user `bob` / `bob`
 
 ## Quick token check (no browser)
 

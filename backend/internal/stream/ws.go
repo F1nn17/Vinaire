@@ -3,11 +3,10 @@ package stream
 import (
 	"log/slog"
 	"net/http"
-	"slices"
 
 	"github.com/gorilla/websocket"
 
-	"github.com/shiraku/vinaire/backend/internal/authz"
+	"github.com/shiraku/vinaire/backend/internal/authn"
 )
 
 // ServeWS upgrades the request to a WebSocket and streams every Event
@@ -16,21 +15,26 @@ import (
 // internal/config) — the WebSocket handshake bypasses chi's CORS
 // middleware, so origin-checking happens here instead, via the Upgrader.
 //
-// A browser's WebSocket API can't attach an Authorization header, so the
-// caller's token travels as `?access_token=` instead (see
-// authz.Verifier.VerifyRequest) and the target cluster as `?cluster=`
-// (Roadmap Phase 11) — both are query params on the same handshake URL.
-// Events for namespaces the caller's groups don't grant "read" on
-// (Roadmap Phase 10) are silently dropped rather than sent and filtered
-// client-side, so an unauthorized namespace's data never reaches the
-// browser at all.
-func ServeWS(hubs map[string]*Hub, defaultCluster string, allowedOrigins []string, verifier *authz.Verifier, policy *authz.Policy) http.HandlerFunc {
+// Unlike a REST call, a WebSocket handshake is still a plain HTTP request,
+// so the session cookie (Roadmap Phase 10) rides along automatically —
+// no query-param token workaround needed. The target cluster still comes
+// from `?cluster=` (Roadmap Phase 11), since that isn't something a cookie
+// can carry.
+//
+// This Hub's informers watch with the backend's own credentials (a Phase 2
+// design predating per-user auth, unchanged here) — the stream isn't
+// scoped to what the caller's own RBAC would let them `list`, only to
+// "logged in or not". A namespace a user's own token can't otherwise list
+// via REST may still surface here. Narrowing that would mean per-user
+// informers (expensive) or a per-event RBAC check (also expensive); out of
+// scope for this phase, flagged for whoever revisits this stream's trust
+// model next.
+func ServeWS(hubs map[string]*Hub, defaultCluster string, allowedOrigins []string, auth *authn.Manager) http.HandlerFunc {
 	upgrader := websocket.Upgrader{CheckOrigin: originChecker(allowedOrigins)}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		claims, err := verifier.VerifyRequest(r)
-		if err != nil {
-			http.Error(w, "unauthorized: "+err.Error(), http.StatusUnauthorized)
+		if _, ok := auth.Authenticate(r); !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		clusterName := r.URL.Query().Get("cluster")
@@ -42,7 +46,6 @@ func ServeWS(hubs map[string]*Hub, defaultCluster string, allowedOrigins []strin
 			http.Error(w, "unknown cluster", http.StatusBadRequest)
 			return
 		}
-		allowedNamespaces, allowAll := policy.AllowedNamespaces(claims, "read")
 
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -73,9 +76,6 @@ func ServeWS(hubs map[string]*Hub, defaultCluster string, allowedOrigins []strin
 			case evt, ok := <-events:
 				if !ok {
 					return
-				}
-				if !allowAll && !slices.Contains(allowedNamespaces, evt.Row.Namespace) {
-					continue
 				}
 				if err := conn.WriteJSON(evt); err != nil {
 					return

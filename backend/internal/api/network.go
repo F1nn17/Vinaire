@@ -38,27 +38,22 @@ type IngressRow struct {
 
 // Ingresses handles GET /api/v1/ingresses?namespace=.
 func (h *Handler) Ingresses(w http.ResponseWriter, r *http.Request) {
-	cluster, ok := h.resolveCluster(w, r)
+	_, clientset, ok := h.resolveCluster(w, r)
 	if !ok {
 		return
 	}
 	namespace := r.URL.Query().Get("namespace")
-	allowed, allowAll, ok := h.authorize(w, r, namespace, "read")
-	if !ok {
-		return
-	}
 
-	ingresses, err := k8s.ListIngresses(r.Context(), cluster.Clientset, namespace)
+	ingresses, err := k8s.ListIngresses(r.Context(), clientset, namespace)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, err.Error())
+		respondK8sError(w, err)
 		return
 	}
 
 	rows := make([]IngressRow, 0, len(ingresses))
 	for _, ing := range ingresses {
-		rows = append(rows, h.ingressRow(r.Context(), cluster.Clientset, ing))
+		rows = append(rows, h.ingressRow(r.Context(), clientset, ing))
 	}
-	rows = filterByAllowedNamespace(rows, namespace, allowed, allowAll, func(row IngressRow) string { return row.Namespace })
 	respondJSON(w, rows)
 }
 
@@ -181,15 +176,11 @@ type GatewayResourcesResponse struct {
 
 // GatewayRoutes handles GET /api/v1/gateway-routes?namespace=.
 func (h *Handler) GatewayRoutes(w http.ResponseWriter, r *http.Request) {
-	cluster, ok := h.resolveCluster(w, r)
+	cluster, _, ok := h.resolveCluster(w, r)
 	if !ok {
 		return
 	}
 	namespace := r.URL.Query().Get("namespace")
-	allowed, allowAll, ok := h.authorize(w, r, namespace, "read")
-	if !ok {
-		return
-	}
 	if cluster.GatewayClientset == nil {
 		respondJSON(w, GatewayResourcesResponse{
 			Available: false,
@@ -209,7 +200,7 @@ func (h *Handler) GatewayRoutes(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		respondError(w, http.StatusBadGateway, err.Error())
+		respondK8sError(w, err)
 		return
 	}
 
@@ -222,7 +213,7 @@ func (h *Handler) GatewayRoutes(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		respondError(w, http.StatusBadGateway, err.Error())
+		respondK8sError(w, err)
 		return
 	}
 
@@ -233,8 +224,6 @@ func (h *Handler) GatewayRoutes(w http.ResponseWriter, r *http.Request) {
 	for _, hr := range httpRoutes.Items {
 		rows = append(rows, httpRouteRow(hr))
 	}
-	rows = filterByAllowedNamespace(rows, namespace, allowed, allowAll, func(row GatewayRow) string { return row.Namespace })
-
 	respondJSON(w, GatewayResourcesResponse{Available: true, Rows: rows})
 }
 

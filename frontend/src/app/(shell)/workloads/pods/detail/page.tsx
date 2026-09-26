@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { usePod } from "@/lib/hooks/useWorkloads";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
@@ -21,16 +21,33 @@ const tabs: { key: Tab; label: string }[] = [
   { key: "yaml", label: "YAML" },
 ];
 
-export default function PodDetailPage() {
-  const { namespace, name } = useParams<{ namespace: string; name: string }>();
-  const podNamespace = decodeURIComponent(namespace);
-  const podName = decodeURIComponent(name);
+// A static export can't pre-render a page per pod name (unknowable at
+// build time) — this route is a single static page,
+// `/workloads/pods/detail`, that reads which pod to show from
+// `?namespace=&name=` instead of a `[namespace]/[name]` route segment. See
+// AGENTS.md's "Rendering model".
+export default function PodDetailPageRoute() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-sm text-text-muted">Loading…</div>}
+    >
+      <PodDetailPage />
+    </Suspense>
+  );
+}
+
+function PodDetailPage() {
+  const searchParams = useSearchParams();
+  const podNamespace = searchParams.get("namespace") ?? "";
+  const podName = searchParams.get("name") ?? "";
   const { data: pod, isLoading, error } = usePod(podNamespace, podName);
   const [tab, setTab] = useState<Tab>("overview");
 
   if (error) {
     return (
-      <div className="p-8 text-sm text-err">Failed to load pod: {error.message}</div>
+      <div className="p-8 text-sm text-err">
+        Failed to load pod: {error.message}
+      </div>
     );
   }
 

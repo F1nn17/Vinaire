@@ -3,11 +3,14 @@
 Vinaire is a custom web UI for managing Kubernetes clusters — a friendlier,
 more opinionated alternative to Rancher/Headlamp, targeting **k3s** clusters.
 
-The UI is **read-only by default**. It is not a way to poke at your cluster
-by hand; it's a way to *see* it clearly. Changes to cluster state are made
-through GitOps (ArgoCD) via pull requests, not through direct writes from the
-browser. See [AGENTS.md](./AGENTS.md) for the full rationale and the rule
-this implies for anyone (human or AI) writing code here.
+The UI is **read-only by default**, with a small, deliberate, fully-audited
+set of exceptions (Deployment restart/delete/rollback — see AGENTS.md's core
+rule) rather than a general-purpose write path. Logging in (Roadmap Phase
+10) is either a pasted Kubernetes ServiceAccount token or Keycloak/OIDC —
+either way, what a given login can actually do is decided by that identity's
+real Kubernetes RBAC, not by a separate permission system in this app. See
+[AGENTS.md](./AGENTS.md) for the full rationale and conventions for anyone
+(human or AI) writing code here.
 
 Design concept: an interactive mockup covering the main screens (Dashboard,
 Topology, Workloads, ConfigMaps, Secrets, Network) exists outside this repo.
@@ -82,6 +85,23 @@ Open [http://localhost:3100](http://localhost:3100).
 > "node process exited before we could connect to it"). `dev` and `build` are
 > pinned to `--webpack` in `package.json` as a workaround. If you're on a
 > platform where Turbopack works fine, feel free to drop the flag.
+
+## Docker (single combined image)
+
+For a prod/test deploy — not needed for day-to-day development, which still
+uses `npm run dev` + `go run .` above:
+
+```bash
+docker build -t vinaire .
+docker run -p 8080:8080 --env AUTH_MODE=disabled vinaire
+```
+
+One image, one process: the Go backend serves both the API and the
+frontend's static export (`next build`'s `output: "export"`) from the same
+port — no Node/npm in the final layer. See AGENTS.md's "Rendering model"
+and "Authentication (Phase 10)" sections for how the pieces fit together,
+and set `AUTH_MODE`/`OIDC_*` env vars for a real deployment instead of
+`disabled`.
 
 ## Repository layout
 

@@ -11,13 +11,45 @@ import (
 	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 )
 
-// Entry is everything needed to talk to one configured cluster.
+// Entry is everything needed to talk to one configured cluster. Clientset
+// is built once at startup with the backend's own credentials — used
+// as-is only in internal/authn.ModeDisabled. Every other auth mode instead
+// calls ClientsetForToken per session, so each request authenticates to
+// the Kubernetes API as the actual logged-in identity (Roadmap Phase 10),
+// not as the backend's own service account.
 type Entry struct {
 	Name             string
 	Clientset        *kubernetes.Clientset
 	RESTConfig       *rest.Config
 	MetricsClientset *metricsclientset.Clientset
 	GatewayClientset *gatewayclientset.Clientset
+}
+
+// RESTConfigForToken returns a copy of this Entry's RESTConfig that
+// authenticates as token instead of whatever credentials the original
+// carries — the server host/CA/TLS settings are reused, but every other
+// auth field is cleared first so the caller's token is the only credential
+// in effect. Exposed separately from ClientsetForToken because
+// internal/stream's exec bridge needs the *rest.Config itself (for
+// remotecommand.NewSPDYExecutor), not just a Clientset built from it.
+func (e *Entry) RESTConfigForToken(token string) *rest.Config {
+	cfg := rest.CopyConfig(e.RESTConfig)
+	cfg.BearerToken = token
+	cfg.BearerTokenFile = ""
+	cfg.Username = ""
+	cfg.Password = ""
+	cfg.CertData = nil
+	cfg.KeyData = nil
+	cfg.CertFile = ""
+	cfg.KeyFile = ""
+	cfg.AuthProvider = nil
+	cfg.ExecProvider = nil
+	return cfg
+}
+
+// ClientsetForToken builds a clientset from RESTConfigForToken(token).
+func (e *Entry) ClientsetForToken(token string) (*kubernetes.Clientset, error) {
+	return kubernetes.NewForConfig(e.RESTConfigForToken(token))
 }
 
 // Registry holds every cluster Vinaire is configured to talk to. Entries

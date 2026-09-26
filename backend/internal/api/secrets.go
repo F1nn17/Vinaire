@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/shiraku/vinaire/backend/internal/authz"
+	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 )
 
@@ -36,19 +36,15 @@ type SecretRow struct {
 // nothing for a browser to accidentally leak if it was never sent. Use the
 // explicit, audited RevealSecretKey endpoint to fetch one value at a time.
 func (h *Handler) Secrets(w http.ResponseWriter, r *http.Request) {
-	cluster, ok := h.resolveCluster(w, r)
+	_, clientset, ok := h.resolveCluster(w, r)
 	if !ok {
 		return
 	}
 	namespace := r.URL.Query().Get("namespace")
-	allowed, allowAll, ok := h.authorize(w, r, namespace, "read")
-	if !ok {
-		return
-	}
 
-	secrets, err := k8s.ListSecrets(r.Context(), cluster.Clientset, namespace)
+	secrets, err := k8s.ListSecrets(r.Context(), clientset, namespace)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, err.Error())
+		respondK8sError(w, err)
 		return
 	}
 
@@ -56,7 +52,6 @@ func (h *Handler) Secrets(w http.ResponseWriter, r *http.Request) {
 	for _, s := range secrets {
 		rows = append(rows, secretRow(s))
 	}
-	rows = filterByAllowedNamespace(rows, namespace, allowed, allowAll, func(row SecretRow) string { return row.Namespace })
 	respondJSON(w, rows)
 }
 
@@ -89,19 +84,15 @@ type revealResponse struct {
 // This is the ONLY path in the backend that ever returns a decoded secret
 // value, and every call is audit-logged (namespace/secret/key + caller
 // identity — never the value itself, or the audit log becomes the leak
-// it's meant to catch). The caller's identity now comes from their verified
-// OIDC token (Roadmap Phase 10) instead of a best-effort source IP.
+// it's meant to catch).
 func (h *Handler) RevealSecretKey(w http.ResponseWriter, r *http.Request) {
-	cluster, ok := h.resolveCluster(w, r)
+	_, clientset, ok := h.resolveCluster(w, r)
 	if !ok {
 		return
 	}
 
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
-	if _, _, ok := h.authorize(w, r, namespace, "read"); !ok {
-		return
-	}
 
 	var req revealRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Key == "" {
@@ -109,7 +100,7 @@ func (h *Handler) RevealSecretKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	secret, err := k8s.GetSecret(r.Context(), cluster.Clientset, namespace, name)
+	secret, err := k8s.GetSecret(r.Context(), clientset, namespace, name)
 	if err != nil {
 		respondError(w, http.StatusNotFound, err.Error())
 		return
@@ -121,12 +112,15 @@ func (h *Handler) RevealSecretKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, _ := authz.FromContext(r.Context())
+	username := ""
+	if sess, ok := authn.FromContext(r.Context()); ok {
+		username = sess.Username
+	}
 	slog.Warn("secret revealed",
 		"namespace", namespace,
 		"secret", name,
 		"key", req.Key,
-		"user", claims.Username,
+		"user", username,
 		"remote_addr", r.RemoteAddr,
 	)
 

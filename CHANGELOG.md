@@ -165,30 +165,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   triggered a real rollout, Rollback reverted `spec.template` to revision
   1's image, and Delete removed the object — all three confirmed via the
   backend's audit log and `kubectl`, with zero browser console errors.
-- **Roadmap Phase 10 (Authorization):** new `internal/authz` package —
-  OIDC bearer-token verification (`github.com/coreos/go-oidc/v3`) plus a
-  flat, config-backed group→namespace/action allow-list
-  (`backend/policy.yaml`), gating every `/api/v1/*` handler. A specific
-  namespace outside the caller's groups gets `403`; an all-namespaces list
-  request instead comes back filtered to what the caller can see, rather
-  than erroring outright. Every existing handler from Phases 1–9 was
-  updated to authorize before touching the cluster, and Phase 9's audit
-  log / Phase 6's secret-reveal audit log now record the caller's real
-  username instead of just a source IP. Frontend: `next-auth`/Auth.js with
-  a Keycloak provider, `src/proxy.ts` protecting every route (redirects to
-  sign-in when logged out), a real Topbar user menu with sign-out, and a
-  new throwaway, fully isolated dev Keycloak instance under `/keycloak`
-  (docker-compose, pre-seeded realm/groups/`alice`+`bob` users) for local
-  login testing. Verified end-to-end over curl with real Keycloak-issued
-  tokens against the real `k3d-vinaire-dev` cluster: `alice`
-  (`auth-viewers`, read-only) sees only the `auth` namespace and gets `403`
-  on any other namespace or any write action; `bob` (`platform-admins`,
-  read+write) sees everything and can restart a real Deployment. A live
-  browser login couldn't be verified on this dev machine — a local,
-  unrelated app (Proxifier) breaks Node's outbound connections including
-  to `localhost`, unrelated to Vinaire's code (see AGENTS.md's frontend
-  "Known local issue" and ROADMAP.md's Phase 10 outcome note for the full
-  diagnosis and what to redo once it's fixed).
+- **Roadmap Phase 10 (Authentication + single image):** `internal/authn` —
+  three login modes via `AUTH_MODE`: `token` (default; paste a Kubernetes
+  ServiceAccount token, session TTL read from its own JWT `exp` claim),
+  `oidc` (a real Authorization Code + PKCE exchange against Keycloak,
+  entirely server-side in this Go process — never in the frontend), and
+  `disabled` (no login, local k3d dev only). The browser only ever holds an
+  opaque, HttpOnly `vinaire_session` cookie; every Kubernetes API call runs
+  as the *caller's own* identity (`internal/clusters.Entry.ClientsetForToken`),
+  so authorization is whatever the target cluster's real RBAC decides — a
+  denied call now correctly comes back as `403`/`401` from the backend
+  (`internal/api.respondK8sError` maps the underlying `apierrors` instead of
+  flattening every failure to `502`). Frontend: a `/login` page (token paste
+  or a Keycloak redirect, depending on `/api/v1/auth/config`), and — since
+  the frontend is now a static export with no server of its own (see
+  below) — every backend call goes out cross-origin with
+  `credentials: "include"`, using a `SameSite=None; Secure` cookie
+  (confirmed working over plain `http://localhost` in a real browser,
+  which treats `localhost` as a secure context). Verified end-to-end with a
+  real, RBAC-scoped (not cluster-admin) ServiceAccount against
+  `k3d-vinaire-dev`, and with a real Keycloak login through the dev
+  instance in `/keycloak`.
+  **Single combined image:** a root `Dockerfile` (multi-stage: Node builds
+  the frontend, Go builds the backend, the final layer is
+  `gcr.io/distroless/static-debian12:nonroot`) — `docker build .` produces
+  one ~50 MB image with no shell, Node, or npm in it; `docker run` serves
+  the API and the static frontend from the same port (`STATIC_DIR`, see
+  `backend/static.go`), verified directly against a running container.
+  **Rendering model:** the frontend now builds with `output: "export"`
+  (Next.js used purely as a build tool — see AGENTS.md's "Rendering model")
+  ; the two resource-detail pages moved from `[namespace]/[name]` dynamic
+  route segments to `?namespace=&name=` query params, since a static export
+  can't pre-render a path for a resource name it doesn't know at build
+  time. This design replaces an earlier, briefly-shipped version of this
+  phase that used a Keycloak-only OIDC bearer-token flow with an app-level
+  `internal/authz` policy layer and `next-auth` — removed as part of this
+  change, along with the local-Proxifier-networking workaround that
+  version needed (moving OIDC server-side removed the only Node code path
+  that ever made an outbound call, so there's nothing left for it to break).
 - **Roadmap Phase 11 (Multi-cluster):** new `internal/clusters.Registry` —
   one client set per configured kubeconfig context (`CLUSTER_CONTEXTS`),
   selected per-request via an `X-Cluster` header (`Handler.resolveCluster`,
@@ -200,11 +214,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `apiFetch`/`buildStreamURL` outside of React, every SWR hook's cache key
   and every WebSocket URL (workload stream, logs, exec) now includes the
   selected cluster so switching it refetches/reconnects cleanly. Verified
-  over curl against two real clusters (`k3d-vinaire-dev` and a second
-  `k3d-vinaire-dev-2` created for this phase): the same user's
-  all-namespaces pod list correctly differs between clusters with no
-  cross-cluster data leakage. Live-browser confirmation of the dropdown
-  itself is blocked by the same local Proxifier issue as Phase 10.
+  against two real clusters (`k3d-vinaire-dev` and a second
+  `k3d-vinaire-dev-2`), both over curl and live in a real browser after
+  Phase 10's rework: switching the Topbar dropdown swaps the Workloads
+  table over to the other cluster's own real data with no stale rows
+  lingering.
 
 ### Changed
 

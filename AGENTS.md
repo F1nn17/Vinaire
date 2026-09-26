@@ -49,26 +49,114 @@ If a request conflicts with this — asks for a write action on a resource
 kind or verb not already covered above — stop and flag it rather than
 silently extending write access.
 
-## Authorization (Phase 10) and multi-cluster (Phase 11)
+## Authentication (Phase 10) and multi-cluster (Phase 11)
 
-Every `/api/v1/*` request requires a verified OIDC bearer token (Keycloak —
-see `/keycloak` at the repo root for the dev instance) — `internal/authz`
-does the verification and the group→namespace/action authorization check.
-The policy is a flat, config-backed allow-list
-(`backend/policy.yaml`: group name → allowed namespaces + `read`/`write`
-actions), deliberately not a full policy engine. A request for a specific
-namespace the caller's groups don't cover gets `403`; an all-namespaces
-list request instead gets silently filtered down to what the caller can
-see (see `internal/api`'s `authorize`/`filterByAllowedNamespace`). Adding a
-new action beyond `read`/`write`, or a per-resource-kind policy, is the
-kind of change that should be raised first, same spirit as the core rule
-above.
+Every `/api/v1/*` request (except `/api/v1/auth/*` itself) requires a
+session — `internal/authn.Manager.Middleware` reads an opaque, HttpOnly
+`vinaire_session` cookie, looks it up in a server-side session store, and
+attaches the resulting identity's real Kubernetes bearer token to the
+request context. `AUTH_MODE` selects how that identity was established:
+- `"token"` (default): `POST /api/v1/auth/login` takes a pasted Kubernetes
+  ServiceAccount token directly; the session's TTL is read from the
+  token's own JWT `exp` claim.
+- `"oidc"`: a real Authorization Code + PKCE flow against Keycloak (or any
+  OIDC provider) — entirely server-side in this Go process
+  (`internal/authn/oidc.go`), never in the frontend. See `/keycloak` at the
+  repo root for the dev instance.
+- `"disabled"`: no login at all (local k3d dev only) — every request uses
+  the backend's own kubeconfig-derived credentials, like every phase before
+  Phase 10.
+
+There is no separate app-level policy layer (no group→namespace allow-list
+in this codebase): `internal/clusters.Entry.ClientsetForToken` builds a
+per-request Kubernetes clientset authenticated as the caller's own
+token/identity, so **the target cluster's real RBAC is what decides**
+what a request can do — an unauthorized call gets a real `403`/`401` back
+from the Kubernetes API itself (`internal/api.respondK8sError` maps that to
+the right HTTP status), the same as `kubectl` would show. Adding an
+app-level permission check on top of that is the kind of change that
+should be raised first, same spirit as the core rule above.
 
 Multi-cluster (Phase 11) lives in `internal/clusters` (`Registry`/`Entry`
 per configured kubeconfig context, via `CLUSTER_CONTEXTS`). Every handler
 resolves its target cluster from the `X-Cluster` request header (or the
 first configured cluster if absent) before doing anything else — see
 `Handler.resolveCluster`.
+
+### Example: a minimal ClusterRole for Vinaire (not cluster-admin)
+
+Since Phase 10 makes the *caller's own* RBAC the only authorization check,
+whoever logs in needs a real RBAC binding — pasting a token for a
+ServiceAccount with no role bound to it just gets `403` on everything. This
+mirrors what `internal/api`'s handlers actually call — read-only, matching
+this file's core rule, plus the three write verbs Phase 9 allows:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vinaire-viewer
+rules:
+  - apiGroups: ["", "apps", "batch", "networking.k8s.io"]
+    resources:
+      [
+        "pods",
+        "deployments",
+        "statefulsets",
+        "daemonsets",
+        "jobs",
+        "configmaps",
+        "secrets",
+        "services",
+        "ingresses",
+        "events",
+        "replicasets",
+      ]
+    verbs: ["get", "list", "watch"]
+  # Phase 9's three write actions — omit this block for a read-only login.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["patch", "delete"]
+```
+
+Bind it cluster-wide or to a single namespace (`RoleBinding` instead of
+`ClusterRoleBinding`, same `roleRef`) depending on how much of the cluster
+that identity should see — Vinaire enforces nothing beyond what the binding
+already grants. Then create a ServiceAccount and a **bounded-duration**
+token to paste into Vinaire's login screen:
+
+```bash
+kubectl create serviceaccount vinaire-viewer -n <namespace>
+kubectl create clusterrolebinding vinaire-viewer \
+  --clusterrole=vinaire-viewer --serviceaccount=<namespace>:vinaire-viewer
+kubectl create token vinaire-viewer -n <namespace> --duration=1h
+```
+
+`--duration` directly sets the session's own TTL (Phase 10 reads it from
+the token's `exp` claim) — don't hand out tokens with no expiry for
+anything but a throwaway local test.
+
+## Rendering model
+
+The frontend uses Next.js purely as a build tool, not a runtime server.
+`next build` runs with `output: "export"`, which renders every page once,
+at build time, into static HTML/JS/CSS files under `/frontend/out`. At
+runtime, Next.js never runs as a server — not in dev-via-Docker, and
+especially not in the single combined production image (Phase 10's second
+half): the Go backend serves that `out/` directory as-is
+(`backend/static.go`'s `http.FileServer`-based handler, mounted only when
+`STATIC_DIR` is set) from the same port as the API. All dynamic
+content loads client-side, via `fetch`/WebSocket calls to the Go backend —
+Go never does HTML templating or rendering; it only ever serves static
+files or answers JSON/WebSocket on `/api/*`. `next dev` is the one
+exception: local development still runs a normal Next.js dev server with
+hot reload, exactly as before — `output: "export"`'s constraints (no
+Route Handlers with server logic, no Middleware, no Server Actions, no
+`next/image` without a custom loader) only bind at `next build` time. This
+is also why dynamic routes like a pod's `[namespace]/[name]` don't exist
+as Next.js route segments — a static export can't pre-render a path for a
+resource name it doesn't know at build time — these pages instead read
+`?namespace=&name=` query params client-side.
 
 ## Repository structure
 
@@ -82,8 +170,8 @@ first configured cluster if absent) before doing anything else — see
 │   │                       CLUSTER_CONTEXTS)
 │   ├── internal/k8s/       client-go clientset + listers, read-only except
 │   │                       Phase 9's Deployment restart/delete/rollback
-│   ├── internal/authz/     OIDC token verification + group->namespace/
-│   │                       action policy (Phase 10)
+│   ├── internal/authn/     sessions + token/oidc/disabled auth modes
+│   │                       (Phase 10) — see the section above
 │   ├── internal/clusters/  per-kubeconfig-context client registry (Phase 11)
 │   ├── internal/api/       HTTP handlers: response shaping, status/color logic
 │   └── internal/stream/    informers + WebSocket fan-out for live updates
@@ -131,22 +219,22 @@ first configured cluster if absent) before doing anything else — see
   hit a Turbopack panic mentioning `evaluate_webpack_loader` or "node process
   exited before we could connect to it", that's this issue — don't spend time
   debugging the CSS, just confirm the `--webpack` flag is still in place.
-- **Known local issue:** on this dev machine, Proxifier (a running background
-  app, unrelated to this project) intercepts `node.exe`'s outbound TCP
-  connections and appears to break them even to `localhost` — this shows up
-  as next-auth's server-side calls to Keycloak (`/keycloak`) failing with
-  `SocketError: other side closed` / `UND_ERR_SOCKET`, even though `curl` and
-  real browsers reach the exact same URL fine (they aren't intercepted the
-  same way). Confirmed via `tasklist` and by testing plain Node `fetch`/
-  `http`/raw `net.Socket` against multiple local targets (Docker-published
-  ports and native Windows processes alike) — all fail the same way,
-  regardless of target. Don't chase this as a Keycloak, Docker-networking, or
-  Vinaire-code bug again; it needs Proxifier's rules adjusted (exclude
-  `node.exe`, or add a direct/no-proxy rule for `localhost`/`127.0.0.1`) or
-  the app closed, which only the machine's owner can do. Backend-side
-  verification (curl, or Go's own `net/http`, both unaffected) stays a valid
-  way to verify OIDC/auth work on this machine even when a live
-  browser-driven Playwright login can't be completed end-to-end.
+- **Resolved-by-architecture, formerly a known local issue:** on this dev
+  machine, Proxifier (a running background app, unrelated to this project)
+  intercepts `node.exe`'s outbound TCP connections and breaks them even to
+  `localhost`, confirmed via `tasklist` and by testing plain Node `fetch`/
+  `http`/raw `net.Socket` against several local targets (Docker-published
+  ports and native Windows processes alike) — all failed the same way. This
+  first surfaced when Phase 10's OIDC flow briefly ran through next-auth
+  (a Node-side OIDC client in the Next.js server), and cost real time to
+  diagnose as a Windows/Proxifier issue rather than a Keycloak or
+  Docker-networking bug. Phase 10's current design (see "Rendering model"
+  below and `internal/authn`) does the entire OIDC exchange in the Go
+  backend and ships the frontend as a static export with no Next.js server
+  at runtime at all — so there's no Node process left making outbound calls
+  for Proxifier to intercept, and this class of bug can't recur here. Kept
+  as a record in case a future change reintroduces server-side Node code
+  (an API route, middleware, etc.) on this machine.
 
 ## Running tests / checks
 

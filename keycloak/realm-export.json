@@ -16,7 +16,10 @@
       "directAccessGrantsEnabled": true,
       "implicitFlowEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["http://localhost:3100/*"],
+      "redirectUris": [
+        "http://localhost:3100/*",
+        "http://localhost:8080/api/v1/auth/oidc/callback"
+      ],
       "webOrigins": ["http://localhost:3100"],
       "attributes": {
         "post.logout.redirect.uris": "http://localhost:3100/*"

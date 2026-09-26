@@ -19,22 +19,50 @@ type Config struct {
 	KubeconfigPath string
 
 	// CORSAllowedOrigins are the exact origins (scheme+host+port) allowed
-	// to call this API from a browser.
+	// to call this API from a browser. Only matters when the frontend
+	// isn't being reached same-origin (e.g. `next dev`'s rewrite proxy) —
+	// see AGENTS.md.
 	CORSAllowedOrigins []string
 
-	// OIDCIssuerURL is the Keycloak realm's issuer URL used for both token
-	// verification here and the frontend's login redirect (Roadmap
-	// Phase 10). See /keycloak at the repo root for the dev instance this
-	// points at by default.
-	OIDCIssuerURL string
-	// OIDCClientID is the public OIDC client every verified token must
-	// have been issued for.
-	OIDCClientID string
+	// FrontendURL is where the browser is redirected back to after a
+	// successful OIDC login (Roadmap Phase 10).
+	FrontendURL string
 
-	// PolicyPath points at the YAML file mapping OIDC groups to allowed
-	// namespaces/actions (see internal/authz.LoadPolicy and
-	// backend/policy.yaml).
-	PolicyPath string
+	// AuthMode selects the active internal/authn.Manager mode: "token"
+	// (default — paste a Kubernetes ServiceAccount token), "oidc" (log in
+	// via Keycloak/any OIDC provider), or "disabled" (no login, local k3d
+	// dev only — every request uses the backend's own credentials).
+	AuthMode string
+	// CookieSecure sets the session cookie's Secure flag.
+	// CookieSameSite sets its SameSite attribute ("none", "lax", or
+	// "strict"). These default to "true"/"none": the frontend build here is
+	// a static export with no server of its own (see AGENTS.md's "Rendering
+	// model"), so it always calls this backend cross-origin, in dev and in
+	// most deployments alike — a cross-origin fetch can only carry the
+	// cookie at all with SameSite=None, and browsers require Secure
+	// whenever SameSite=None is set (they treat `http://localhost`
+	// specifically as a secure context, so this still works without real
+	// TLS for local dev). Set COOKIE_SAMESITE=strict (and, once actually
+	// served over TLS, leave COOKIE_SECURE=true) for a same-origin
+	// deployment — e.g. the single combined image (Roadmap Phase 10) with a
+	// TLS-terminating ingress in front of it.
+	CookieSecure   bool
+	CookieSameSite string
+
+	// OIDCIssuerURL/OIDCClientID/OIDCClientSecret/OIDCRedirectURL configure
+	// AuthMode "oidc" 's Authorization Code + PKCE flow. See /keycloak at
+	// the repo root for the dev instance these point at by default.
+	OIDCIssuerURL    string
+	OIDCClientID     string
+	OIDCClientSecret string
+	OIDCRedirectURL  string
+
+	// StaticDir, if set and the directory exists, is served as the
+	// frontend's static export (Roadmap Phase 10's single combined image —
+	// see AGENTS.md's "Rendering model"). Empty by default so `go run .`
+	// during local dev, with no frontend build present, behaves exactly as
+	// before — no static serving at all.
+	StaticDir string
 
 	// ClusterContexts lists the kubeconfig context names Vinaire is
 	// configured to talk to (Roadmap Phase 11). Empty means single-cluster
@@ -44,18 +72,28 @@ type Config struct {
 }
 
 const (
-	defaultPort          = "8080"
-	defaultCORSOrigin    = "http://localhost:3100"
-	defaultOIDCIssuerURL = "http://localhost:8180/realms/vinaire-dev"
-	defaultOIDCClientID  = "vinaire-frontend"
-	defaultPolicyPath    = "policy.yaml"
-	envPort              = "PORT"
-	envKubeconfig        = "KUBECONFIG"
-	envCORSAllowedOrigin = "CORS_ALLOWED_ORIGINS"
-	envOIDCIssuerURL     = "OIDC_ISSUER_URL"
-	envOIDCClientID      = "OIDC_CLIENT_ID"
-	envPolicyPath        = "POLICY_PATH"
-	envClusterContexts   = "CLUSTER_CONTEXTS"
+	defaultPort            = "8080"
+	defaultCORSOrigin      = "http://localhost:3100"
+	defaultFrontendURL     = "http://localhost:3100"
+	defaultAuthMode        = "token"
+	defaultOIDCIssuerURL   = "http://localhost:8180/realms/vinaire-dev"
+	defaultOIDCClientID    = "vinaire-frontend"
+	defaultOIDCRedirectURL = "http://localhost:8080/api/v1/auth/oidc/callback"
+	envPort                = "PORT"
+	envKubeconfig          = "KUBECONFIG"
+	envCORSAllowedOrigin   = "CORS_ALLOWED_ORIGINS"
+	envFrontendURL         = "FRONTEND_URL"
+	envAuthMode            = "AUTH_MODE"
+	envCookieSecure        = "COOKIE_SECURE"
+	envCookieSameSite      = "COOKIE_SAMESITE"
+	defaultCookieSecure    = "true"
+	defaultCookieSameSite  = "none"
+	envOIDCIssuerURL       = "OIDC_ISSUER_URL"
+	envOIDCClientID        = "OIDC_CLIENT_ID"
+	envOIDCClientSecret    = "OIDC_CLIENT_SECRET"
+	envOIDCRedirectURL     = "OIDC_REDIRECT_URL"
+	envStaticDir           = "STATIC_DIR"
+	envClusterContexts     = "CLUSTER_CONTEXTS"
 )
 
 // Load reads configuration from the environment, falling back to defaults
@@ -65,9 +103,15 @@ func Load() Config {
 		Port:               getEnv(envPort, defaultPort),
 		KubeconfigPath:     os.Getenv(envKubeconfig),
 		CORSAllowedOrigins: splitCSV(getEnv(envCORSAllowedOrigin, defaultCORSOrigin)),
+		FrontendURL:        getEnv(envFrontendURL, defaultFrontendURL),
+		AuthMode:           getEnv(envAuthMode, defaultAuthMode),
+		CookieSecure:       getEnv(envCookieSecure, defaultCookieSecure) == "true",
+		CookieSameSite:     getEnv(envCookieSameSite, defaultCookieSameSite),
 		OIDCIssuerURL:      getEnv(envOIDCIssuerURL, defaultOIDCIssuerURL),
 		OIDCClientID:       getEnv(envOIDCClientID, defaultOIDCClientID),
-		PolicyPath:         getEnv(envPolicyPath, defaultPolicyPath),
+		OIDCClientSecret:   os.Getenv(envOIDCClientSecret),
+		OIDCRedirectURL:    getEnv(envOIDCRedirectURL, defaultOIDCRedirectURL),
+		StaticDir:          os.Getenv(envStaticDir),
 		ClusterContexts:    splitCSV(os.Getenv(envClusterContexts)),
 	}
 }

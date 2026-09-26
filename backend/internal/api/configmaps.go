@@ -27,19 +27,15 @@ type ConfigMapRow struct {
 }
 
 func (h *Handler) ConfigMaps(w http.ResponseWriter, r *http.Request) {
-	cluster, ok := h.resolveCluster(w, r)
+	_, clientset, ok := h.resolveCluster(w, r)
 	if !ok {
 		return
 	}
 	namespace := r.URL.Query().Get("namespace")
-	allowed, allowAll, ok := h.authorize(w, r, namespace, "read")
-	if !ok {
-		return
-	}
 
-	configMaps, err := k8s.ListConfigMaps(r.Context(), cluster.Clientset, namespace)
+	configMaps, err := k8s.ListConfigMaps(r.Context(), clientset, namespace)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, err.Error())
+		respondK8sError(w, err)
 		return
 	}
 
@@ -47,7 +43,6 @@ func (h *Handler) ConfigMaps(w http.ResponseWriter, r *http.Request) {
 	for _, cm := range configMaps {
 		rows = append(rows, configMapRow(cm))
 	}
-	rows = filterByAllowedNamespace(rows, namespace, allowed, allowAll, func(row ConfigMapRow) string { return row.Namespace })
 	respondJSON(w, rows)
 }
 

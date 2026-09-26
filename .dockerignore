@@ -1,0 +1,10 @@
+**/.git
+**/node_modules
+frontend/.next
+frontend/out
+backend/bin
+*.log
+.env
+.env.*
+!frontend/.env.example
+keycloak

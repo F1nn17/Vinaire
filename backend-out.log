@@ -1,7 +1,17 @@
-time=2026-09-25T22:22:08.174+04:00 level=INFO msg="kubernetes client initialized" cluster=k3d-vinaire-dev
-time=2026-09-25T22:22:08.205+04:00 level=INFO msg="kubernetes client initialized" cluster=k3d-vinaire-dev-2
-time=2026-09-25T22:22:08.252+04:00 level=INFO msg="oidc verifier initialized" issuer=http://localhost:8180/realms/vinaire-dev
-time=2026-09-25T22:22:08.253+04:00 level=INFO msg="vinaire backend listening" addr=:8080 cors_allowed_origins=[http://localhost:3100] clusters="[k3d-vinaire-dev k3d-vinaire-dev-2]"
-time=2026-09-25T22:22:08.454+04:00 level=INFO msg="stream: informer caches synced, watching for live updates"
-time=2026-09-25T22:22:08.454+04:00 level=INFO msg="stream: informer caches synced, watching for live updates"
-time=2026-09-25T22:22:12.538+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/yWSIHk5aWc-000001
+time=2026-09-26T16:31:37.787+04:00 level=INFO msg="kubernetes client initialized" cluster=k3d-vinaire-dev
+time=2026-09-26T16:31:37.820+04:00 level=INFO msg="kubernetes client initialized" cluster=k3d-vinaire-dev-2
+time=2026-09-26T16:31:37.820+04:00 level=INFO msg="auth provider initialized" mode=disabled
+time=2026-09-26T16:31:37.820+04:00 level=INFO msg="vinaire backend listening" addr=:8080 cors_allowed_origins=[http://localhost:3100] clusters="[k3d-vinaire-dev k3d-vinaire-dev-2]"
+time=2026-09-26T16:31:38.021+04:00 level=INFO msg="stream: informer caches synced, watching for live updates"
+time=2026-09-26T16:31:38.021+04:00 level=INFO msg="stream: informer caches synced, watching for live updates"
+time=2026-09-26T16:31:52.551+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/H8lIGNf3Ep-000001
+time=2026-09-26T16:33:10.944+04:00 level=INFO msg=request method=GET path=/api/v1/clusters status=200 bytes=89 duration_ms=0 request_id=Shiraku/H8lIGNf3Ep-000002
+time=2026-09-26T16:33:10.945+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/H8lIGNf3Ep-000003
+time=2026-09-26T16:33:10.952+04:00 level=INFO msg=request method=GET path=/api/v1/deployments status=200 bytes=1055 duration_ms=6 request_id=Shiraku/H8lIGNf3Ep-000004
+time=2026-09-26T16:33:14.064+04:00 level=INFO msg=request method=GET path=/api/v1/deployments status=200 bytes=3 duration_ms=75 request_id=Shiraku/H8lIGNf3Ep-000006
+time=2026-09-26T16:33:15.583+04:00 level=INFO msg=request method=GET path=/api/v1/stream/workloads status=0 bytes=0 duration_ms=4630 request_id=Shiraku/H8lIGNf3Ep-000005
+time=2026-09-26T16:33:15.585+04:00 level=INFO msg=request method=OPTIONS path=/api/v1/deployments status=200 bytes=0 duration_ms=0 request_id=Shiraku/H8lIGNf3Ep-000007
+time=2026-09-26T16:33:15.604+04:00 level=INFO msg=request method=GET path=/api/v1/deployments status=200 bytes=204 duration_ms=17 request_id=Shiraku/H8lIGNf3Ep-000009
+time=2026-09-26T16:33:15.960+04:00 level=INFO msg=request method=OPTIONS path=/healthz status=200 bytes=0 duration_ms=0 request_id=Shiraku/H8lIGNf3Ep-000010
+time=2026-09-26T16:33:15.961+04:00 level=INFO msg=request method=GET path=/healthz status=200 bytes=16 duration_ms=0 request_id=Shiraku/H8lIGNf3Ep-000011
+time=2026-09-26T16:33:17.140+04:00 level=INFO msg=request method=GET path=/api/v1/stream/workloads status=0 bytes=0 duration_ms=1553 request_id=Shiraku/H8lIGNf3Ep-000008

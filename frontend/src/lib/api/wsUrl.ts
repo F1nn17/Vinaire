@@ -1,24 +1,29 @@
-import { getSession } from "next-auth/react";
 import { getCurrentCluster } from "@/lib/clusterStore";
 import { API_BASE } from "./config";
 
-// Browsers can't attach an Authorization header to a WebSocket handshake,
-// so the caller's token travels as `?access_token=` instead (matches
-// internal/authz.Verifier.VerifyRequest's fallback on the backend); the
-// selected cluster (Roadmap Phase 11) travels as `?cluster=` the same way.
-export async function buildStreamURL(path: string): Promise<string> {
-  const session = await getSession();
+// A WebSocket handshake is still a plain HTTP request, so the session
+// cookie (Roadmap Phase 10) rides along automatically — no token query
+// param needed. The selected cluster (Roadmap Phase 11) still travels as
+// `?cluster=`, since that isn't something a cookie can carry.
+//
+// API_BASE is usually "" (same-origin — see lib/api/config.ts), so the
+// WebSocket URL is built from the current page's own origin; a
+// same-origin `?path?query` string wouldn't work for `new WebSocket()`,
+// which needs a full ws(s):// URL.
+export function buildStreamURL(path: string): string {
   const params = new URLSearchParams();
-  if (session?.accessToken) {
-    params.set("access_token", session.accessToken);
-  }
   const cluster = getCurrentCluster();
   if (cluster) {
     params.set("cluster", cluster);
   }
 
-  const base = API_BASE.replace(/^http/, "ws");
   const separator = path.includes("?") ? "&" : "?";
   const qs = params.toString();
-  return qs ? `${base}${path}${separator}${qs}` : `${base}${path}`;
+  const fullPath = qs ? `${path}${separator}${qs}` : path;
+
+  if (API_BASE) {
+    return `${API_BASE.replace(/^http/, "ws")}${fullPath}`;
+  }
+  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${wsProtocol}//${window.location.host}${fullPath}`;
 }

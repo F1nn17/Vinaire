@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
 import { useDeployment } from "@/lib/hooks/useWorkloads";
 import type { DeploymentPodRow } from "@/lib/types";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -68,11 +68,26 @@ const podColumns: DataTableColumn<DeploymentPodRow>[] = [
   },
 ];
 
-export default function DeploymentDetailPage() {
+// A static export can't pre-render a page per deployment name (unknowable
+// at build time) — this route is a single static page,
+// `/workloads/deployments/detail`, that reads which deployment to show
+// from `?namespace=&name=` instead of a `[namespace]/[name]` route
+// segment. See AGENTS.md's "Rendering model".
+export default function DeploymentDetailPageRoute() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-sm text-text-muted">Loading…</div>}
+    >
+      <DeploymentDetailPage />
+    </Suspense>
+  );
+}
+
+function DeploymentDetailPage() {
   const router = useRouter();
-  const { namespace, name } = useParams<{ namespace: string; name: string }>();
-  const deploymentNamespace = decodeURIComponent(namespace);
-  const deploymentName = decodeURIComponent(name);
+  const searchParams = useSearchParams();
+  const deploymentNamespace = searchParams.get("namespace") ?? "";
+  const deploymentName = searchParams.get("name") ?? "";
   const {
     data: deployment,
     isLoading,
@@ -188,7 +203,9 @@ export default function DeploymentDetailPage() {
           columns={podColumns}
           rows={deployment.pods}
           rowKey={(r) => r.name}
-          rowHref={(r) => `/workloads/pods/${deploymentNamespace}/${r.name}`}
+          rowHref={(r) =>
+            `/workloads/pods/detail?namespace=${encodeURIComponent(deploymentNamespace)}&name=${encodeURIComponent(r.name)}`
+          }
         />
       )}
 

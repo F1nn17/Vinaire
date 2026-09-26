@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { logout } from "@/lib/api/auth";
 
-// Roadmap Phase 10: replaces the decorative avatar circle with the actual
-// logged-in user (from the Keycloak session) and a real sign-out action.
+// Roadmap Phase 10: a sign-out action against the session cookie. There's
+// no client-visible username to show — the session is an opaque cookie the
+// browser holds, not something this code reads (token mode's pasted
+// ServiceAccount tokens have no human name attached anyway).
 export function UserMenu() {
-  const { data: session } = useSession();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -20,8 +21,10 @@ export function UserMenu() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const name = session?.user?.name ?? session?.user?.email ?? "?";
-  const initial = name.charAt(0).toUpperCase();
+  async function handleSignOut() {
+    await logout();
+    window.location.href = "/login";
+  }
 
   return (
     <div ref={rootRef} className="relative">
@@ -31,17 +34,14 @@ export function UserMenu() {
         aria-label="User menu"
         className="flex h-[30px] w-[30px] items-center justify-center rounded-full border border-border bg-surface-2 text-xs font-semibold"
       >
-        {initial}
+        ?
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-20 min-w-[200px] rounded-lg border border-border bg-surface p-1 shadow-lg">
-          <div className="truncate px-3 py-2 text-xs text-text-muted">
-            {name}
-          </div>
+        <div className="absolute right-0 top-[calc(100%+6px)] z-20 min-w-[160px] rounded-lg border border-border bg-surface p-1 shadow-lg">
           <button
             type="button"
-            onClick={() => signOut({ callbackUrl: "/" })}
+            onClick={handleSignOut}
             className="w-full rounded-md px-3 py-2 text-left text-[12.5px] text-err hover:bg-surface-2"
           >
             Sign out
