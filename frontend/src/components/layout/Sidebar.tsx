@@ -11,6 +11,7 @@ import {
   NetworkIcon,
   SecretIcon,
   SettingsIcon,
+  StorageIcon,
   TopologyIcon,
 } from "@/components/icons";
 
@@ -69,6 +70,17 @@ const groups: NavGroup[] = [
         label: "Secrets",
         icon: <SecretIcon />,
         isActive: (p) => p.startsWith("/secrets"),
+      },
+    ],
+  },
+  {
+    label: "Storage",
+    items: [
+      {
+        href: "/storage",
+        label: "PVCs & volumes",
+        icon: <StorageIcon />,
+        isActive: (p) => p.startsWith("/storage"),
       },
     ],
   },

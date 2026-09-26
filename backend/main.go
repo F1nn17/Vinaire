@@ -124,6 +124,10 @@ func main() {
 		protected.Get("/ingresses", workloadsHandler.Ingresses)
 		protected.Get("/gateway-routes", workloadsHandler.GatewayRoutes)
 		protected.Get("/clusters", workloadsHandler.ListClusters)
+		protected.Get("/pvcs", workloadsHandler.PersistentVolumeClaims)
+		protected.Get("/pvcs/{namespace}/{name}", workloadsHandler.PersistentVolumeClaimDetail)
+		protected.Get("/pvs", workloadsHandler.PersistentVolumes)
+		protected.Get("/storageclasses", workloadsHandler.StorageClasses)
 
 		// Write actions (Roadmap Phase 9) — the deliberate, narrow, audited
 		// exception to the read-only rule. See AGENTS.md's core rule and

@@ -227,6 +227,23 @@ export function ServiceIcon({ size = 16, className }: IconProps) {
   );
 }
 
+export function StorageIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <ellipse cx="12" cy="5.5" rx="8" ry="3" />
+      <path d="M4 5.5v6.5c0 1.7 3.6 3 8 3s8-1.3 8-3V5.5" />
+      <path d="M4 12v6.5c0 1.7 3.6 3 8 3s8-1.3 8-3V12" />
+    </svg>
+  );
+}
+
 export function PodIcon({ size = 16, className }: IconProps) {
   return (
     <svg

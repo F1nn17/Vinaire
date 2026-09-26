@@ -143,6 +143,67 @@ export type JobDetail = {
   yaml: string;
 };
 
+// Matches the backend's api.PVCRow (Roadmap Phase 13).
+export type PVCRow = {
+  name: string;
+  namespace: string;
+  status: string;
+  statusColor: StatusColor;
+  capacity: string;
+  accessModes: string;
+  storageClass: string;
+  age: string;
+  href: string;
+};
+
+// Matches the backend's api.PVRow (Roadmap Phase 13). PersistentVolumes are
+// cluster-scoped — no namespace field.
+export type PVRow = {
+  name: string;
+  status: string;
+  statusColor: StatusColor;
+  capacity: string;
+  accessModes: string;
+  reclaimPolicy: string;
+  storageClass: string;
+  claimRef: string;
+  age: string;
+};
+
+// Matches the backend's api.StorageClassRow (Roadmap Phase 13).
+// StorageClasses are cluster-scoped.
+export type StorageClassRow = {
+  name: string;
+  provisioner: string;
+  reclaimPolicy: string;
+  volumeBindingMode: string;
+  isDefault: boolean;
+  age: string;
+};
+
+// Matches the backend's api.PVCMountingPod (Roadmap Phase 13).
+export type PVCMountingPod = {
+  name: string;
+  namespace: string;
+};
+
+// Matches the backend's api.PVCDetailResponse (Roadmap Phase 13).
+export type PVCDetail = {
+  name: string;
+  namespace: string;
+  status: string;
+  statusColor: StatusColor;
+  capacity: string;
+  accessModes: string;
+  storageClass: string;
+  volumeName: string;
+  age: string;
+  labels: Record<string, string>;
+  mountedBy: PVCMountingPod[];
+  events: ClusterEvent[];
+  yaml: string;
+};
+
 export type ConfigMapKey = {
   label: string;
   value: string;

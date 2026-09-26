@@ -232,6 +232,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CronJob`. Verified end-to-end against `k3d-vinaire-dev`, including a
   live browser click-through from the Workloads list to a real StatefulSet's
   detail page.
+- **Roadmap Phase 13 (Storage: PVC / PV / StorageClass):** new
+  `GET /api/v1/{pvcs,pvs,storageclasses}` list endpoints and
+  `GET /api/v1/pvcs/{namespace}/{name}` detail (metadata, real provisioning
+  events, YAML, and which pods mount it — a pod-spec scan for
+  `volumes[].persistentVolumeClaim.claimName`, the same style Phase 7's
+  topology graph uses for ConfigMap/Secret references). PVCs are namespaced;
+  PVs and StorageClasses are cluster-scoped — the first cluster-scoped
+  resource kind in the app, so their list pages correctly have no namespace
+  filter. "Near capacity" is requested/provisioned capacity, not real
+  bytes-used (no metrics source for that yet — Phase 16's territory).
+  Frontend: a new sidebar "Storage" section, a tabbed list page for all
+  three kinds, and a PVC detail page linking each mounting pod to its own
+  real Pod detail page. Verified end-to-end against `k3d-vinaire-dev`,
+  including a live browser click-through from the PVC list through to a
+  mounting pod's own detail page.
 
 ### Changed
 

@@ -980,11 +980,34 @@ same way as Phase 3's pod detail (real cluster, real resource).
 
 ---
 
-## Phase 13 — Storage (PVC / PV / StorageClass)
+## Phase 13 — Storage (PVC / PV / StorageClass) ✅ done
 
 **Goal:** a Storage section shows real PersistentVolumeClaims,
 PersistentVolumes, and StorageClasses, including which pods actually mount
 a given PVC.
+
+> **Outcome note:** resolved this phase's own risk note by picking
+> requested/provisioned capacity (`status.capacity`, falling back to
+> `spec.resources.requests` for an unbound claim) over real bytes-used —
+> zero new dependencies, and real bytes-used stays Phase 16's territory
+> (metrics-server has no per-volume stat, only kubelet/Prometheus do). PVC
+> is the only namespaced kind of the three; PV/StorageClass list pages
+> correctly omit the namespace filter entirely — this was also the first
+> phase to introduce a cluster-scoped Kubernetes resource, so
+> `internal/k8s.ListPersistentVolumes`/`ListStorageClasses` are the first
+> `List*` helpers with no `namespace` parameter. The pod-mount scan reuses
+> Phase 7's topology "scan the pod spec for references" style, simplified
+> to a single field read (`spec.volumes[].persistentVolumeClaim.claimName`)
+> since a PVC — unlike a ConfigMap/Secret — never attaches via
+> `envFrom`/`env[].valueFrom`. Verified end-to-end against `k3d-vinaire-dev`
+> with a throwaway namespace, PVC, and mounting pod: the PVC list, its
+> detail page (capacity, access modes, storage class, real provisioning
+> events, and the mounting pod listed and linked to its own real Pod detail
+> page), the cluster's real PV (`Bound`, correct claim ref), and its real
+> default `StorageClass` (`local-path`, `WaitForFirstConsumer`) all matched
+> `kubectl get pvc/pv/sc` — confirmed both over curl and via a live
+> Chromium click-through (list → PVC detail → linked pod's own detail
+> page). New sidebar "Storage" section added with a new `StorageIcon`.
 
 **Backend**
 - `GET /api/v1/pvcs?namespace=`, `GET /api/v1/pvs`,
