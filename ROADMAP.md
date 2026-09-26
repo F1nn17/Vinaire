@@ -1281,11 +1281,54 @@ never zeros, never a crash.
 
 ---
 
-## Phase 17 — Production hardening
+## Phase 17 — Production hardening ✅ done
 
 **Goal:** the app behaves safely and legibly outside a single trusted
 developer's local machine — rate-limited writes, a durable audit trail,
 and clear error/empty/loading states throughout.
+
+> **Outcome note:** the rate limiter and audit log both key/tag on the
+> caller's session identity (`internal/authn.Session.Username`, falling
+> back to the session ID in token mode where there's no human username) —
+> resolving this phase's own risk note about not keying on source IP alone.
+> Chose a 1/sec-sustained, burst-5 token bucket per identity, applied via a
+> `chi` sub-router group wrapping just the three Phase 9 write routes, so
+> every other endpoint is untouched. The durable audit sink
+> (`internal/audit`, `gopkg.in/natefinch/lumberjack.v2`) sits alongside the
+> existing stdout `slog` line rather than replacing it — both
+> `deployment_actions.go`'s three actions and `secrets.go`'s reveal now go
+> through one shared `Handler.auditLog` (previously two separate ad hoc
+> implementations). Retention is explicit per the risk note: 10MB/file, 5
+> rotated+compressed backups, 30-day max age. The clearer-403 fix turned
+> out to need no per-handler changes at all: Kubernetes' own Forbidden
+> message already names the verb/resource/namespace
+> (`cannot patch resource "deployments" in API group "apps" in the
+> namespace "x"`) — the actual problem was this backend's own
+> `fmt.Errorf("restart deployment: %w", err)`-style wrapping prefix
+> appearing in front of it, so `respondK8sError` now unwraps to the
+> underlying `*apierrors.StatusError` and returns its clean message
+> directly, a single-place fix with no call-site churn. On the frontend,
+> `Toast`/`ConfirmModal` turned out to already be properly extracted,
+> generic shared components (`components/ui/`) with a single consumer
+> (Deployment detail) rather than page-inline code — nothing to
+> generalize there. The real gap was loading/empty states: a new
+> `TableSkeleton`/`ListSkeleton` (`components/ui/Skeleton.tsx`) replaced
+> every list page's bare "Loading…" text — wired directly into `DataTable`
+> itself (one change covering Workloads, Storage, Access control, Custom
+> Resources, Network) plus the two `ListDetailSplit` pages (ConfigMaps,
+> Secrets) — and every list's `emptyLabel` was made specific
+> (`No deployments found in namespace "x".`, not a generic "Nothing here
+> yet."). Detail pages and Dashboard/Topology were left out of this pass —
+> the Definition of done below scopes to list pages specifically.
+> Verified end-to-end against `k3d-vinaire-dev`: hammering the restart
+> endpoint got 5 real `200`s then real `429`s, refilling at 1/sec exactly
+> as configured; the audit log recorded exactly the successful actions
+> (none of the rate-limited ones) and every entry survived killing and
+> restarting the backend process; a real RBAC-restricted ServiceAccount's
+> forbidden restart attempt came back with the clean Kubernetes message,
+> no internal wrapping prefix; and a real browser confirmed both the
+> skeleton (via an artificially delayed API response) and a specific
+> empty-state message for a nonexistent namespace on Workloads.
 
 **Backend**
 - Rate limiting on the three write endpoints (Phase 9) — a simple

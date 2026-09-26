@@ -17,6 +17,7 @@ import type {
   ServiceAccountRow,
 } from "@/lib/types";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { PillTabs } from "@/components/ui/Tabs";
 
 type AccessControlTab =
@@ -256,20 +257,20 @@ export default function AccessControlPage() {
         <div className="text-sm text-err">
           Failed to load {tab}: {active.error.message}
         </div>
-      ) : active.isLoading || !active.data ? (
-        <div className="text-sm text-text-muted">Loading…</div>
       ) : tab === "roles" ? (
         <DataTable
           columns={roleColumns}
           rows={roles.data ?? []}
           rowKey={(r) => `${r.namespace}/${r.name}`}
-          emptyLabel="No Roles found."
+          isLoading={roles.isLoading || !roles.data}
+          emptyLabel={`No Roles found${namespace ? ` in namespace "${namespace}"` : ""}.`}
         />
       ) : tab === "clusterroles" ? (
         <DataTable
           columns={clusterRoleColumns}
           rows={clusterRoles.data ?? []}
           rowKey={(r) => r.name}
+          isLoading={clusterRoles.isLoading || !clusterRoles.data}
           emptyLabel="No ClusterRoles found."
         />
       ) : tab === "rolebindings" ? (
@@ -277,13 +278,15 @@ export default function AccessControlPage() {
           columns={roleBindingColumns}
           rows={roleBindings.data ?? []}
           rowKey={(r) => `${r.namespace}/${r.name}`}
-          emptyLabel="No RoleBindings found."
+          isLoading={roleBindings.isLoading || !roleBindings.data}
+          emptyLabel={`No RoleBindings found${namespace ? ` in namespace "${namespace}"` : ""}.`}
         />
       ) : tab === "clusterrolebindings" ? (
         <DataTable
           columns={clusterRoleBindingColumns}
           rows={clusterRoleBindings.data ?? []}
           rowKey={(r) => r.name}
+          isLoading={clusterRoleBindings.isLoading || !clusterRoleBindings.data}
           emptyLabel="No ClusterRoleBindings found."
         />
       ) : tab === "serviceaccounts" ? (
@@ -291,10 +294,14 @@ export default function AccessControlPage() {
           columns={serviceAccountColumns}
           rows={serviceAccounts.data ?? []}
           rowKey={(r) => `${r.namespace}/${r.name}`}
-          emptyLabel="No ServiceAccounts found."
+          isLoading={serviceAccounts.isLoading || !serviceAccounts.data}
+          emptyLabel={`No ServiceAccounts found${namespace ? ` in namespace "${namespace}"` : ""}.`}
         />
       ) : (
-        <SummaryView data={summary.data ?? []} />
+        <SummaryView
+          data={summary.data ?? []}
+          isLoading={summary.isLoading || !summary.data}
+        />
       )}
     </div>
   );
@@ -302,9 +309,15 @@ export default function AccessControlPage() {
 
 function SummaryView({
   data,
+  isLoading,
 }: {
   data: NonNullable<ReturnType<typeof useRBACSummary>["data"]>;
+  isLoading: boolean;
 }) {
+  if (isLoading) {
+    return <ListSkeleton />;
+  }
+
   if (data.length === 0) {
     return (
       <div className="text-sm text-text-muted">

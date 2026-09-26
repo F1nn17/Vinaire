@@ -96,17 +96,16 @@ function CustomResourcesPage() {
         <div className="text-sm text-err">
           Failed to load instances: {instances.error.message}
         </div>
-      ) : instances.isLoading || !instances.data ? (
-        <div className="text-sm text-text-muted">Loading…</div>
       ) : (
         <DataTable
           columns={columns}
-          rows={instances.data}
+          rows={instances.data ?? []}
           rowKey={(r) => `${r.namespace}/${r.name}`}
           rowHref={(r) =>
             `/custom-resources/detail?crd=${encodeURIComponent(crdName)}&namespace=${encodeURIComponent(r.namespace)}&name=${encodeURIComponent(r.name)}`
           }
-          emptyLabel="No instances found."
+          isLoading={instances.isLoading || !instances.data}
+          emptyLabel={`No instances found${namespace ? ` in namespace "${namespace}"` : ""}.`}
         />
       )}
     </div>

@@ -14,17 +14,28 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"golang.org/x/time/rate"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
 	"github.com/shiraku/vinaire/backend/internal/api"
+	"github.com/shiraku/vinaire/backend/internal/audit"
 	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/clusters"
 	"github.com/shiraku/vinaire/backend/internal/config"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 	"github.com/shiraku/vinaire/backend/internal/stream"
+)
+
+// writeRateLimit/writeRateBurst bound the three Phase 9 write endpoints
+// (Roadmap Phase 17) — generous enough that normal interactive use (a
+// restart here, a rollback there) never trips it, tight enough that a
+// scripted hammering of the endpoint gets a real 429 within a few requests.
+const (
+	writeRateLimit = rate.Limit(1) // 1/sec sustained, per identity
+	writeRateBurst = 5
 )
 
 const shutdownTimeout = 5 * time.Second
@@ -71,6 +82,8 @@ func main() {
 		LokiURL:         cfg.LokiURL,
 		AlertmanagerURL: cfg.AlertmanagerURL,
 	})
+	workloadsHandler.Audit = audit.NewLogger(cfg.AuditLogPath)
+	writeLimiter := api.NewWriteRateLimiter(writeRateLimit, writeRateBurst)
 
 	streamHandler := unavailableWSHandler
 	logsHandler := unavailableWSHandler
@@ -149,9 +162,13 @@ func main() {
 		// Write actions (Roadmap Phase 9) — the deliberate, narrow, audited
 		// exception to the read-only rule. See AGENTS.md's core rule and
 		// internal/k8s/deployment_actions.go before adding another one.
-		protected.Post("/deployments/{namespace}/{name}/restart", workloadsHandler.RestartDeployment)
-		protected.Delete("/deployments/{namespace}/{name}", workloadsHandler.DeleteDeployment)
-		protected.Post("/deployments/{namespace}/{name}/rollback", workloadsHandler.RollbackDeployment)
+		// Rate-limited per identity (Roadmap Phase 17) — see writeLimiter.
+		protected.Group(func(w chi.Router) {
+			w.Use(writeLimiter.Middleware)
+			w.Post("/deployments/{namespace}/{name}/restart", workloadsHandler.RestartDeployment)
+			w.Delete("/deployments/{namespace}/{name}", workloadsHandler.DeleteDeployment)
+			w.Post("/deployments/{namespace}/{name}/rollback", workloadsHandler.RollbackDeployment)
+		})
 	})
 
 	// Single combined image (Roadmap Phase 10's second half — see

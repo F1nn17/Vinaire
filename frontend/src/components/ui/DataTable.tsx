@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 
 export type DataTableColumn<T> = {
   header: string;
@@ -13,14 +14,24 @@ export function DataTable<T>({
   rowKey,
   rowHref,
   emptyLabel = "Nothing here yet.",
+  isLoading = false,
 }: {
   columns: DataTableColumn<T>[];
   rows: T[];
   rowKey: (row: T) => string;
   rowHref?: (row: T) => string | undefined;
   emptyLabel?: string;
+  // Roadmap Phase 17: a real skeleton instead of every page rendering its
+  // own bare "Loading…" text before this component. Callers still branch
+  // on their `error` state themselves — this only covers the loading/empty/
+  // loaded states.
+  isLoading?: boolean;
 }) {
   const gridTemplateColumns = columns.map((c) => c.width).join(" ");
+
+  if (isLoading) {
+    return <TableSkeleton columns={columns.length} />;
+  }
 
   return (
     <div className="flex-1 overflow-auto rounded-[10px] border border-border bg-surface">

@@ -80,6 +80,14 @@ type Config struct {
 	PrometheusURL   string
 	LokiURL         string
 	AlertmanagerURL string
+
+	// AuditLogPath is where Phase 9 write actions and Phase 6 secret
+	// reveals are durably logged (Roadmap Phase 17), in addition to the
+	// structured stdout slog line they already write. Relative to the
+	// working directory by default — for this to actually "survive a pod
+	// restart" (this phase's own Definition of done) in a real Kubernetes
+	// Deployment, mount a volume at whatever directory this path lives in.
+	AuditLogPath string
 }
 
 const (
@@ -108,6 +116,8 @@ const (
 	envPrometheusURL       = "PROMETHEUS_URL"
 	envLokiURL             = "LOKI_URL"
 	envAlertmanagerURL     = "ALERTMANAGER_URL"
+	envAuditLogPath        = "AUDIT_LOG_PATH"
+	defaultAuditLogPath    = "audit.log"
 )
 
 // Load reads configuration from the environment, falling back to defaults
@@ -130,6 +140,7 @@ func Load() Config {
 		PrometheusURL:      os.Getenv(envPrometheusURL),
 		LokiURL:            os.Getenv(envLokiURL),
 		AlertmanagerURL:    os.Getenv(envAlertmanagerURL),
+		AuditLogPath:       getEnv(envAuditLogPath, defaultAuditLogPath),
 	}
 }
 

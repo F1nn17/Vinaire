@@ -297,6 +297,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Alertmanager response shapes — including a live browser click-through
   showing real mock alerts in the Topbar bell and a real pod's historical
   logs correctly parsed and level-highlighted.
+- **Roadmap Phase 17 (Production hardening):** the three Phase 9 write
+  endpoints are now rate-limited per logged-in identity (1/sec sustained,
+  burst 5, real `429` past that — never a silent drop); Phase 9's writes
+  and Phase 6's secret reveal now go through one shared `Handler.auditLog`
+  that durably records every action (`internal/audit`, rotated/compressed,
+  10MB/5 backups/30 days) in addition to the existing stdout log line, so
+  the trail survives a pod restart; and a Forbidden response's message is
+  now Kubernetes' own clean explanation instead of this backend's internal
+  wrapping prefix tacked in front of it. Frontend: a new shared
+  `TableSkeleton`/`ListSkeleton` replaced every list page's bare
+  "Loading…" text (wired into `DataTable` itself, plus the two
+  `ListDetailSplit` pages), and every list's empty state is now specific
+  (e.g. `No deployments found in namespace "x".`) rather than generic.
+  `Toast`/`ConfirmModal` turned out to already be properly shared
+  components — nothing to change there. Verified end-to-end against
+  `k3d-vinaire-dev`: real `429`s after a burst of 5, audit entries
+  surviving a backend process restart, a real RBAC-restricted
+  ServiceAccount getting the clean Forbidden message, and a real browser
+  showing both the loading skeleton and a specific empty state.
 
 ### Changed
 

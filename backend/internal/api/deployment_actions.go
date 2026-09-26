@@ -2,12 +2,10 @@ package api
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 )
 
@@ -34,7 +32,7 @@ func (h *Handler) RestartDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditWriteAction(r, "restart", namespace, name)
+	h.auditLog(r, "restart", namespace, name)
 	respondJSON(w, map[string]string{"status": "ok"})
 }
 
@@ -52,7 +50,7 @@ func (h *Handler) DeleteDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditWriteAction(r, "delete", namespace, name)
+	h.auditLog(r, "delete", namespace, name)
 	respondJSON(w, map[string]string{"status": "ok"})
 }
 
@@ -80,22 +78,6 @@ func (h *Handler) RollbackDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditWriteAction(r, "rollback", namespace, name, "revision", req.Revision)
+	h.auditLog(r, "rollback", namespace, name, "revision", req.Revision)
 	respondJSON(w, map[string]string{"status": "ok"})
-}
-
-// auditWriteAction logs every write action Phase 9 allows — see AGENTS.md's
-// core rule. "who" is the caller's logged-in identity (best-effort
-// username in OIDC mode, empty in token mode — a pasted ServiceAccount
-// token carries no human username) plus their source address; extra
-// key/value pairs add action-specific context (e.g. rollback's target
-// revision).
-func auditWriteAction(r *http.Request, action, namespace, name string, extra ...any) {
-	username := ""
-	if sess, ok := authn.FromContext(r.Context()); ok {
-		username = sess.Username
-	}
-	args := []any{"action", action, "namespace", namespace, "name", name, "user", username, "remote_addr", r.RemoteAddr}
-	args = append(args, extra...)
-	slog.Warn("write action", args...)
 }

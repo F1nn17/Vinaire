@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"github.com/shiraku/vinaire/backend/internal/audit"
 	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/clusters"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
@@ -52,6 +53,13 @@ type Handler struct {
 	PrometheusURL   string
 	LokiURL         string
 	AlertmanagerURL string
+
+	// Audit is the durable sink for write actions (Phase 9) and secret
+	// reveals (Phase 6) — see internal/audit and Handler.auditLog. Set
+	// directly on the Handler after construction (main.go), since it's a
+	// single additional piece of optional infrastructure, not part of the
+	// per-cluster/per-request resolution the constructor params above are.
+	Audit *audit.Logger
 }
 
 // ObservabilityConfig groups the optional observability-stack URLs

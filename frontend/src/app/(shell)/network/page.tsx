@@ -6,6 +6,7 @@ import type { GatewayRow, IngressRow } from "@/lib/types";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PillTabs } from "@/components/ui/Tabs";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { PlusIcon } from "@/components/icons";
 
 type Tab = "ingress" | "gateway";
@@ -131,14 +132,13 @@ export default function NetworkPage() {
           <div className="text-sm text-err">
             Failed to load Ingresses: {ingressError.message}
           </div>
-        ) : ingressLoading || !ingressRows ? (
-          <div className="text-sm text-text-muted">Loading…</div>
         ) : (
           <DataTable
             columns={ingressColumns}
-            rows={ingressRows}
+            rows={ingressRows ?? []}
             rowKey={(r) => `${r.namespace}/${r.name}`}
-            emptyLabel="No Ingresses found."
+            isLoading={ingressLoading || !ingressRows}
+            emptyLabel={`No Ingresses found${namespace ? ` in namespace "${namespace}"` : ""}.`}
           />
         ))}
 
@@ -148,17 +148,18 @@ export default function NetworkPage() {
             Failed to load Gateway API resources: {gatewayError.message}
           </div>
         ) : gatewayLoading || !gatewayResult ? (
-          <div className="text-sm text-text-muted">Loading…</div>
+          <TableSkeleton columns={gatewayColumns.length} />
         ) : !gatewayResult.available ? (
           <div className="rounded-[10px] border border-border bg-surface p-5 text-sm text-text-muted">
-            Gateway API isn&rsquo;t available on this cluster: {gatewayResult.reason}
+            Gateway API isn&rsquo;t available on this cluster:{" "}
+            {gatewayResult.reason}
           </div>
         ) : (
           <DataTable
             columns={gatewayColumns}
             rows={gatewayResult.rows}
             rowKey={(r) => `${r.namespace}/${r.kind}/${r.name}`}
-            emptyLabel="No Gateway API resources found."
+            emptyLabel={`No Gateway API resources found${namespace ? ` in namespace "${namespace}"` : ""}.`}
           />
         ))}
     </div>

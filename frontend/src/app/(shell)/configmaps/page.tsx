@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useConfigMaps } from "@/lib/hooks/useConfigMaps";
 import { ListDetailSplit } from "@/components/ui/ListDetailSplit";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { PlusIcon } from "@/components/icons";
 
 export default function ConfigMapsPage() {
@@ -39,7 +40,7 @@ export default function ConfigMapsPage() {
           Failed to load ConfigMaps: {error.message}
         </div>
       ) : isLoading || !data ? (
-        <div className="text-sm text-text-muted">Loading…</div>
+        <ListSkeleton />
       ) : data.length === 0 ? (
         <div className="text-sm text-text-muted">
           No ConfigMaps found{namespace ? ` in namespace "${namespace}"` : ""}.

@@ -2,14 +2,12 @@ package api
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"sort"
 
 	"github.com/go-chi/chi/v5"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 )
 
@@ -112,17 +110,7 @@ func (h *Handler) RevealSecretKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username := ""
-	if sess, ok := authn.FromContext(r.Context()); ok {
-		username = sess.Username
-	}
-	slog.Warn("secret revealed",
-		"namespace", namespace,
-		"secret", name,
-		"key", req.Key,
-		"user", username,
-		"remote_addr", r.RemoteAddr,
-	)
+	h.auditLog(r, "reveal_secret", namespace, name, "key", req.Key)
 
 	w.Header().Set("Cache-Control", "no-store")
 	respondJSON(w, revealResponse{Value: string(value)})

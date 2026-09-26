@@ -94,14 +94,14 @@ export default function WorkloadsPage() {
         <div className="text-sm text-err">
           Failed to load {tab}: {error.message}
         </div>
-      ) : isLoading || !data ? (
-        <div className="text-sm text-text-muted">Loading…</div>
       ) : (
         <DataTable
           columns={columns}
-          rows={data}
+          rows={data ?? []}
           rowKey={(r) => `${r.namespace}/${r.name}`}
           rowHref={(r) => r.href}
+          isLoading={isLoading || !data}
+          emptyLabel={`No ${tab} found${namespace ? ` in namespace "${namespace}"` : ""}.`}
         />
       )}
     </div>

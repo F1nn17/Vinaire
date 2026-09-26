@@ -27,6 +27,8 @@ yarn-error.log*
 
 # --- Local dev server logs (repo root, from ad hoc `npm run dev`/`go run` runs) ---
 *.log
+# --- Durable audit log (Roadmap Phase 17) and its rotated/compressed backups ---
+*.log.gz
 
 # --- IDE ---
 .vscode/

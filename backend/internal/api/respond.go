@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -32,13 +33,32 @@ func respondError(w http.ResponseWriter, status int, message string) {
 // work and for this to actually match what `kubectl` would show.
 func respondK8sError(w http.ResponseWriter, err error) {
 	status := http.StatusBadGateway
+	message := err.Error()
+
 	switch {
 	case apierrors.IsForbidden(err):
 		status = http.StatusForbidden
+		message = forbiddenMessage(err)
 	case apierrors.IsUnauthorized(err):
 		status = http.StatusUnauthorized
 	case apierrors.IsNotFound(err):
 		status = http.StatusNotFound
 	}
-	respondError(w, status, err.Error())
+	respondError(w, status, message)
+}
+
+// forbiddenMessage extracts the Kubernetes API server's own explanation for
+// a Forbidden error (it already names the verb/resource/namespace, e.g.
+// `deployments.apps "x" is forbidden: User "y" cannot patch resource
+// "deployments" in API group "apps" in the namespace "z"`) — Roadmap
+// Phase 17 wants a specific, request-derived message in the response body,
+// not this backend's own wrapping prefix (e.g. "list pods: ") tacked in
+// front of it. errors.As unwraps through that wrapping to find the
+// underlying *apierrors.StatusError.
+func forbiddenMessage(err error) string {
+	var statusErr *apierrors.StatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.Status().Message
+	}
+	return err.Error()
 }

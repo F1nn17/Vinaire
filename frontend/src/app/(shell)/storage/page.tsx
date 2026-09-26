@@ -215,21 +215,21 @@ export default function StoragePage() {
         <div className="text-sm text-err">
           Failed to load {tab}: {active.error.message}
         </div>
-      ) : active.isLoading || !active.data ? (
-        <div className="text-sm text-text-muted">Loading…</div>
       ) : tab === "pvcs" ? (
         <DataTable
           columns={pvcColumns}
           rows={pvcs.data ?? []}
           rowKey={(r) => `${r.namespace}/${r.name}`}
           rowHref={(r) => r.href}
-          emptyLabel="No PVCs found."
+          isLoading={pvcs.isLoading || !pvcs.data}
+          emptyLabel={`No PVCs found${namespace ? ` in namespace "${namespace}"` : ""}.`}
         />
       ) : tab === "pvs" ? (
         <DataTable
           columns={pvColumns}
           rows={pvs.data ?? []}
           rowKey={(r) => r.name}
+          isLoading={pvs.isLoading || !pvs.data}
           emptyLabel="No PersistentVolumes found."
         />
       ) : (
@@ -237,6 +237,7 @@ export default function StoragePage() {
           columns={storageClassColumns}
           rows={storageClasses.data ?? []}
           rowKey={(r) => r.name}
+          isLoading={storageClasses.isLoading || !storageClasses.data}
           emptyLabel="No StorageClasses found."
         />
       )}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSecrets } from "@/lib/hooks/useSecrets";
 import { revealSecretKey } from "@/lib/api/secrets";
 import { ListDetailSplit } from "@/components/ui/ListDetailSplit";
+import { ListSkeleton } from "@/components/ui/Skeleton";
 import { PlusIcon, SecretIcon } from "@/components/icons";
 import type { SecretDetail } from "@/lib/types";
 
@@ -57,7 +58,7 @@ export default function SecretsPage() {
           Failed to load Secrets: {error.message}
         </div>
       ) : isLoading || !data ? (
-        <div className="text-sm text-text-muted">Loading…</div>
+        <ListSkeleton />
       ) : data.length === 0 ? (
         <div className="text-sm text-text-muted">
           No Secrets found{namespace ? ` in namespace "${namespace}"` : ""}.
