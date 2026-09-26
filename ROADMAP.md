@@ -688,74 +688,99 @@ visible in `kubectl get deployments`.
 
 ---
 
-## Phase 10 — Authorization ✅ done
-
-**Goal:** Keycloak-backed login, with group membership limiting which
-namespaces/actions a user can see and do.
-
-> **Outcome note:** implemented in full — `internal/authz` (OIDC token
-> verification via `go-oidc` + a flat `backend/policy.yaml` group→
-> namespace/action allow-list), every `/api/v1/*` handler gated through it,
-> and `next-auth`/Auth.js on the frontend with a real Keycloak login,
-> protected routes (`src/proxy.ts` — Next.js 16 renamed the middleware
-> convention), and sign-out. A throwaway, fully isolated dev Keycloak
-> (`/keycloak`, docker-compose + a pre-seeded realm/groups/users) backs all
-> of this locally. Verified end-to-end **against the real backend with
-> real Keycloak-issued tokens over curl**: no token → `401`; `alice`
-> (`auth-viewers`, read-only, namespace `auth`) → an all-namespaces list
-> request comes back scoped to just `auth`, an explicit `?namespace=default`
-> request gets `403`, and a restart/delete/rollback attempt gets `403` even
-> on her own namespace (read ≠ write); `bob` (`platform-admins`,
-> read+write, every namespace) → sees every namespace and a restart
-> succeeds (`200`), logged in the audit trail with his real username.
->
-> **Known gap:** a live, browser-driven login (next-auth's actual OAuth
-> redirect dance through a real browser) could not be verified end-to-end
-> on this dev machine — a local, unrelated app (Proxifier) intercepts
-> Node's outbound TCP connections and breaks next-auth's server-side calls
-> to Keycloak even though curl and real browsers are unaffected (see
-> AGENTS.md's frontend "Known local issue" and the saved memory note on
-> this). The frontend code itself builds, lints, and type-checks cleanly.
-> This should be re-verified with a real browser login once that's fixed —
-> whoever picks this up next shouldn't need to re-diagnose the Proxifier
-> issue, just redo the browser-driven part of the check.
+## Phase 10 — Authorization (token-first, with optional Keycloak) + a single image
 
 **Backend**
-- OIDC middleware validating Keycloak-issued tokens —
-  `github.com/coreos/go-oidc/v3` for verification; `golang.org/x/oauth2` is
-  already pulled in transitively via `client-go`, just needs promoting to a
-  direct `go.mod` require.
-- Group → namespace/action mapping: read the token's groups/roles claim,
-  map to an allow-list of namespaces and permitted actions (config-backed
-  for now — e.g. a small YAML/JSON policy file — not over-engineered into a
-  full policy engine at this stage).
-- Every handler from Phases 1–9 gets a authorization check inserted here —
-  this phase touches a lot of existing code, but adds no new endpoints.
+- An `AuthProvider` interface with implementations switched via `AUTH_MODE`:
+  - `"token"` (default) — login via a pasted Kubernetes ServiceAccount
+    token.
+  - `"oidc"` — login via Keycloak (or any OIDC provider), available as an
+    option once Keycloak is deployed in the cluster.
+  - `"disabled"` — for local k3d development, no login at all.
+- **Token mode:**
+  - `POST /api/v1/auth/login` accepts a pasted K8s token, stores it in a
+    server-side session store (an in-memory map to start — swappable for
+    Redis later without changing the interface), and generates a random
+    session ID.
+  - The session ID is handed to the browser as a cookie with
+    `HttpOnly` + `Secure` + `SameSite=Strict` — the browser never receives
+    or can read the raw K8s token via `document.cookie`.
+  - Middleware on every protected route pulls the K8s token out of the
+    server-side session by cookie and attaches it to the Kubernetes API
+    request's `Authorization` header itself.
+  - Session TTL is synced to the K8s token's own TTL (the token is created
+    via `kubectl create token --duration=...`) — the session is invalidated
+    once it expires, requiring a fresh login.
+  - `POST /api/v1/auth/logout` — removes the session from the store and
+    clears the cookie.
+- **OIDC mode** (active when `AUTH_MODE=oidc`):
+  - Authorization Code flow with PKCE via `go-oidc/v3` + `oauth2`.
+  - Issuer URL/client ID/secret come from env
+    (`OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`), pointing at
+    a Keycloak pod in the same cluster (e.g.
+    `http://keycloak.auth.svc.cluster.local/realms/vinaire`).
+  - After a successful Keycloak login, the same session layer as token
+    mode is used — only the identity source differs; the frontend and the
+    rest of the backend see no difference.
+  - Mapping Keycloak groups to Kubernetes RBAC (`ClusterRoleBinding`) — a
+    basic scaffold for now, detailed rules to be refined as it goes.
+- `GET /api/v1/auth/config` — tells the frontend which `AUTH_MODE` is
+  active, so the UI shows the right login screen.
+- README/AGENTS.md gets an example `ClusterRole` manifest with the minimal
+  permission set Vinaire needs (**not** cluster-admin), plus the command
+  for creating a ServiceAccount + a token with a bounded `--duration`.
 
 **Frontend**
-- Login page redirecting to Keycloak (Authorization Code + PKCE), protected
-  routes via Next.js middleware checking a session cookie, sign-out.
-- Recommend `next-auth`/Auth.js with its generic OIDC provider rather than
-  hand-rolling the PKCE flow — first-party Next.js integration.
+- A login screen: a token-paste field (token mode) + a "Sign in with
+  Keycloak" button (shown only when `/api/v1/auth/config` reports `oidc`).
+- Every request goes out with `credentials: 'include'` — the cookie rides
+  along automatically; no token is ever stored or read from JS.
+- A `401` from any protected route → redirect to `/login`.
+
+**Also in this phase: a single backend+frontend image**
+- A multi-stage `Dockerfile`: a `node` stage builds the frontend
+  (`npm run build`), a `golang` stage builds the backend, and the final
+  minimal layer (alpine or distroless, **must** run as a non-root user)
+  holds only the Go binary and the frontend's static output next to it.
+- In production, the Go backend serves that static output itself
+  (`http.FileServer` or `go:embed`) from the same port as the API — one
+  process, one pod, one image, the same shape as Headlamp.
+- Day-to-day development still runs `npm run dev` and `go run .`
+  separately with hot reload — the single image is only built for a
+  prod/test deploy into k3d; the local dev loop doesn't change.
+
+**Complexity:** M — the session layer and token login are simple on their
+own, but the OIDC branch and folding the build into one Dockerfile add
+real volume.
 
 **New dependencies**
-- `go.mod`: `github.com/coreos/go-oidc/v3`
-- `package.json`: `next-auth` (v5 / Auth.js)
-
-**Complexity:** L
+- `go.mod`: `github.com/coreos/go-oidc/v3`, `golang.org/x/oauth2` (needed
+  for OIDC mode, but added now alongside the interface so it doesn't need
+  revisiting later), `github.com/google/uuid` (or equivalent) for
+  session-ID generation. Token mode and the combined build need no new
+  dependencies.
+- `package.json`: none.
 
 **Risks to check early**
-- This is also where Phase 5's unauthenticated-exec window (flagged above)
-  actually closes — explicitly re-verify Terminal access is gated by the
-  new per-namespace/action mapping here, not just "logged in = full access
-  to everything," which would defeat the point of this phase for exec
-  specifically.
+- The K8s token itself must never end up in logs — not access logs, not
+  error traces; treat it like a password.
+- If Keycloak isn't deployed in the cluster yet but `AUTH_MODE=oidc` is set
+  anyway, the backend must fail fast at startup with a clear message
+  (`"OIDC_ISSUER_URL unreachable"`), not silently break the whole service.
+- Folding everything into one image makes it easy to drop basic practices
+  (non-root user, a minimal base image) — this is a common mistake when
+  moving from separate images to a combined one; check for it explicitly
+  in code review.
 
 **Definition of done**
-Opening any Vinaire URL while logged out redirects to Keycloak. Logged in
-as a user who only belongs to an `auth-viewers`-style group: Workloads only
-shows the `auth` namespace; requests for other namespaces return `403` from
-the backend (not just a hidden UI element — the API itself enforces it).
+Logging in with a pasted ServiceAccount token works; the browser's DevTools
+show the session cookie marked `HttpOnly` and unreachable from the console
+via `document.cookie`. Once the token's TTL expires, requests start getting
+`401` and the frontend redirects to `/login`. With `AUTH_MODE=oidc` and
+Keycloak deployed in the cluster, the "Sign in with Keycloak" button really
+logs in through a real realm. `docker build .` at the repo root builds one
+image; `docker run` of that image serves both the API and the frontend on
+one port, with no node/npm inside the final layer.
 
 ---
 

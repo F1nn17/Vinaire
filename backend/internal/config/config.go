@@ -46,7 +46,7 @@ type Config struct {
 const (
 	defaultPort          = "8080"
 	defaultCORSOrigin    = "http://localhost:3100"
-	defaultOIDCIssuerURL = "http://localhost:8081/realms/vinaire-dev"
+	defaultOIDCIssuerURL = "http://localhost:8180/realms/vinaire-dev"
 	defaultOIDCClientID  = "vinaire-frontend"
 	defaultPolicyPath    = "policy.yaml"
 	envPort              = "PORT"

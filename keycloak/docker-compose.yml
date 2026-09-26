@@ -6,7 +6,16 @@ services:
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      # Deliberately NOT setting KC_HOSTNAME: Keycloak's default
+      # "request-based" hostname derivation is exactly what makes this
+      # setup work across two different callers with two different valid
+      # hostnames for the same realm — see frontend/docker-compose.dev.yml
+      # and auth.ts's comment on AUTH_KEYCLOAK_ISSUER for the full story.
     ports:
       - "8180:8080"
     volumes:
       - ./realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+
+networks:
+  default:
+    name: keycloak_default
