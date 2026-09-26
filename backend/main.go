@@ -134,6 +134,9 @@ func main() {
 		protected.Get("/clusterrolebindings", workloadsHandler.ClusterRoleBindings)
 		protected.Get("/serviceaccounts", workloadsHandler.ServiceAccounts)
 		protected.Get("/rbac/summary", workloadsHandler.RBACSummary)
+		protected.Get("/crds", workloadsHandler.CRDs)
+		protected.Get("/crds/{crdName}/instances", workloadsHandler.CRDInstances)
+		protected.Get("/crds/{crdName}/instances/{name}", workloadsHandler.CRDInstanceDetail)
 
 		// Write actions (Roadmap Phase 9) — the deliberate, narrow, audited
 		// exception to the read-only rule. See AGENTS.md's core rule and

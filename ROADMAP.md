@@ -1120,11 +1120,40 @@ bound to which roles.
 
 ---
 
-## Phase 15 — Custom Resources (generic CRD viewer)
+## Phase 15 — Custom Resources (generic CRD viewer) ✅ done
 
 **Goal:** a Custom Resources section lists whatever CRDs are actually
 installed on the connected cluster and can list/view any of their
 instances — no hardcoded per-type Go code for each new CRD.
+
+> **Outcome note:** `go get k8s.io/apiextensions-apiserver` initially pulled
+> in the full apiserver dependency tree (etcd, otel, grpc, prometheus —
+> dozens of transitive modules) since that's what the *module* declares,
+> but `go mod tidy` afterward reduced `go.mod`/`go.sum` to almost nothing
+> extra (net +1 direct dependency line): this backend only imports the
+> lightweight generated typed clientset
+> (`.../client/clientset/clientset`) and API types package, never the
+> actual apiserver code, so none of that heavy tree gets compiled in. The
+> existing `resolveCluster` helper (Phase 10/11) was refactored into a
+> shared `resolveRESTConfig` plus two thin builders —`resolveCluster`
+> (typed clientset, unchanged behavior) and the new `resolveDynamic`
+> (dynamic + apiextensions clients) — so the per-request, caller's-own-
+> identity auth model applies to the generic CRD path exactly the same way
+> it does everywhere else, with zero duplicated auth logic. Picked each
+> CRD's *storage* version (always exactly one) for the dynamic client's
+> GVR, sidestepping any "which served version" ambiguity. Verified
+> end-to-end against `k3d-vinaire-dev`'s real installed CRDs (33 of them —
+> Traefik Hub, Gateway API, k3s/Helm-controller CRDs, no throwaway test
+> CRD needed): the dynamic sidebar section correctly listed every one by
+> its real `Kind`; a namespaced CRD with real instances
+> (`helmcharts.helm.cattle.io`, 2 real `HelmChart` objects in
+> `kube-system`) showed a real list with a namespace column and its YAML
+> matched `kubectl get helmchart traefik -n kube-system -o yaml` exactly;
+> a cluster-scoped CRD with zero instances
+> (`gatewayclasses.gateway.networking.k8s.io`) correctly returned an empty
+> list with no namespace filter shown, rather than erroring — confirmed
+> both over curl and in a live Chromium click-through from the dynamic
+> sidebar through to a real YAML view.
 
 **Backend**
 - Discovery: enumerate installed CRDs via the `apiextensions-apiserver`

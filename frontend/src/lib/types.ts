@@ -275,6 +275,35 @@ export type RBACBindingSummary = {
   rules: RBACRule[];
 };
 
+// Matches the backend's api.CRDRow (Roadmap Phase 15).
+export type CRDRow = {
+  name: string;
+  group: string;
+  version: string;
+  kind: string;
+  plural: string;
+  namespaced: boolean;
+  age: string;
+};
+
+// Matches the backend's api.CRDInstanceRow (Roadmap Phase 15) — a generic
+// fallback shape (name/namespace/age), not each CRD's own printer columns.
+export type CRDInstanceRow = {
+  name: string;
+  namespace: string;
+  age: string;
+};
+
+// Matches the backend's api.CRDInstanceDetailResponse (Roadmap Phase 15).
+export type CRDInstanceDetail = {
+  name: string;
+  namespace: string;
+  kind: string;
+  age: string;
+  labels: Record<string, string>;
+  yaml: string;
+};
+
 export type ConfigMapKey = {
   label: string;
   value: string;

@@ -260,6 +260,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Role/RoleBinding/ServiceAccount and the real `vinaire-viewer` ClusterRole/
   ClusterRoleBinding from Phase 10 — the summary correctly resolved a test
   binding down to its role's exact rule.
+- **Roadmap Phase 15 (Custom Resources — generic CRD viewer):** new
+  `GET /api/v1/crds` (discovers every installed CRD via
+  `k8s.io/apiextensions-apiserver`'s typed clientset),
+  `GET /api/v1/crds/{crdName}/instances?namespace=`, and
+  `GET /api/v1/crds/{crdName}/instances/{name}?namespace=` — fully generic,
+  driven by `k8s.io/client-go/dynamic` against each CRD's own storage
+  version, with no hardcoded per-CRD Go code. Refactored `resolveCluster`
+  into a shared `resolveRESTConfig` plus a new `resolveDynamic`, so the
+  dynamic/apiextensions clients authenticate as the caller's own identity
+  exactly like every typed-clientset handler already does. Frontend: a
+  dynamic sidebar "Custom Resources" section built from the discovered CRD
+  list itself (no static nav entries), a generic instance list (name/
+  namespace/age — not each CRD's own printer columns), and a YAML detail
+  view reusing the existing `CodeBlock` pattern. Verified end-to-end
+  against `k3d-vinaire-dev`'s real installed CRDs (33 of them, no
+  throwaway test CRD needed) — a namespaced CRD with real instances
+  (`HelmChart`) and a cluster-scoped CRD with none (`GatewayClass`) both
+  behaved correctly, confirmed via a live browser click-through from the
+  dynamic sidebar to a real YAML view matching `kubectl get ... -o yaml`.
 
 ### Changed
 

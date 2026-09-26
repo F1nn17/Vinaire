@@ -260,6 +260,22 @@ export function ShieldIcon({ size = 16, className }: IconProps) {
   );
 }
 
+export function PuzzleIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <path d="M9 4h4v2.2a1.8 1.8 0 003.6 0V4H20v4.4h-2.2a1.8 1.8 0 000 3.6H20V16h-3.4v-2.2a1.8 1.8 0 00-3.6 0V16H9v-4.4H6.8a1.8 1.8 0 000-3.6H9z" />
+      <path d="M9 16H4v-4.4" />
+    </svg>
+  );
+}
+
 export function PodIcon({ size = 16, className }: IconProps) {
   return (
     <svg

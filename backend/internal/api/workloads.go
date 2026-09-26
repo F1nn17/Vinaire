@@ -12,7 +12,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/clusters"
@@ -52,16 +55,17 @@ func NewHandler(registry *clusters.Registry, auth *authn.Manager) *Handler {
 // cluster" (the first one configured).
 const clusterHeader = "X-Cluster"
 
-// resolveCluster picks the cluster.Entry this request targets and builds
-// the clientset the caller should use against it. Outside ModeDisabled,
-// that clientset authenticates as the caller's own logged-in identity
-// (Roadmap Phase 10 — see internal/clusters.Entry.ClientsetForToken), not
-// as the backend's own service account: authorization is therefore
-// whatever the real Kubernetes API/RBAC decides on each call, not a
-// separate app-level check here. It writes the response itself and
-// returns ok=false on any failure (unknown cluster, unreachable cluster,
-// or no session).
-func (h *Handler) resolveCluster(w http.ResponseWriter, r *http.Request) (*clusters.Entry, *kubernetes.Clientset, bool) {
+// resolveRESTConfig picks the cluster.Entry this request targets and
+// returns the *rest.Config the caller should use against it — authenticated
+// as the caller's own logged-in identity outside ModeDisabled (Roadmap
+// Phase 10 — see internal/clusters.Entry.RESTConfigForToken), not as the
+// backend's own service account: authorization is therefore whatever the
+// real Kubernetes API/RBAC decides on each call, not a separate app-level
+// check here. It writes the response itself and returns ok=false on any
+// failure (unknown cluster, unreachable cluster, or no session).
+// resolveCluster and resolveDynamic both build their specific client type
+// from this shared resolution so the cluster/auth logic lives in one place.
+func (h *Handler) resolveRESTConfig(w http.ResponseWriter, r *http.Request) (*clusters.Entry, *rest.Config, bool) {
 	name := r.Header.Get(clusterHeader)
 	entry, ok := h.Clusters.Resolve(name)
 	if !ok {
@@ -79,15 +83,53 @@ func (h *Handler) resolveCluster(w http.ResponseWriter, r *http.Request) (*clust
 		return nil, nil, false
 	}
 	if h.Auth.Mode == authn.ModeDisabled {
+		return entry, entry.RESTConfig, true
+	}
+	return entry, entry.RESTConfigForToken(sess.K8sToken), true
+}
+
+// resolveCluster is resolveRESTConfig plus building a typed Kubernetes
+// clientset from it. In ModeDisabled it reuses the Entry's own pre-built
+// Clientset rather than constructing an equivalent new one.
+func (h *Handler) resolveCluster(w http.ResponseWriter, r *http.Request) (*clusters.Entry, *kubernetes.Clientset, bool) {
+	entry, cfg, ok := h.resolveRESTConfig(w, r)
+	if !ok {
+		return nil, nil, false
+	}
+	if h.Auth.Mode == authn.ModeDisabled {
 		return entry, entry.Clientset, true
 	}
 
-	clientset, err := entry.ClientsetForToken(sess.K8sToken)
+	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to build kubernetes client: "+err.Error())
 		return nil, nil, false
 	}
 	return entry, clientset, true
+}
+
+// resolveDynamic is resolveRESTConfig plus building the dynamic and
+// apiextensions clients Phase 15's generic CRD viewer needs — there's no
+// typed Go struct for an arbitrary CRD instance, so these clients work in
+// unstructured data instead of the typed clientset every other handler
+// uses.
+func (h *Handler) resolveDynamic(w http.ResponseWriter, r *http.Request) (dynamic.Interface, *apiextensionsclientset.Clientset, bool) {
+	_, cfg, ok := h.resolveRESTConfig(w, r)
+	if !ok {
+		return nil, nil, false
+	}
+
+	dyn, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to build dynamic client: "+err.Error())
+		return nil, nil, false
+	}
+	apiext, err := apiextensionsclientset.NewForConfig(cfg)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to build apiextensions client: "+err.Error())
+		return nil, nil, false
+	}
+	return dyn, apiext, true
 }
 
 // detailHref builds a link to a resource's static detail page as
