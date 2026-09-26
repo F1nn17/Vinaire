@@ -215,8 +215,7 @@ func StatefulSetRow(s appsv1.StatefulSet) WorkloadRow {
 		StatusColor: string(color),
 		Restarts:    "—",
 		Age:         formatAge(s.CreationTimestamp.Time),
-		// No StatefulSet detail screen yet — link back to the list.
-		Href: "/workloads",
+		Href:        detailHref("/workloads/statefulsets/detail", s.Namespace, s.Name),
 	}
 }
 
@@ -253,8 +252,7 @@ func DaemonSetRow(ds appsv1.DaemonSet) WorkloadRow {
 		StatusColor: string(color),
 		Restarts:    "—",
 		Age:         formatAge(ds.CreationTimestamp.Time),
-		// No DaemonSet detail screen yet — link back to the list.
-		Href: "/workloads",
+		Href:        detailHref("/workloads/daemonsets/detail", ds.Namespace, ds.Name),
 	}
 }
 
@@ -281,21 +279,8 @@ func (h *Handler) Jobs(w http.ResponseWriter, r *http.Request) {
 // JobRow maps a job to the frontend's row shape. Exported so internal/stream
 // can reuse the exact same mapping for live WebSocket diffs.
 func JobRow(j batchv1.Job) WorkloadRow {
-	completions := int32(1)
-	if j.Spec.Completions != nil {
-		completions = *j.Spec.Completions
-	}
-
-	var status string
-	var color StatusColor
-	switch {
-	case j.Status.Failed > 0:
-		status, color = "Failed", StatusErr
-	case j.Status.Succeeded >= completions:
-		status, color = "Complete", StatusOK
-	default:
-		status, color = "Running", StatusWarn
-	}
+	completions := jobCompletions(j)
+	status, color := jobStatus(j, completions)
 
 	return WorkloadRow{
 		Name:        j.Name,
@@ -305,7 +290,29 @@ func JobRow(j batchv1.Job) WorkloadRow {
 		StatusColor: string(color),
 		Restarts:    "—",
 		Age:         formatAge(j.CreationTimestamp.Time),
-		// No Job detail screen yet — link back to the list.
-		Href: "/workloads",
+		Href:        detailHref("/workloads/jobs/detail", j.Namespace, j.Name),
+	}
+}
+
+// jobCompletions returns a Job's desired completion count, defaulting to 1
+// the same way the Kubernetes API itself does when spec.completions is unset.
+func jobCompletions(j batchv1.Job) int32 {
+	if j.Spec.Completions != nil {
+		return *j.Spec.Completions
+	}
+	return 1
+}
+
+// jobStatus mirrors `kubectl get jobs`' STATUS column: Failed takes priority
+// over a partial success count, then Complete once every completion has
+// succeeded, otherwise still Running.
+func jobStatus(j batchv1.Job, completions int32) (status string, color StatusColor) {
+	switch {
+	case j.Status.Failed > 0:
+		return "Failed", StatusErr
+	case j.Status.Succeeded >= completions:
+		return "Complete", StatusOK
+	default:
+		return "Running", StatusWarn
 	}
 }

@@ -1,7 +1,10 @@
 import { deploymentDetailsMock } from "@/lib/mock/deploymentDetails";
 import type {
+  DaemonSetDetail,
   DeploymentDetail,
+  JobDetail,
   PodDetail,
+  StatefulSetDetail,
   WorkloadKind,
   WorkloadRow,
 } from "@/lib/types";
@@ -42,6 +45,57 @@ export async function getPod(
   try {
     return await apiFetch<PodDetail>(
       `/api/v1/pods/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return undefined;
+    }
+    throw err;
+  }
+}
+
+// Real endpoint (Roadmap Phase 12).
+export async function getStatefulSet(
+  namespace: string,
+  name: string,
+): Promise<StatefulSetDetail | undefined> {
+  try {
+    return await apiFetch<StatefulSetDetail>(
+      `/api/v1/statefulsets/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return undefined;
+    }
+    throw err;
+  }
+}
+
+// Real endpoint (Roadmap Phase 12).
+export async function getDaemonSet(
+  namespace: string,
+  name: string,
+): Promise<DaemonSetDetail | undefined> {
+  try {
+    return await apiFetch<DaemonSetDetail>(
+      `/api/v1/daemonsets/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return undefined;
+    }
+    throw err;
+  }
+}
+
+// Real endpoint (Roadmap Phase 12).
+export async function getJob(
+  namespace: string,
+  name: string,
+): Promise<JobDetail | undefined> {
+  try {
+    return await apiFetch<JobDetail>(
+      `/api/v1/jobs/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
     );
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {

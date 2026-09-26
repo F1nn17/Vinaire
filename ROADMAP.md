@@ -915,3 +915,371 @@ Configure two kubeconfig contexts (e.g. two local k3d clusters). Switching
 the Topbar dropdown reloads Workloads/Dashboard with the other cluster's
 real data — no page reload required, no data from the previous cluster
 lingering in the tables.
+
+---
+
+## Phase 12 — StatefulSet / DaemonSet / Job detail pages ✅ done
+
+**Goal:** clicking a StatefulSet, DaemonSet, or Job row in Workloads opens a
+real detail page, instead of the dead-end self-link back to the list these
+three kinds currently have.
+
+> **Outcome note:** shipped with a smaller Overview shape than Pod detail —
+> metadata + labels, Events, and YAML tabs only, no CPU/Memory gauges or a
+> Containers list, since those don't naturally attach to a controller object
+> the way they do to a single Pod (per this phase's own scope note). Jobs
+> are scoped to plain `batch/v1` `Job` objects only, not `CronJob`, matching
+> `internal/k8s.ListJobs`'s existing behavior — the open question this
+> phase's risk note raised. Verified end-to-end against `k3d-vinaire-dev`:
+> a real `StatefulSet` (created in a throwaway namespace, deleted after)
+> showed its real ready count, service name, update strategy, image, age,
+> and a real "Create Pod" event; the cluster's existing
+> `daemonset.apps/svclb-traefik-...` and `job.batch/helm-install-traefik`
+> (both present by default in k3d/k3s) showed real desired/current counts
+> and real completions/start/completion times respectively, each with a
+> full real YAML tab. Clicking a real StatefulSet row in the Workloads list
+> navigated to the new `/workloads/statefulsets/detail?namespace=&name=`
+> route with the real data rendered — confirmed live in a real Chromium
+> browser via Playwright, not just over curl. No changes were needed in
+> `internal/stream` — the existing Phase 2 informers already broadcast
+> `StatefulSetRow`/`DaemonSetRow`/`JobRow` diffs, which now carry real
+> `Href` values instead of the `"/workloads"` placeholder.
+
+**Backend**
+- `GET /api/v1/statefulsets/{namespace}/{name}`,
+  `GET /api/v1/daemonsets/{namespace}/{name}`,
+  `GET /api/v1/jobs/{namespace}/{name}` — the same `Get()` + build-detail
+  pattern already used for Pods (Phase 3) and, implicitly, Deployments.
+  Live status updates reuse Phase 2's existing informers for these kinds;
+  the detail fetch itself is a one-shot `Get()`, same as pod detail.
+- Update `StatefulSetRow`/`DaemonSetRow`/`JobRow` (`internal/api/workloads.go`)
+  to point `Href` at these new detail routes instead of the hardcoded
+  `"/workloads"` placeholder.
+
+**Frontend**
+- Three new detail pages, one per kind, following the query-param routing
+  Phase 10 established (`?namespace=&name=`, not a `[namespace]/[name]`
+  dynamic segment — see AGENTS.md's "Rendering model").
+
+**Complexity:** S — the list+detail shape is already proven twice over
+(Pods, Deployments); this is repeating it, not designing something new.
+
+**New dependencies**
+- `go.mod`: none
+- `package.json`: none
+
+**Risks to check early**
+- Decide whether the "Jobs" kind's detail page covers one-shot `Job`
+  objects only, or also `CronJob` (a distinct resource with a different
+  status shape) — don't conflate the two into one detail page design.
+
+**Definition of done**
+Click a real StatefulSet/DaemonSet/Job row in Workloads → its detail page
+shows real metadata/status, not a bounce back to `/workloads`. Verified the
+same way as Phase 3's pod detail (real cluster, real resource).
+
+---
+
+## Phase 13 — Storage (PVC / PV / StorageClass)
+
+**Goal:** a Storage section shows real PersistentVolumeClaims,
+PersistentVolumes, and StorageClasses, including which pods actually mount
+a given PVC.
+
+**Backend**
+- `GET /api/v1/pvcs?namespace=`, `GET /api/v1/pvs`,
+  `GET /api/v1/storageclasses` — plain `List()` calls, same shape as every
+  other list endpoint so far.
+- `GET /api/v1/pvcs/{namespace}/{name}` — detail, plus a scan of every pod
+  in the namespace for `volumes[].persistentVolumeClaim.claimName`
+  matching this PVC, to report which pods mount it (the same
+  "scan the pod spec" pattern Phase 7's topology graph already uses for
+  ConfigMap/Secret references).
+- This is also what backs the Dashboard's "PVC near capacity" card
+  (Phase 18) — see this phase's risk note below before assuming that's a
+  simple field read.
+
+**Frontend**
+- A new Storage section in the sidebar, list views for all three kinds,
+  and a PVC detail page listing the pods that mount it.
+
+**Complexity:** M — the list/detail pages themselves are easy; the
+pod-mount scan and the "near capacity" data-source decision (see risk
+below) are the real work.
+
+**New dependencies**
+- `go.mod`: none (core `v1` objects, already-imported client-go)
+- `package.json`: none
+
+**Risks to check early**
+- A `PersistentVolumeClaim`'s own object has a requested/provisioned
+  capacity, not actual bytes-used — there's no byte-level usage number
+  available without a metrics source (kubelet's volume stats, or
+  Prometheus, which is Phase 16's territory). Decide now whether "near
+  capacity" means requested-vs-StorageClass-limit (available with zero new
+  dependencies) or real bytes-used (needs a metrics source, and arguably
+  belongs in Phase 16 instead) — don't discover this mid-implementation.
+- `PersistentVolume`/`StorageClass` are cluster-scoped while `PVC` is
+  namespaced — the namespace filter UX needs to handle this correctly, not
+  offer a namespace dropdown on a cluster-scoped list.
+
+**Definition of done**
+Storage's PVC/PV/StorageClass lists match `kubectl get pvc/pv/sc -A`. A real
+PVC's detail page lists exactly the pods that mount it, verified against
+`kubectl describe pod` for each.
+
+---
+
+## Phase 14 — RBAC viewer (read-only)
+
+**Goal:** an Access control section shows real Roles, ClusterRoles,
+RoleBindings, ClusterRoleBindings, and ServiceAccounts, with a simple
+"who can do what" summary for a selected namespace.
+
+**Backend**
+- `GET /api/v1/roles?namespace=`, `GET /api/v1/clusterroles`,
+  `GET /api/v1/rolebindings?namespace=`, `GET /api/v1/clusterrolebindings`,
+  `GET /api/v1/serviceaccounts?namespace=` — plain `List()` calls via
+  `clientset.RbacV1()`, already part of the existing client-go module.
+- A per-namespace summary correlates bindings → roles → rules into a
+  readable rollup — this is a static assembly over already-fetched
+  objects, **not** a live `SubjectAccessReview` / "can I do X" check;
+  keep the scope to "what's configured," matching this file's
+  not-over-engineered spirit for policy/permission features.
+
+**Frontend**
+- A new Access control sidebar section: tables for each resource kind,
+  plus the per-namespace summary view.
+
+**Complexity:** M — the raw list/detail tables are trivial; the
+bindings→roles→rules correlation for the summary view is the actual work.
+
+**New dependencies**
+- `go.mod`: none (`rbac.authorization.k8s.io` ships with client-go)
+- `package.json`: none
+
+**Risks to check early**
+- `ClusterRole`/`ClusterRoleBinding` are cluster-scoped while
+  `Role`/`RoleBinding` are namespaced — same scope-mixing UX question as
+  Phase 13's PV/PVC; decide the sidebar/filter layout before writing the
+  list pages.
+- Be explicit in the UI that this shows *configured* bindings, not a live
+  permission check — don't let the summary view imply a
+  `SubjectAccessReview` result it doesn't actually perform.
+
+**Definition of done**
+Access control's Roles/RoleBindings/ServiceAccounts lists match
+`kubectl get roles/rolebindings/serviceaccounts -n <namespace>` for a real
+namespace. The per-namespace summary correctly lists which subjects are
+bound to which roles.
+
+---
+
+## Phase 15 — Custom Resources (generic CRD viewer)
+
+**Goal:** a Custom Resources section lists whatever CRDs are actually
+installed on the connected cluster and can list/view any of their
+instances — no hardcoded per-type Go code for each new CRD.
+
+**Backend**
+- Discovery: enumerate installed CRDs via the `apiextensions-apiserver`
+  clientset.
+- Generic list/get via `k8s.io/client-go/dynamic` (`dynamic.Interface`)
+  against any GVR the discovery step found — there's no typed Go struct
+  for an arbitrary CRD, so this is unstructured (`map[string]any`) data
+  all the way through, unlike every other phase so far.
+
+**Frontend**
+- A dynamic sidebar section built from the discovered CRD list, a generic
+  table (falling back to name/namespace/age columns when a CRD's own
+  printer-columns aren't used), and a YAML view for any single instance
+  (reusing the existing `CodeBlock`/YAML-tab pattern from Pod/Deployment
+  detail).
+
+**Complexity:** L — the dynamic-client, discovery-driven UI is a genuinely
+different shape from every previous phase (no fixed Go type ↔ fixed
+frontend shape mapping); closer to Phase 2's complexity than Phase 12's.
+
+**New dependencies**
+- `go.mod`: `k8s.io/apiextensions-apiserver` (CRD discovery client — a new
+  module, unlike `dynamic`, which is already a sub-package of the existing
+  `client-go` dependency)
+- `package.json`: none
+
+**Risks to check early**
+- Printer-columns and status shapes vary wildly per CRD — decide the
+  fallback table shape (name/namespace/age, ignoring CRD-specific columns
+  at first) before trying to render every CRD generically. Don't let one
+  exotic CRD's shape block the others from working.
+
+**Definition of done**
+On a cluster with a real CRD installed (e.g. Gateway API's own CRDs,
+already present per Phase 8's outcome note), the Custom Resources section
+lists it and shows its real instances' YAML, matching
+`kubectl get <crd> -o yaml`.
+
+---
+
+## Phase 16 — Prometheus / Loki / Alertmanager integration
+
+**Goal:** Pod detail and Dashboard's CPU/Memory show real historical
+metrics (not just metrics-server's point-in-time numbers from Phase 3),
+the Logs tab gains historical search, and the Topbar's alert bell shows
+real firing alerts.
+
+**Backend**
+- Proxy endpoints for Prometheus instant/range queries
+  (`GET /api/v1/metrics/query?...`) — this backend forwards to a
+  configured Prometheus URL, it doesn't evaluate PromQL itself.
+- A Loki query proxy extending Phase 4's live-tail with historical search
+  (`GET /api/v1/pods/{namespace}/{name}/logs/search?query=&since=`).
+- An Alertmanager active-alerts proxy (`GET /api/v1/alerts`).
+- This is also what backs the Dashboard's real CPU/Memory sparklines
+  (Phase 18) — see this phase's risk note below.
+
+**Frontend**
+- Dashboard's CPU/Memory bars, sparklines, and the Pods-down card wire to
+  real data; the Topbar bell shows a real feed from Alertmanager instead
+  of the static red dot.
+
+**Complexity:** L — three separate external systems to integrate
+(Prometheus, Loki, Alertmanager), each with its own query language/API
+shape, and any of them may simply not be installed on a given cluster.
+
+**New dependencies**
+- `go.mod`: none required strictly — Prometheus/Loki/Alertmanager all
+  speak plain HTTP+JSON, proxyable via `net/http` alone; a typed client
+  (`github.com/prometheus/client_golang/api`) could simplify query
+  building and is worth evaluating when this phase starts rather than
+  committing to hand-rolled query strings now.
+- `package.json`: a charting library (e.g. `recharts`) if the existing
+  hand-rolled `Sparkline` component doesn't scale to real range-query data.
+
+**Risks to check early**
+- **Check now:** none of Prometheus/Loki/Alertmanager may be installed on
+  the target cluster — same pattern as Phase 3's metrics-server and
+  Phase 8's Gateway API, but three independent systems this time. Design
+  an explicit "unavailable" state per integration (a cluster might have
+  Prometheus but not Loki) rather than one all-or-nothing observability
+  flag.
+
+**Definition of done**
+On a cluster with Prometheus/Loki/Alertmanager installed and reachable:
+Dashboard's CPU/Memory and Pods-down cards match what those systems report,
+the Logs tab's historical search returns real matching lines from Loki, and
+a real firing Alertmanager alert shows up in the Topbar bell. On a cluster
+without them, each integration shows its own explicit "unavailable" state —
+never zeros, never a crash.
+
+---
+
+## Phase 17 — Production hardening
+
+**Goal:** the app behaves safely and legibly outside a single trusted
+developer's local machine — rate-limited writes, a durable audit trail,
+and clear error/empty/loading states throughout.
+
+**Backend**
+- Rate limiting on the three write endpoints (Phase 9) — a simple
+  per-identity token bucket, not a general API gateway.
+- A persistent audit log: Phase 9/10's structured
+  `slog.Warn("write action", ...)` lines currently only go to stdout; this
+  phase gives them a durable sink (a rotated log file, or a small
+  append-only store) so they survive a pod restart.
+- Explicit 403 handling: `internal/api.respondK8sError` (Phase 10) already
+  maps `apierrors.IsForbidden` to a `403` status — this phase makes the
+  response *body* clearer too (a specific "you don't have permission to X
+  in namespace Y" message derived from the request, not the raw
+  Kubernetes error string forwarded as-is).
+
+**Frontend**
+- A shared toast/error-handling system generalized from the Deployment
+  detail page's existing `Toast`/`ConfirmModal` pattern (Phase 9) across
+  the whole app, loading skeletons instead of bare "Loading…" text, and
+  explicit empty states ("No pods in this namespace") everywhere a list
+  can legitimately be empty.
+
+**Complexity:** M — no individual piece is hard, but "consistently
+everywhere" is real surface area across every existing page.
+
+**New dependencies**
+- `go.mod`: a rate-limiting helper (`golang.org/x/time/rate` — already an
+  indirect dependency per `go.mod`, just needs promoting to direct) or
+  hand-rolled; a log-rotation library (e.g.
+  `gopkg.in/natefinch/lumberjack.v2`) only if going the rotated-log-file
+  route rather than an append-only store.
+- `package.json`: none, assuming the existing `Toast`/`ConfirmModal`
+  components generalize rather than needing a new UI library.
+
+**Risks to check early**
+- Rate limiting needs a real identity to key on — Phase 10's session
+  (`internal/authn.Session`) gives exactly that. Don't key on source IP
+  alone once real auth exists, or multiple users behind the same NAT/proxy
+  would throttle each other.
+- Decide the audit log's retention/rotation policy explicitly before
+  shipping — unbounded growth on a long-running pod is a real risk.
+
+**Definition of done**
+Hammering a write endpoint past its rate limit gets a clear `429`, not a
+silently-dropped or slow request. The audit log survives a pod restart
+(`kubectl delete pod` on the backend, confirm prior entries are still
+there). Every existing list page shows a real loading skeleton and a real
+empty state against an empty namespace, not a blank white area.
+
+---
+
+## Phase 18 — Dashboard / Overview (finishing with real data)
+
+**Goal:** the Dashboard's cards (Pods down, Healthy pods, Namespaces, PVC
+near capacity, CPU/Memory, Drifted from Git) all show real data or an
+explicit, honest "unavailable" state — never a fabricated zero.
+
+**Backend**
+- `GET /api/v1/dashboard/summary` — aggregates pods-down/healthy-pods
+  counts and per-namespace pod counts from the same pod list Phase 1
+  already fetches; no new Kubernetes API surface, just a new aggregation
+  endpoint over existing data.
+- `GET /api/v1/events?namespace=&limit=20` — a general recent-events feed
+  (cluster-wide or namespace-scoped), distinct from Phase 3's per-object
+  event filter; sorted by timestamp.
+- ArgoCD detection: a discovery check for the `applications.argoproj.io`
+  CRD (the same `apierrors.IsNotFound`/`meta.IsNoMatchError` pattern
+  Phase 8 already uses for Gateway API) — if absent, the Drifted-from-Git
+  card reports itself unavailable rather than a fabricated zero.
+- PVC-near-capacity and CPU/Memory stay explicitly "unavailable" at this
+  stage — Phase 13 and Phase 16 respectively are what actually back them;
+  this phase only builds the Dashboard card shell and its
+  honest-unavailable state.
+
+**Frontend**
+- Dashboard wires to `/api/v1/dashboard/summary` and `/api/v1/events`
+  instead of mock data. Pods down / Healthy pods / Namespaces show real,
+  updating numbers. PVC near capacity shows "Not available yet" instead of
+  a number until Phase 13 ships. Drifted from Git hides entirely (not a
+  zero) when ArgoCD isn't detected. CPU/Memory sparklines show a
+  "Metrics coming in a later phase" placeholder instead of a drawn line
+  until Phase 16 ships.
+
+**Complexity:** S — almost entirely aggregation over data other phases
+already fetch, plus one new discovery check; the main work is the
+frontend's honest-unavailable-state handling for the two cards that stay
+stubbed.
+
+**New dependencies**
+- `go.mod`: none
+- `package.json`: none
+
+**Risks to check early**
+- This phase deliberately ships two cards (PVC, CPU/Memory) still stubbed —
+  make sure "unavailable" is visually distinct from a real zero (a
+  genuinely healthy cluster legitimately has zero pods-down, and that must
+  not look identical to "we don't have this data yet"), or this phase
+  quietly reintroduces the exact fabricated-zero problem it's meant to
+  close.
+
+**Definition of done**
+On a real cluster, Pods down/Healthy pods/Namespaces match
+`kubectl get pods -A` and `kubectl get ns`; the events feed matches
+`kubectl get events --sort-by=.lastTimestamp`; on a cluster without ArgoCD,
+the Drifted-from-Git card doesn't render at all, and the PVC/CPU-Memory
+cards show explicit stubs, not zeros.

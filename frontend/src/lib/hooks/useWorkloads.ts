@@ -1,5 +1,12 @@
 import useSWR from "swr";
-import { getDeployment, getPod, getWorkloads } from "@/lib/api/workloads";
+import {
+  getDaemonSet,
+  getDeployment,
+  getJob,
+  getPod,
+  getStatefulSet,
+  getWorkloads,
+} from "@/lib/api/workloads";
 import { useCurrentCluster } from "@/lib/clusterStore";
 import type { WorkloadKind } from "@/lib/types";
 
@@ -25,5 +32,26 @@ export function usePod(namespace: string, name: string) {
   const cluster = useCurrentCluster();
   return useSWR(["pod", namespace, name, cluster], () =>
     getPod(namespace, name),
+  );
+}
+
+export function useStatefulSet(namespace: string, name: string) {
+  const cluster = useCurrentCluster();
+  return useSWR(["statefulset", namespace, name, cluster], () =>
+    getStatefulSet(namespace, name),
+  );
+}
+
+export function useDaemonSet(namespace: string, name: string) {
+  const cluster = useCurrentCluster();
+  return useSWR(["daemonset", namespace, name, cluster], () =>
+    getDaemonSet(namespace, name),
+  );
+}
+
+export function useJob(namespace: string, name: string) {
+  const cluster = useCurrentCluster();
+  return useSWR(["job", namespace, name, cluster], () =>
+    getJob(namespace, name),
   );
 }

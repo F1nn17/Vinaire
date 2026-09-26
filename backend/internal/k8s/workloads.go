@@ -60,3 +60,30 @@ func ListJobs(ctx context.Context, clientset *kubernetes.Clientset, namespace st
 	}
 	return list.Items, nil
 }
+
+// GetStatefulSet fetches a single statefulset by namespace and name.
+func GetStatefulSet(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) (*appsv1.StatefulSet, error) {
+	sts, err := clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get statefulset %s/%s: %w", namespace, name, err)
+	}
+	return sts, nil
+}
+
+// GetDaemonSet fetches a single daemonset by namespace and name.
+func GetDaemonSet(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) (*appsv1.DaemonSet, error) {
+	ds, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get daemonset %s/%s: %w", namespace, name, err)
+	}
+	return ds, nil
+}
+
+// GetJob fetches a single job by namespace and name.
+func GetJob(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) (*batchv1.Job, error) {
+	job, err := clientset.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get job %s/%s: %w", namespace, name, err)
+	}
+	return job, nil
+}

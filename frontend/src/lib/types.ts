@@ -91,6 +91,58 @@ export type DeploymentDetail = {
   yaml: string;
 };
 
+// Matches the backend's api.StatefulSetDetailResponse (Roadmap Phase 12).
+export type StatefulSetDetail = {
+  name: string;
+  namespace: string;
+  status: string;
+  statusColor: StatusColor;
+  ready: string;
+  serviceName: string;
+  updateStrategy: string;
+  image: string;
+  age: string;
+  labels: Record<string, string>;
+  events: ClusterEvent[];
+  yaml: string;
+};
+
+// Matches the backend's api.DaemonSetDetailResponse (Roadmap Phase 12).
+export type DaemonSetDetail = {
+  name: string;
+  namespace: string;
+  status: string;
+  statusColor: StatusColor;
+  ready: string;
+  desired: number;
+  current: number;
+  updateStrategy: string;
+  image: string;
+  age: string;
+  labels: Record<string, string>;
+  events: ClusterEvent[];
+  yaml: string;
+};
+
+// Matches the backend's api.JobDetailResponse (Roadmap Phase 12). Scoped to
+// plain batch/v1 Jobs only — CronJob isn't covered.
+export type JobDetail = {
+  name: string;
+  namespace: string;
+  status: string;
+  statusColor: StatusColor;
+  completions: string;
+  active: number;
+  failed: number;
+  startTime: string;
+  completionTime: string;
+  image: string;
+  age: string;
+  labels: Record<string, string>;
+  events: ClusterEvent[];
+  yaml: string;
+};
+
 export type ConfigMapKey = {
   label: string;
   value: string;

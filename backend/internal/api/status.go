@@ -1,6 +1,16 @@
 package api
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
+)
+
+// formatReady renders a "ready/desired" pair the same way every workload
+// list row already does (e.g. WorkloadRow.Ready), for reuse on detail pages.
+func formatReady(ready, desired int32) string {
+	return fmt.Sprintf("%d/%d", ready, desired)
+}
 
 // StatusColor mirrors the frontend's StatusColor union type
 // (frontend/src/lib/types.ts: "ok" | "warn" | "err").

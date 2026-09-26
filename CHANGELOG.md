@@ -219,6 +219,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Phase 10's rework: switching the Topbar dropdown swaps the Workloads
   table over to the other cluster's own real data with no stale rows
   lingering.
+- **Roadmap Phase 12 (StatefulSet / DaemonSet / Job detail pages):** new
+  `GET /api/v1/{statefulsets,daemonsets,jobs}/{namespace}/{name}` endpoints
+  (mirroring Phase 3's Pod-detail `Get()` + events + YAML pattern, minus the
+  CPU/Memory/Containers fields that don't naturally apply to a controller
+  object). `StatefulSetRow`/`DaemonSetRow`/`JobRow`'s `Href` now point at
+  real detail pages instead of the `"/workloads"` placeholder. Frontend:
+  three new query-param-routed detail pages
+  (`/workloads/{statefulsets,daemonsets,jobs}/detail?namespace=&name=`),
+  following the same static-export routing convention as Pod/Deployment
+  detail. Jobs are scoped to plain `batch/v1` `Job` objects only, not
+  `CronJob`. Verified end-to-end against `k3d-vinaire-dev`, including a
+  live browser click-through from the Workloads list to a real StatefulSet's
+  detail page.
 
 ### Changed
 
