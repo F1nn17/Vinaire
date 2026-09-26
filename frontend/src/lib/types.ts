@@ -304,6 +304,32 @@ export type CRDInstanceDetail = {
   yaml: string;
 };
 
+// Matches the backend's api.AlertRow (Roadmap Phase 16) — a simplified view
+// of an Alertmanager alert.
+export type AlertRow = {
+  name: string;
+  severity: string;
+  summary: string;
+  statusColor: StatusColor;
+  startsAt: string;
+};
+
+// Discriminated union every Phase 16 observability proxy returns — the
+// same "explicit unavailable, never a fabricated result" pattern as
+// GatewayResourcesResult (Phase 8).
+export type AlertsResult =
+  | { available: true; alerts: AlertRow[] }
+  | { available: false; reason: string };
+
+export type LogsSearchResult =
+  { available: true; lines: LogLine[] } | { available: false; reason: string };
+
+// Raw Prometheus response, forwarded as-is under `result` — this app never
+// evaluates PromQL itself, so there's no typed shape to declare beyond
+// Prometheus's own (see https://prometheus.io/docs/prometheus/latest/querying/api/).
+export type MetricsQueryResult =
+  { available: true; result: unknown } | { available: false; reason: string };
+
 export type ConfigMapKey = {
   label: string;
   value: string;

@@ -1194,12 +1194,46 @@ lists it and shows its real instances' YAML, matching
 
 ---
 
-## Phase 16 — Prometheus / Loki / Alertmanager integration
+## Phase 16 — Prometheus / Loki / Alertmanager integration ✅ done
 
 **Goal:** Pod detail and Dashboard's CPU/Memory show real historical
 metrics (not just metrics-server's point-in-time numbers from Phase 3),
 the Logs tab gains historical search, and the Topbar's alert bell shows
 real firing alerts.
+
+> **Outcome note:** scoped Dashboard CPU/Memory/Pods-down wiring out of
+> this phase, deliberately — Phase 18's own section already claims that
+> exact wiring ("Phase 13 and Phase 16 ... back them; this phase [18] only
+> builds the Dashboard card shell") and Pods-down doesn't need Prometheus
+> at all (it's a plain aggregation over the pod list Phase 1 already
+> fetches). Phase 16 instead delivers the three backend proxies in full,
+> plus the two frontend pieces its own Goal statement names concretely: the
+> Logs tab's historical search and the Topbar alert bell — Phase 18 is
+> what will consume the metrics proxy for the Dashboard later. All three
+> proxies share one `available: false` discriminated-response shape (same
+> pattern as Phase 3's metrics-server and Phase 8's Gateway API) rather
+> than three different ad-hoc shapes. `guessLogLevel` (the log-level
+> heuristic) is intentionally duplicated from `internal/stream/logs.go`
+> rather than shared — `internal/stream` already imports `internal/api`
+> for its Row-mapper functions, so the reverse import would cycle; a
+> shared package felt like premature abstraction for five lines of code.
+> The Loki proxy assumes a `namespace`/`pod` label scheme (the common
+> Promtail/Grafana Agent convention) — a differently-labeled Loki simply
+> won't find a pod's logs, a real but accepted limitation of proxying
+> rather than reimplementing label discovery. Verified end-to-end: with no
+> `PROMETHEUS_URL`/`LOKI_URL`/`ALERTMANAGER_URL` configured, all three
+> endpoints correctly returned `available: false` with a clear reason
+> (never a 500, never fabricated data). With all three pointed at minimal
+> mock HTTP servers replaying real Prometheus/Loki/Alertmanager response
+> shapes (no real observability stack needed to validate the proxy/parsing
+> logic itself): `/api/v1/alerts` correctly mapped severity to
+> statusColor and fell back to `annotations.description` when `summary`
+> was absent; `/api/v1/metrics/query` correctly forwarded Prometheus's raw
+> response under `result`; the Logs tab's History mode against a real pod
+> (`coredns` in `k3d-vinaire-dev`'s `kube-system`) correctly parsed Loki's
+> nanosecond timestamps and applied the ERROR/WARN/INFO heuristic — all
+> confirmed live in a real Chromium browser, including the Topbar bell
+> showing both a critical and a warning alert with correct colors.
 
 **Backend**
 - Proxy endpoints for Prometheus instant/range queries

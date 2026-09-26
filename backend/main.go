@@ -66,7 +66,11 @@ func main() {
 		go stream.StartWorkloadInformers(ctx, entry.Clientset, hub)
 	}
 
-	workloadsHandler := api.NewHandler(registry, auth)
+	workloadsHandler := api.NewHandler(registry, auth, api.ObservabilityConfig{
+		PrometheusURL:   cfg.PrometheusURL,
+		LokiURL:         cfg.LokiURL,
+		AlertmanagerURL: cfg.AlertmanagerURL,
+	})
 
 	streamHandler := unavailableWSHandler
 	logsHandler := unavailableWSHandler
@@ -113,6 +117,7 @@ func main() {
 		protected.Get("/stream/workloads", streamHandler)
 		protected.Get("/pods/{namespace}/{name}", workloadsHandler.PodDetail)
 		protected.Get("/pods/{namespace}/{name}/logs", logsHandler)
+		protected.Get("/pods/{namespace}/{name}/logs/search", workloadsHandler.LogsSearch)
 		protected.Get("/pods/{namespace}/{name}/exec", execHandler)
 		protected.Get("/statefulsets/{namespace}/{name}", workloadsHandler.StatefulSetDetail)
 		protected.Get("/daemonsets/{namespace}/{name}", workloadsHandler.DaemonSetDetail)
@@ -137,6 +142,9 @@ func main() {
 		protected.Get("/crds", workloadsHandler.CRDs)
 		protected.Get("/crds/{crdName}/instances", workloadsHandler.CRDInstances)
 		protected.Get("/crds/{crdName}/instances/{name}", workloadsHandler.CRDInstanceDetail)
+		protected.Get("/metrics/query", workloadsHandler.MetricsQuery)
+		protected.Get("/metrics/query_range", workloadsHandler.MetricsQueryRange)
+		protected.Get("/alerts", workloadsHandler.Alerts)
 
 		// Write actions (Roadmap Phase 9) — the deliberate, narrow, audited
 		// exception to the read-only rule. See AGENTS.md's core rule and

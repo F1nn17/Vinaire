@@ -279,6 +279,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`HelmChart`) and a cluster-scoped CRD with none (`GatewayClass`) both
   behaved correctly, confirmed via a live browser click-through from the
   dynamic sidebar to a real YAML view matching `kubectl get ... -o yaml`.
+- **Roadmap Phase 16 (Prometheus / Loki / Alertmanager integration):** new
+  `GET /api/v1/metrics/{query,query_range}`, `GET /api/v1/alerts`, and
+  `GET /api/v1/pods/{namespace}/{name}/logs/search?query=&since=` — plain
+  HTTP proxies to an already-running observability stack, configured via
+  `PROMETHEUS_URL`/`LOKI_URL`/`ALERTMANAGER_URL` (all optional; Vinaire
+  never installs or manages these itself). Any unconfigured or unreachable
+  integration responds with an explicit `{"available": false, "reason"}`
+  instead of erroring — the same pattern Phase 3 (metrics-server) and
+  Phase 8 (Gateway API) already use. Frontend: the Topbar bell is now a
+  real dropdown sourced from Alertmanager, and the Pod detail Logs tab
+  gained a "History" mode (LogQL search via Loki) alongside the existing
+  live tail. Dashboard CPU/Memory/Pods-down wiring is deliberately left to
+  Phase 18, per that phase's own scope note. Verified both the
+  unconfigured (`available: false`, no crash) and configured paths — the
+  latter against minimal mock HTTP servers replaying real Prometheus/Loki/
+  Alertmanager response shapes — including a live browser click-through
+  showing real mock alerts in the Topbar bell and a real pod's historical
+  logs correctly parsed and level-highlighted.
 
 ### Changed
 

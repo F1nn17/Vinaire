@@ -69,6 +69,17 @@ type Config struct {
 	// mode: use KubeconfigPath/in-cluster config exactly as before Phase 11
 	// existed.
 	ClusterContexts []string
+
+	// PrometheusURL/LokiURL/AlertmanagerURL point at an already-running
+	// observability stack (Roadmap Phase 16) — Vinaire never installs or
+	// manages these itself, it only proxies to them if configured. Empty
+	// means "not configured": every endpoint that needs one responds with
+	// an explicit `{"available": false, ...}` instead of erroring, the
+	// same pattern Phase 3 (metrics-server) and Phase 8 (Gateway API) use
+	// for an optional cluster capability that may not exist.
+	PrometheusURL   string
+	LokiURL         string
+	AlertmanagerURL string
 }
 
 const (
@@ -94,6 +105,9 @@ const (
 	envOIDCRedirectURL     = "OIDC_REDIRECT_URL"
 	envStaticDir           = "STATIC_DIR"
 	envClusterContexts     = "CLUSTER_CONTEXTS"
+	envPrometheusURL       = "PROMETHEUS_URL"
+	envLokiURL             = "LOKI_URL"
+	envAlertmanagerURL     = "ALERTMANAGER_URL"
 )
 
 // Load reads configuration from the environment, falling back to defaults
@@ -113,6 +127,9 @@ func Load() Config {
 		OIDCRedirectURL:    getEnv(envOIDCRedirectURL, defaultOIDCRedirectURL),
 		StaticDir:          os.Getenv(envStaticDir),
 		ClusterContexts:    splitCSV(os.Getenv(envClusterContexts)),
+		PrometheusURL:      os.Getenv(envPrometheusURL),
+		LokiURL:            os.Getenv(envLokiURL),
+		AlertmanagerURL:    os.Getenv(envAlertmanagerURL),
 	}
 }
 

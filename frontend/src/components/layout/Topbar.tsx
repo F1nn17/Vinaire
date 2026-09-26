@@ -1,4 +1,5 @@
-import { BellIcon, SearchIcon } from "@/components/icons";
+import { SearchIcon } from "@/components/icons";
+import { AlertsBell } from "@/components/layout/AlertsBell";
 import { BackendStatus } from "@/components/layout/BackendStatus";
 import { ClusterPicker } from "@/components/layout/ClusterPicker";
 import { UserMenu } from "@/components/layout/UserMenu";
@@ -26,17 +27,7 @@ export function Topbar() {
 
       <div className="ml-auto flex items-center gap-4">
         <BackendStatus />
-        <button
-          type="button"
-          aria-label="Alerts"
-          className="relative text-text-muted"
-        >
-          <BellIcon />
-          <span
-            aria-hidden="true"
-            className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2 border-bg bg-err"
-          />
-        </button>
+        <AlertsBell />
         <UserMenu />
       </div>
     </div>

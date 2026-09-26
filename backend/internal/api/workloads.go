@@ -44,10 +44,33 @@ type WorkloadRow struct {
 type Handler struct {
 	Clusters *clusters.Registry
 	Auth     *authn.Manager
+
+	// PrometheusURL/LokiURL/AlertmanagerURL back the Roadmap Phase 16
+	// observability proxies (internal/api/observability.go) — empty means
+	// "not configured," and every handler using one degrades to an
+	// explicit `available: false` response rather than failing.
+	PrometheusURL   string
+	LokiURL         string
+	AlertmanagerURL string
 }
 
-func NewHandler(registry *clusters.Registry, auth *authn.Manager) *Handler {
-	return &Handler{Clusters: registry, Auth: auth}
+// ObservabilityConfig groups the optional observability-stack URLs
+// (Roadmap Phase 16) NewHandler takes, since they're conceptually one unit
+// distinct from the cluster registry/auth manager.
+type ObservabilityConfig struct {
+	PrometheusURL   string
+	LokiURL         string
+	AlertmanagerURL string
+}
+
+func NewHandler(registry *clusters.Registry, auth *authn.Manager, obs ObservabilityConfig) *Handler {
+	return &Handler{
+		Clusters:        registry,
+		Auth:            auth,
+		PrometheusURL:   obs.PrometheusURL,
+		LokiURL:         obs.LokiURL,
+		AlertmanagerURL: obs.AlertmanagerURL,
+	}
 }
 
 // clusterHeader is how the frontend picks which configured cluster a
