@@ -349,8 +349,29 @@ npm run format:check
 npm run build
 ```
 
-There is no test suite yet (see ROADMAP.md — this is pre-MVP). When adding
-the first real feature, add tests alongside it rather than retrofitting
+There's no unit test suite yet (see ROADMAP.md — this is pre-MVP) — but
+Roadmap Phase 23 added a real integration/e2e suite, run against an actual
+disposable cluster rather than mocked client-go:
+
+```bash
+# Backend integration tests (needs a real cluster + a running backend —
+# see .github/workflows/ci.yml's `integration` job, or run
+# backend/integration/testdata/manifests.yaml + `go run .` locally first)
+cd backend
+go test -tags=integration -count=1 ./integration/...
+
+# Frontend e2e (needs E2E_TOKEN — a real ServiceAccount token — and
+# E2E_BASE_URL pointed at a running frontend/backend pair)
+cd frontend
+npm run test:e2e
+```
+
+Both are excluded from the fast `go build`/`go vet`/`npm run build` path
+above (the integration tests sit behind a `go:build integration` tag; the
+e2e test skips itself when `E2E_TOKEN` is unset) and only run in CI on
+pull requests into main, not every push — they need a real k3d cluster,
+which is noticeably slower than the lint/build jobs. When adding the first
+unit test, add it alongside its own feature rather than retrofitting
 later.
 
 ## Git module path

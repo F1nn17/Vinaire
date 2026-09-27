@@ -1876,10 +1876,54 @@ a list of green numbers.
 
 ---
 
-## Phase 23 — Automated tests against a real k3d cluster in CI
+## Phase 23 — Automated tests against a real k3d cluster in CI ✅ done
 
 **Goal:** CI actually catches regressions against a real Kubernetes API,
 not just compiles/lints.
+
+> **Outcome note:** `backend/integration/integration_test.go` (behind
+> `//go:build integration`, so it's invisible to every normal `go build`/
+> `go test ./...`) makes real HTTP requests against a real, already-running
+> Vinaire backend pointed at a real cluster with
+> `backend/integration/testdata/manifests.yaml` applied — one of each major
+> workload kind (Deployment/StatefulSet/DaemonSet/Job) plus a Service/
+> ConfigMap/Secret/PVC/Ingress, all named and namespaced predictably so
+> every test asserts against a *specific* expected value, not just "some
+> array is non-empty." Covers pods/deployments/statefulsets/daemonsets/
+> jobs/configmaps/nodes/storage/ingresses/search/capacity/dashboard-
+> summary/topology, pod and deployment detail, and — the one write path
+> this suite exercises end-to-end, since this is a disposable CI-only
+> cluster — a real Deployment restart. Frontend e2e
+> (`frontend/e2e/smoke.spec.ts`, `@playwright/test`) does a real token
+> login and clicks through every sidebar section, skipping itself
+> entirely when `E2E_TOKEN` isn't set so a plain local `npx playwright
+> test` doesn't fail for an unrelated reason.
+>
+> Verified this suite for real, not just by reading it: ran the full
+> backend suite against `k3d-vinaire-dev` with its fixtures applied (all
+> 17 pass), then deliberately broke the namespace filter in `Pods` (made
+> it ignore the query param) to confirm this phase's own Definition of
+> done — `TestPodsListAndNamespaceFilter` failed immediately and
+> specifically, naming every leaked pod — then reverted. Caught two real
+> bugs *in the test suite itself* this way (an exact-name match against a
+> pod whose real name has a generated suffix; an uppercase `"Deployment"`
+> where the topology handler actually emits lowercase `"deployment"`) —
+> exactly the kind of mistake this suite is supposed to make impossible to
+> ship silently, this time in the tests rather than the app. Also ran the
+> e2e suite against a live `next dev` + token-mode backend with a real
+> `vinaire` ServiceAccount token — full login-to-Settings walk passes.
+> Additionally dry-ran the CI job's own cluster setup end to end on a
+> throwaway `k3d cluster create --agents 0 --wait --timeout 120s` (the
+> exact command in the workflow) to make sure a genuinely fresh cluster —
+> not the long-lived dev one — behaves the same way, including confirming
+> the fixture PVC's `Pending` status (k3d's `local-path` StorageClass is
+> `WaitForFirstConsumer`, and nothing in the fixtures actually mounts it)
+> is expected and not something the test suite needed to work around.
+> The GitHub Actions workflow YAML itself (k3d install, background
+> backend/frontend processes across steps, artifact upload) could not be
+> executed from this environment — validated its structure (parsed with
+> PyYAML, step ordering printed and checked) but a real Actions run is
+> the one thing still unverified end-to-end.
 
 **Backend**
 - Integration tests (`go test` behind an `integration` build tag) that

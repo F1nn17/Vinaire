@@ -464,6 +464,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cluster has little deployed — and the "Create" buttons are inert mockup
   leftovers with no handler at all, which the project owner asked to leave
   alone for now rather than deciding a new write path on the spot.
+- **Roadmap Phase 23 (Automated tests against a real k3d cluster in CI):**
+  `backend/integration/` — real HTTP requests against a real running
+  backend pointed at a real cluster (never mocked client-go), behind a
+  `go:build integration` tag so it's invisible to the normal build/test
+  path; fixture manifests covering one of each major workload kind plus
+  Service/ConfigMap/Secret/PVC/Ingress. `frontend/e2e/` — a Playwright
+  smoke test doing a real token login and clicking through every sidebar
+  section. `.github/workflows/ci.yml` gained a PR-only `integration` job
+  that stands up k3d, applies the fixtures, runs both suites, and tears
+  the cluster down. Verified for real: ran the full backend suite against
+  `k3d-vinaire-dev` (17/17 pass), deliberately broke the namespace filter
+  to confirm this phase's own Definition of done (immediate, specific
+  failure), caught two real bugs in the test suite itself along the way,
+  ran the e2e suite against a live token-mode backend, and dry-ran the
+  CI job's k3d cluster setup on a genuinely fresh cluster.
 
 ### Changed
 
