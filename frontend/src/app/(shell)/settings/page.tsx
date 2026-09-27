@@ -19,11 +19,13 @@ const tabs: { id: SettingsTab; label: string }[] = [
   { id: "help", label: "Справка" },
 ];
 
-type HelpSection = "cluster" | "crds";
+type HelpSection = "cluster" | "crds" | "keycloak" | "observability";
 
 const helpSections: { id: HelpSection; label: string }[] = [
   { id: "cluster", label: "Подключение кластера" },
   { id: "crds", label: "Кастомные ресурсы" },
+  { id: "keycloak", label: "Вход по логину и паролю" },
+  { id: "observability", label: "Метрики, логи, алерты" },
 ];
 
 const fullClusterRoleYaml = `apiVersion: rbac.authorization.k8s.io/v1
@@ -43,6 +45,12 @@ rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: ["pods", "nodes"]
     verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]
@@ -325,11 +333,10 @@ export default function SettingsPage() {
           </div>
 
           <div className="min-w-0 flex-1 rounded-[10px] border border-border bg-surface p-5 text-sm">
-            {helpSection === "cluster" ? (
-              <ClusterHelp />
-            ) : (
-              <CustomResourcesHelp />
-            )}
+            {helpSection === "cluster" && <ClusterHelp />}
+            {helpSection === "crds" && <CustomResourcesHelp />}
+            {helpSection === "keycloak" && <KeycloakHelp />}
+            {helpSection === "observability" && <ObservabilityHelp />}
           </div>
         </div>
       )}
@@ -614,6 +621,182 @@ function CustomResourcesHelp() {
           Resources» (например,{" "}
           <span className="font-mono">hub.traefik.io/v1alpha1</span>).
         </div>
+      </div>
+    </div>
+  );
+}
+
+function KeycloakHelp() {
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <div className="mb-1 text-[13px] font-semibold">
+          Вход по логину и паролю (Keycloak / OIDC)
+        </div>
+        <div className="text-xs text-text-muted">
+          По умолчанию Vinaire работает в режиме{" "}
+          <span className="font-mono">AUTH_MODE=token</span> — на экране входа
+          вставляется готовый Kubernetes-токен (см. раздел «Подключение
+          кластера»). Чтобы вместо этого был обычный вход по логину и паролю,
+          переключите Vinaire в режим{" "}
+          <span className="font-mono">AUTH_MODE=oidc</span> — она проведёт
+          настоящий вход через Keycloak (или любой другой OIDC-провайдер)
+          целиком на своей стороне (в Go-бэкенде), без единой строчки этого в
+          браузере.
+        </div>
+      </div>
+
+      <div className="rounded-md border border-warn/60 bg-surface-2 p-3 text-text-muted">
+        <span className="font-semibold text-foreground">Важно понимать: </span>
+        вход через Keycloak — это только про то,{" "}
+        <span className="italic">как вы попадаете в Vinaire</span>. Токен,
+        которым Vinaire потом обращается к самому Kubernetes API — это тот же
+        самый OIDC id_token, что вы получили при входе. Значит API-сервер
+        подключаемого кластера должен сам доверять этому Keycloak (флаги вида{" "}
+        <span className="font-mono">--oidc-issuer-url</span> при запуске
+        kube-apiserver, или аналог у managed-провайдера). На обычном локальном
+        k3d/k3s из коробки такого доверия нет — вход через Keycloak пройдёт, а
+        обращения к кластеру будут падать с 401, пока API-сервер не настроен
+        отдельно. Это делает не Vinaire, а администратор кластера — если это не
+        ваш случай, оставайтесь на{" "}
+        <span className="font-mono">AUTH_MODE=token</span>.
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Быстрый способ: тестовый Keycloak из этого репозитория
+        </div>
+        <div className="mt-1 text-text-muted">
+          В <span className="font-mono">/keycloak</span> уже лежит одноразовый
+          Keycloak для локальной проверки самого входа (переживать за реальных
+          пользователей тут не нужно — данные не сохраняются) — настройки
+          Vinaire по умолчанию уже смотрят именно на него:
+        </div>
+        <Code>{`cd keycloak
+docker compose up -d`}</Code>
+        <div className="mt-1 text-text-muted">
+          Тестовые пользователи: <span className="font-mono">alice/alice</span>{" "}
+          и <span className="font-mono">bob/bob</span>. Подробности — в{" "}
+          <span className="font-mono">keycloak/README.md</span> репозитория.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Подключение своего Keycloak
+        </div>
+        <ol className="mt-1 list-decimal pl-5 text-text-muted">
+          <li>
+            В Keycloak создайте realm (или используйте существующий) и в нём —
+            client с включённым{" "}
+            <span className="font-mono">Client authentication</span>{" "}
+            (confidential client). Обмен кодом на токен целиком происходит в
+            бэкенде Vinaire, поэтому client secret не попадает в браузер.
+          </li>
+          <li className="mt-1.5">
+            Valid redirect URI клиента — ровно адрес бэкенда Vinaire, например:
+            <Code>{`https://<адрес-vinaire>/api/v1/auth/oidc/callback`}</Code>
+          </li>
+          <li className="mt-1.5">Сохраните client id и client secret.</li>
+        </ol>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Переменные окружения на Deployment Vinaire
+        </div>
+        <Code>
+          {`kubectl set env deployment/vinaire -n <namespace> \\
+  AUTH_MODE=oidc \\
+  OIDC_ISSUER_URL=https://<адрес-keycloak>/realms/<realm> \\
+  OIDC_CLIENT_ID=<client id> \\
+  OIDC_CLIENT_SECRET=<client secret> \\
+  OIDC_REDIRECT_URL=https://<адрес-vinaire>/api/v1/auth/oidc/callback
+
+kubectl rollout restart deployment/vinaire -n <namespace>`}
+        </Code>
+        <div className="mt-1 text-text-muted">
+          После этого экран входа Vinaire ведёт на страницу логина Keycloak
+          вместо поля для вставки токена.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ObservabilityHelp() {
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <div className="mb-1 text-[13px] font-semibold">
+          Метрики, логи и алерты
+        </div>
+        <div className="text-xs text-text-muted">
+          Vinaire ничего из этого не устанавливает сама — она только
+          подключается к уже работающему в кластере Prometheus/Loki/
+          Alertmanager, если указать их адрес. Каждый из трёх настраивается
+          отдельно и независимо от остальных.
+        </div>
+      </div>
+
+      <div className="rounded-md border border-border bg-surface-2 p-3 text-text-muted">
+        <span className="font-semibold text-foreground">Про Grafana: </span>
+        Vinaire не подключается к Grafana и не встраивает её панели — такой
+        интеграции сейчас нет. Если у вас есть Grafana, открывайте её как
+        отдельный инструмент; здесь речь только про Prometheus/Loki/
+        Alertmanager.
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Alertmanager — колокольчик с алертами вверху страницы
+        </div>
+        <div className="mt-1 text-text-muted">
+          Единственный из трёх, у которого уже есть готовое место в интерфейсе —
+          список текущих алертов в колокольчике в правом верхнем углу.
+        </div>
+        <Code>
+          {`kubectl set env deployment/vinaire -n <namespace> \\
+  ALERTMANAGER_URL=http://<адрес-alertmanager>:9093
+kubectl rollout restart deployment/vinaire -n <namespace>`}
+        </Code>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Loki — поиск по истории логов в Pod → Logs
+        </div>
+        <div className="mt-1 text-text-muted">
+          Живой хвост логов пода (верхняя часть вкладки Logs) идёт напрямую из
+          Kubernetes и Loki для этого не нужен. Loki подключает нижнюю часть той
+          же вкладки — поиск по логам за прошлый период. Он рассчитывает, что
+          сборщик логов в кластере (Promtail, Grafana Agent и т.п.) подписывает
+          строки метками <span className="font-mono">namespace</span> и{" "}
+          <span className="font-mono">pod</span> — это самое частое соглашение,
+          но не единственное; если у вашего сборщика метки называются иначе,
+          поиск просто не найдёт логи конкретного пода.
+        </div>
+        <Code>
+          {`kubectl set env deployment/vinaire -n <namespace> \\
+  LOKI_URL=http://<адрес-loki>:3100
+kubectl rollout restart deployment/vinaire -n <namespace>`}
+        </Code>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">Prometheus</div>
+        <div className="mt-1 text-text-muted">
+          На сегодня в интерфейсе Vinaire нет собственного графика, построенного
+          на данных Prometheus — CPU/Memory на Overview и в Nodes берутся
+          напрямую из metrics-server, без Prometheus вообще. Подключение ниже
+          даёт бэкенду прокси-эндпоинт для сырых PromQL- запросов на будущее —
+          сейчас он ничего дополнительно не показывает в самом приложении.
+        </div>
+        <Code>
+          {`kubectl set env deployment/vinaire -n <namespace> \\
+  PROMETHEUS_URL=http://<адрес-prometheus>:9090
+kubectl rollout restart deployment/vinaire -n <namespace>`}
+        </Code>
       </div>
     </div>
   );

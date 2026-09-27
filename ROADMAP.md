@@ -1678,10 +1678,81 @@ in results, Enter opens its Pod detail.
 
 ---
 
-## Phase 21 — Packaging Vinaire for installation (Helm chart)
+## Phase 21 — Packaging Vinaire for installation (Helm chart) ✅ done
 
 **Goal:** Vinaire can be installed on any cluster via a standard Helm
 chart, not just this dev-cluster-specific manual setup.
+
+> **Outcome note:** the chart itself (`/charts/vinaire`) matches the plan —
+> `Deployment`/`Service`/`ServiceAccount`/`ClusterRole`/`ClusterRoleBinding`
+> templates, plus a `Role`/`RoleBinding` scoped to exactly the one Secret
+> Phase 24's "add a cluster via the web UI" needs (this repo had *no*
+> checked-in manifest at all for the live `vinaire` Deployment before this
+> phase — it had only ever been applied ad hoc via `kubectl` across earlier
+> phases). `values.yaml`'s `rbac.extraRules` replaces AGENTS.md's
+> hardcoded Traefik/Gateway/k3s CRD groups with a generic escape hatch,
+> since a chart meant for "any cluster" can't know another cluster's CRDs
+> in advance. `helm` itself wasn't installed on this dev machine — added it
+> (`winget install Helm.Helm`) specifically to actually run the chart
+> rather than eyeball the templates, per this project's standing practice
+> of verifying end-to-end rather than trusting written-but-untested YAML.
+>
+> Building this chart's ClusterRole from scratch (rather than copying
+> AGENTS.md's existing example) surfaced two real, previously-undiscovered
+> bugs that were also fixed here and backported into AGENTS.md's own
+> example and the live `k3d-vinaire-dev` cluster's `vinaire-viewer` role,
+> since both had been silently broken the whole time:
+>
+> 1. **Every WebSocket endpoint 403'd on the real deployed instance** —
+>    Pod logs, the Pod terminal, and Phase 2's live table updates were all
+>    quietly broken on the actual in-cluster deployment (reachable at
+>    `vinaire.localtest.me`), not just theoretically: `originChecker`
+>    (`internal/stream/origin.go`) only ever allowed origins in
+>    `CORS_ALLOWED_ORIGINS`, which defaults to the local dev frontend's
+>    `http://localhost:3100` and was never overridden on the live
+>    Deployment. Plain `fetch()` calls worked regardless (browsers don't
+>    apply CORS to same-origin requests, and the single combined image is
+>    same-origin by design — see "Rendering model"), which is exactly why
+>    this went unnoticed: the app looked like it worked. A WebSocket
+>    handshake's `Origin` header gets checked unconditionally though, with
+>    no same-origin exemption. Fixed by having `originChecker` allow a
+>    same-origin request (`Origin`'s host matches the request's own `Host`)
+>    unconditionally, in addition to the existing explicit allowlist for
+>    genuinely cross-origin dev setups — confirmed via three raw WS
+>    handshakes (same-origin, unlisted cross-origin, listed cross-origin)
+>    hitting exactly the right outcome each time before touching the
+>    browser at all.
+> 2. **`pods/log`/`pods/exec` were never granted at all.** These are
+>    separate RBAC subresources from `pods` itself — granting `get/list/
+>    watch` on `pods` (which every phase's ClusterRole always had) never
+>    implied read access to a pod's logs or exec access into it. Once (1)
+>    was fixed, Logs and Terminal both progressed from "never connects" to
+>    a WebSocket that opened fine and then got an explicit 403 straight
+>    from the Kubernetes API — which is what actually pointed at the exact
+>    missing grant. Fixed by adding `pods/log` (get) and `pods/exec`
+>    (create) as their own rules.
+>
+> Verified end-to-end against `k3d-vinaire-dev`: `helm install
+> vinaire-chart-test ./charts/vinaire -n vinaire-chart-test
+> --create-namespace` brought up a working pod from a clean namespace,
+> `kubectl create token` + the login screen authenticated successfully, and
+> the chart's own ClusterRole correctly allowed listing real pods — all
+> with zero manual manifest edits (this phase's Definition of done, word
+> for word), then torn down (`helm uninstall` + delete namespace). Rebuilt
+> the main image with both RBAC/origin fixes, redeployed to the live
+> `vinaire` Deployment, and confirmed live in a real browser: the Logs tab
+> streamed real nginx log lines, and the Terminal tab opened a real,
+> working `/ #` shell prompt inside the pod.
+>
+> Also added, in the same batch: two more sections in Settings' "Справка"
+> tab (extending Phase 20's rewrite) — "Вход по логину и паролю" (how to
+> point `AUTH_MODE=oidc` at Keycloak or another OIDC provider, including
+> the honest caveat that the target cluster's own API server must
+> separately trust that issuer) and "Метрики, логи, алерты" (connecting
+> `PROMETHEUS_URL`/`LOKI_URL`/`ALERTMANAGER_URL`, plus an explicit note
+> that Grafana isn't something this app integrates with at all, and that
+> Prometheus's proxy endpoint isn't wired into any visible chart yet —
+> only Alertmanager and Loki currently show up in the UI).
 
 **Backend/Infra**
 - An official Helm chart under `/charts/vinaire` — Deployment (the single

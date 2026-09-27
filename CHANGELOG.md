@@ -418,6 +418,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the complete ready-to-apply ClusterRole YAML (not a "customize this
   example" framing) alongside a clearly-labeled `cluster-admin` shortcut
   for disposable local clusters, and finding the API server address.
+- **Roadmap Phase 21 (Helm chart):** an installable chart under
+  `/charts/vinaire` — Deployment/Service/ServiceAccount/ClusterRole/
+  ClusterRoleBinding, plus a Role/RoleBinding scoped to the one Secret
+  Phase 24's cluster-management feature needs. `values.yaml` switches
+  `authMode` (token/oidc/disabled) and exposes `rbac.extraRules` for a
+  cluster's own installed CRDs. Added two more Settings -> Справка
+  sections: "Вход по логину и паролю" (connecting Keycloak/OIDC) and
+  "Метрики, логи, алерты" (connecting Prometheus/Loki/Alertmanager, and
+  clarifying Grafana isn't integrated at all). Verified with a real
+  `helm install` on `k3d-vinaire-dev`: token login and a real pod list
+  worked from a clean namespace with zero manual manifest edits.
+- Fixed two real bugs found while building the chart's RBAC from scratch,
+  both silently broken on the actual deployed instance the whole time:
+  every WebSocket endpoint (Pod logs, Pod terminal, Phase 2's live table
+  updates) 403'd because `originChecker` never exempted a same-origin
+  request, only the `CORS_ALLOWED_ORIGINS` allowlist (which defaults to
+  the local dev frontend's origin, never overridden on the real
+  deployment) — masked because plain `fetch()` calls are naturally
+  same-origin and unaffected; and `pods/log`/`pods/exec` (separate RBAC
+  subresources from `pods` itself) were never granted at all, so Logs and
+  Terminal got an explicit 403 straight from Kubernetes even once the
+  WebSocket connected. Both fixed and confirmed live: real streamed nginx
+  logs and a working in-pod shell.
 
 ### Changed
 

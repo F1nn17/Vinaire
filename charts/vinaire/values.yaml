@@ -1,0 +1,98 @@
+# Default values for the vinaire chart.
+
+replicaCount: 1
+
+image:
+  # Point this at wherever you actually pushed the single combined image
+  # (see the repo root Dockerfile) — "vinaire:latest" only resolves on a
+  # cluster that already has that image locally (e.g. via
+  # `k3d image import`), it is not published anywhere.
+  repository: vinaire
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# AUTH_MODE: how Vinaire establishes who's calling (see AGENTS.md's
+# Authentication section) — "token" (paste a Kubernetes ServiceAccount
+# token on the login screen) is the safe default for a real install.
+# "disabled" skips login entirely (every request uses this chart's own
+# ServiceAccount) — fine for a disposable local cluster, never for
+# anything shared. "oidc" enables real username/password login through
+# Keycloak or another OIDC provider — fill in the oidc block below and see
+# Vinaire's own Settings -> Справка -> "Вход по логину и паролю" for the
+# full walkthrough (including the important caveat that the target
+# cluster's own API server must separately be configured to trust that
+# OIDC issuer).
+authMode: token
+
+oidc:
+  issuerURL: ""
+  clientID: ""
+  clientSecret: ""
+  redirectURL: ""
+
+# The public URL this Vinaire install is reachable at (e.g.
+# "https://vinaire.example.com"), used only to send the browser back to
+# the right place after an OIDC login. Leave empty for token/disabled
+# mode. Only needed for oidc mode when Vinaire is reachable at something
+# other than the backend's own default assumption — see the chart's
+# README for why this matters.
+frontendURL: ""
+
+cookie:
+  secure: true
+  sameSite: none
+
+# Optional, independent proxies to an already-running observability
+# stack (Vinaire never installs or evaluates these itself) — see
+# Settings -> Справка -> "Метрики, логи, алерты" for what each one
+# actually lights up in the UI. Leave any of them empty to leave that
+# integration off.
+observability:
+  prometheusURL: ""
+  lokiURL: ""
+  alertmanagerURL: ""
+
+serviceAccount:
+  create: true
+  # Generated from the release name when empty.
+  name: ""
+
+rbac:
+  # The narrow, "not cluster-admin" ClusterRole/ClusterRoleBinding this
+  # ServiceAccount needs to do anything at all — see AGENTS.md's "Example:
+  # a minimal ClusterRole for Vinaire" for exactly what each rule backs.
+  # Turn this off only if you're binding an existing role yourself.
+  create: true
+  # Extra rules appended to the generated ClusterRole — most commonly for
+  # Custom Resources (Phase 15) whose API groups this chart can't know in
+  # advance. Example:
+  #   extraRules:
+  #     - apiGroups: ["cert-manager.io"]
+  #       resources: ["*"]
+  #       verbs: ["get", "list", "watch"]
+  extraRules: []
+  # The narrow write path backing "add a cluster via the web UI" (Settings
+  # page) — create-only on Secrets in this release's own namespace, plus
+  # get/update scoped to exactly the one Secret this feature persists to.
+  # See AGENTS.md's core rule for why this is a separate, deliberately
+  # narrower Role than the ClusterRole above.
+  clusterManagement:
+    create: true
+
+resources: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Extra plain env vars, appended as-is:
+#   extraEnv:
+#     - name: SOME_VAR
+#       value: "some value"
+extraEnv: []

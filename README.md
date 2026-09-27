@@ -103,12 +103,41 @@ and "Authentication (Phase 10)" sections for how the pieces fit together,
 and set `AUTH_MODE`/`OIDC_*` env vars for a real deployment instead of
 `disabled`.
 
+## Installation (Helm)
+
+For installing onto a real cluster rather than building from source — a
+Helm chart under [`/charts/vinaire`](./charts/vinaire) packages the same
+single combined image above, plus a `ServiceAccount`/`ClusterRole` with a
+minimal, "not cluster-admin" permission set (see AGENTS.md's core rule for
+exactly what it grants).
+
+```bash
+helm install vinaire ./charts/vinaire -n vinaire --create-namespace
+kubectl rollout status deployment/vinaire -n vinaire
+kubectl port-forward -n vinaire svc/vinaire 8080:8080
+```
+
+Then get a bounded-duration token for the chart's own ServiceAccount and
+paste it into the login screen at `http://localhost:8080`:
+
+```bash
+kubectl create token vinaire -n vinaire --duration=1h
+```
+
+See `charts/vinaire/values.yaml` for every option — most notably
+`authMode` (`token` by default; `oidc` for real login via Keycloak or
+another provider, `disabled` for no login at all on a disposable local
+cluster) and `rbac.extraRules` for granting read access to CRDs your own
+cluster has installed (Custom Resources, see Vinaire's own Settings ->
+Справка once logged in).
+
 ## Repository layout
 
 ```text
 .
 ├── frontend/     Next.js app
 ├── backend/      Go HTTP server + Kubernetes client
+├── charts/       Helm chart for installing onto a real cluster
 ├── package.json  Root orchestrator (`npm run dev` runs both at once)
 ├── AGENTS.md     Conventions & architecture rules for AI coding agents
 ├── ROADMAP.md    Staged plan (MVP → GitOps write flow)

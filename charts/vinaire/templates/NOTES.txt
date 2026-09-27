@@ -1,0 +1,37 @@
+Vinaire is installing into namespace "{{ .Release.Namespace }}".
+
+1. Wait for the pod to come up:
+
+   kubectl rollout status deployment/{{ include "vinaire.fullname" . }} -n {{ .Release.Namespace }}
+
+2. Reach it (adjust if you set service.type to something other than ClusterIP):
+
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "vinaire.fullname" . }} 8080:{{ .Values.service.port }}
+   open http://localhost:8080
+
+{{- if eq .Values.authMode "token" }}
+
+3. Log in with a bounded-duration token for this chart's own ServiceAccount
+   (already bound to a real, "not cluster-admin" RBAC role by this chart —
+   see AGENTS.md's core rule for exactly what it can/can't do):
+
+   kubectl create token {{ include "vinaire.serviceAccountName" . }} -n {{ .Release.Namespace }} --duration=1h
+
+   Paste that into Vinaire's login screen. To let someone else log in as
+   themselves instead, create their own ServiceAccount + RoleBinding (see
+   Vinaire's own Settings -> Справка -> "Подключение кластера" once
+   logged in) rather than sharing this one.
+{{- else if eq .Values.authMode "oidc" }}
+
+3. AUTH_MODE is "oidc" — Vinaire will redirect to your configured OIDC
+   provider for login. If `frontendURL` wasn't set to this install's real
+   public URL, the post-login redirect may bounce somewhere unexpected —
+   see the chart README and Vinaire's own Settings -> Справка -> "Вход по
+   логину и паролю" for the full walkthrough and an important caveat about
+   the target cluster's API server needing to trust this OIDC issuer too.
+{{- else }}
+
+3. AUTH_MODE is "disabled" — no login screen at all; every request uses
+   this chart's own ServiceAccount directly. Fine for a disposable local
+   cluster, not recommended for anything shared.
+{{- end }}

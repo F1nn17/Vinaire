@@ -159,6 +159,17 @@ rules:
   - apiGroups: ["metrics.k8s.io"]
     resources: ["pods", "nodes"]
     verbs: ["get", "list"]
+  # pods/log and pods/exec are separate RBAC subresources — granting
+  # "pods" above does NOT imply either of these. Without this block, Pod
+  # detail's Logs/Terminal tabs open a WebSocket that connects fine and
+  # then immediately gets a 403 from the Kubernetes API itself, which
+  # looks like a Vinaire bug rather than a missing RBAC grant.
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]
@@ -247,6 +258,10 @@ resource name it doesn't know at build time — these pages instead read
 │   └── internal/stream/    informers + WebSocket fan-out for live updates
 ├── keycloak/               Throwaway dev-only Keycloak (docker-compose) for
 │                           local OIDC login — see its README
+├── charts/vinaire/         Helm chart for installing onto a real cluster
+│                           (Phase 21) — Deployment/Service/ServiceAccount/
+│                           ClusterRole templates for the same combined
+│                           image as the repo-root Dockerfile
 ├── package.json            Root orchestrator only (`npm run dev` = both apps)
 ├── ROADMAP.md              Staged plan
 ├── CHANGELOG.md            Keep a Changelog format

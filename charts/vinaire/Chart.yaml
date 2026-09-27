@@ -1,0 +1,12 @@
+apiVersion: v2
+name: vinaire
+description: >-
+  A Kubernetes management UI that is read-only by default, with a narrow,
+  explicit, and always-audited set of write actions (see the project's
+  AGENTS.md for the exact list).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/shiraku/vinaire
+sources:
+  - https://github.com/shiraku/vinaire
