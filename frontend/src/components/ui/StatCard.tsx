@@ -10,7 +10,14 @@ export function StatCard({ title, dotColor, value, caption }: StatCardData) {
         </span>
         <StatusDot color={dotColor} size={8} />
       </div>
-      <div className="mt-2.5 font-mono text-[32px] font-semibold">{value}</div>
+      {/* Roadmap Phase 18: null ("not available yet") renders visibly
+          muted and as a dash — never identical to a real 0, which renders
+          bold like any other number. */}
+      <div
+        className={`mt-2.5 font-mono text-[32px] font-semibold ${value === null ? "text-text-faint" : ""}`}
+      >
+        {value === null ? "—" : value}
+      </div>
       <div className="mt-1 text-xs text-text-faint">{caption}</div>
     </div>
   );

@@ -1379,11 +1379,47 @@ empty state against an empty namespace, not a blank white area.
 
 ---
 
-## Phase 18 — Dashboard / Overview (finishing with real data)
+## Phase 18 — Dashboard / Overview (finishing with real data) ✅ done
 
 **Goal:** the Dashboard's cards (Pods down, Healthy pods, Namespaces, PVC
 near capacity, CPU/Memory, Drifted from Git) all show real data or an
 explicit, honest "unavailable" state — never a fabricated zero.
+
+> **Outcome note:** "pods down" is defined as any pod whose computed
+> status color (the same `podStatus` helper every workload list already
+> uses) isn't `ok` — Pending/CrashLoopBackOff/Failed/etc. all count,
+> matching what a human scanning the Workloads table would call "down."
+> ArgoCD detection reused Phase 15's exact generic-CRD machinery
+> (`k8s.GetCRD` for discovery, the dynamic client for listing) applied to
+> one specific, well-known CRD (`applications.argoproj.io`) instead of a
+> user-selected one — no new capability needed, just a new caller. A
+> `discardResponseWriter` (a `http.ResponseWriter` that no-ops) lets the
+> ArgoCD check reuse the existing `resolveDynamic` unchanged: if it fails,
+> the drift fields just stay zero/unavailable instead of failing the whole
+> dashboard summary. Hit and fixed a real bug during testing: `sample`
+> slices built with a bare `var x []string` marshal to JSON `null` when
+> never appended to, not `[]` — crashed the frontend's `.length` check;
+> fixed by initializing with `make([]string, 0, n)` instead, the same
+> pattern already used everywhere else in this codebase for exactly this
+> reason. PVC-near-capacity and CPU/Memory are hardcoded frontend stubs (no
+> backend field at all) rather than a `null`-valued API field, since Phase
+> 13/16 already made clear there's no real "near capacity" or historical
+> CPU/Memory number to fetch yet regardless of what the Dashboard asks for.
+> `StatCardData.value` became `number | null`, rendered as a visibly muted
+> "—" (distinct styling, not just a dash character) instead of a bold
+> number — resolving this phase's own risk note about not looking like a
+> real zero. Verified end-to-end against `k3d-vinaire-dev`, including
+> during a real cluster restart (the dev machine had gone to sleep
+> overnight): Pods down/Healthy pods correctly reflected the cluster's
+> actual transient recovery state (6 down while pods were
+> `ContainerCreating`, settling to 0 once stable) before settling to
+> matching `kubectl get pods -A` exactly; the events feed showed real
+> recent cluster events; and ArgoCD detection was verified both ways with a
+> throwaway CRD + two Application instances (one `Synced`, one
+> `OutOfSync`) — the card appeared with the correct drifted count and
+> sample name when "installed," and disappeared entirely (confirmed via
+> DOM text, not just a screenshot) once the CRD was removed again, all
+> confirmed in a live browser.
 
 **Backend**
 - `GET /api/v1/dashboard/summary` — aggregates pods-down/healthy-pods

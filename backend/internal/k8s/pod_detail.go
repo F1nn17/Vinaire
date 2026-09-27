@@ -36,3 +36,14 @@ func ListEventsForObject(ctx context.Context, clientset *kubernetes.Clientset, n
 	}
 	return list.Items, nil
 }
+
+// ListEvents returns every event in namespace, or across all namespaces if
+// namespace is empty — a general recent-events feed (Roadmap Phase 18),
+// unlike ListEventsForObject's per-object field-selector query.
+func ListEvents(ctx context.Context, clientset *kubernetes.Clientset, namespace string) ([]corev1.Event, error) {
+	list, err := clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list events: %w", err)
+	}
+	return list.Items, nil
+}

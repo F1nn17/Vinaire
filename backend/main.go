@@ -158,6 +158,8 @@ func main() {
 		protected.Get("/metrics/query", workloadsHandler.MetricsQuery)
 		protected.Get("/metrics/query_range", workloadsHandler.MetricsQueryRange)
 		protected.Get("/alerts", workloadsHandler.Alerts)
+		protected.Get("/dashboard/summary", workloadsHandler.DashboardSummary)
+		protected.Get("/events", workloadsHandler.Events)
 
 		// Write actions (Roadmap Phase 9) — the deliberate, narrow, audited
 		// exception to the read-only rule. See AGENTS.md's core rule and

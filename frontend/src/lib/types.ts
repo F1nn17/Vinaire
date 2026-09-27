@@ -387,7 +387,10 @@ export type GatewayResourcesResult =
 export type StatCardData = {
   title: string;
   dotColor: StatusColor;
-  value: number;
+  // Roadmap Phase 18: null means "not available yet" (e.g. PVC near
+  // capacity, stubbed until real byte-usage data exists) — rendered
+  // visibly differently from a real 0, never a fabricated zero.
+  value: number | null;
   caption: string;
 };
 
@@ -396,11 +399,31 @@ export type NamespacePodCount = {
   pods: number;
 };
 
+// Matches the backend's api.DashboardSummaryResponse (Roadmap Phase 18).
+export type DashboardSummary = {
+  podsDown: number;
+  podsDownSample: string[];
+  healthyPods: number;
+  namespaces: NamespacePodCount[];
+  argoCDAvailable: boolean;
+  driftedCount: number;
+  driftedSample: string[];
+};
+
 export type DashboardData = {
   statCards: StatCardData[];
+  // null when ArgoCD isn't installed — the Drifted-from-Git card hides
+  // entirely rather than showing a fabricated zero.
+  driftedFromGit: {
+    count: number;
+    dotColor: StatusColor;
+    caption: string;
+  } | null;
   events: ClusterEvent[];
-  cpu: { used: string; total: string; points: number[] };
-  memory: { used: string; total: string; points: number[] };
+  // null until Phase 16's Prometheus proxy is wired into the Dashboard —
+  // shows an honest placeholder instead of a drawn (fabricated) line.
+  cpu: { used: string; total: string; points: number[] } | null;
+  memory: { used: string; total: string; points: number[] } | null;
   namespaces: NamespacePodCount[];
 };
 

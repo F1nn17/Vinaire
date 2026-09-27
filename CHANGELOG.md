@@ -316,6 +316,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   surviving a backend process restart, a real RBAC-restricted
   ServiceAccount getting the clean Forbidden message, and a real browser
   showing both the loading skeleton and a specific empty state.
+- **Roadmap Phase 18 (Dashboard / Overview — finishing with real data):**
+  new `GET /api/v1/dashboard/summary` (pods-down/healthy-pods counts and
+  per-namespace pod counts, aggregated from the same pod list Phase 1
+  already fetches — no new Kubernetes API surface) and
+  `GET /api/v1/events?namespace=&limit=` (a general recent-events feed).
+  ArgoCD detection reuses Phase 15's generic-CRD discovery/dynamic-list
+  machinery against one specific, well-known CRD
+  (`applications.argoproj.io`) to report both whether ArgoCD is installed
+  and how many Applications are `OutOfSync`. PVC-near-capacity and CPU/
+  Memory stay explicit frontend-side "not available yet" stubs — Phase
+  13/16 built the real data sources, but wiring them into the Dashboard
+  is intentionally out of this phase's scope. `StatCardData.value` is now
+  `number | null`, rendered as a visibly muted "—" rather than a bold
+  number, so "unavailable" can never be confused with a real 0; the
+  Drifted-from-Git card hides entirely (not a zero) when ArgoCD isn't
+  detected. This retires the last of the mock dashboard data
+  (`lib/mock/dashboard.ts` deleted). Verified end-to-end against
+  `k3d-vinaire-dev`, including through a real cluster restart (correctly
+  reflecting pods transiently down during recovery, settling to match
+  `kubectl get pods -A` exactly) and a throwaway ArgoCD-like CRD with a
+  `Synced` and an `OutOfSync` Application, confirmed both installed
+  (correct drifted count) and removed (card fully absent) in a live
+  browser. Along the way, fixed a real bug: an empty Go slice declared
+  with `var x []string` marshals to JSON `null`, not `[]`, which crashed
+  the frontend's `.length` check — fixed with `make([]string, 0, n)`.
 
 ### Changed
 
