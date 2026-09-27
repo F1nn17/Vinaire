@@ -1,14 +1,14 @@
-import { deploymentDetailsMock } from "@/lib/mock/deploymentDetails";
 import type {
   DaemonSetDetail,
   DeploymentDetail,
   JobDetail,
+  NodeDetail,
+  NodeRow,
   PodDetail,
   StatefulSetDetail,
   WorkloadKind,
   WorkloadRow,
 } from "@/lib/types";
-import { simulatedDelay } from "./config";
 import { apiFetch, ApiError } from "./http";
 
 // Real endpoint (Roadmap Phase 1) — backend derives status/color/age and
@@ -21,17 +21,21 @@ export function getWorkloads(
   return apiFetch<WorkloadRow[]>(`/api/v1/${kind}${query}`);
 }
 
-// TODO(vinaire, Phase 3): replace with
-// `fetch(`${API_BASE}/api/v1/deployments/${namespace}/${name}`)`. Signature
-// already takes `namespace` (Phase 1 routing fix) even though the lookup is
-// still name-only mock data for now.
+// Real endpoint.
 export async function getDeployment(
   namespace: string,
   name: string,
 ): Promise<DeploymentDetail | undefined> {
-  void namespace;
-  await simulatedDelay();
-  return deploymentDetailsMock[name];
+  try {
+    return await apiFetch<DeploymentDetail>(
+      `/api/v1/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return undefined;
+    }
+    throw err;
+  }
 }
 
 // Real endpoint (Roadmap Phase 3) — Overview and Events come from the real
@@ -79,6 +83,25 @@ export async function getDaemonSet(
   try {
     return await apiFetch<DaemonSetDetail>(
       `/api/v1/daemonsets/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return undefined;
+    }
+    throw err;
+  }
+}
+
+// Real endpoint (Roadmap Phase 19).
+export function getNodes(): Promise<NodeRow[]> {
+  return apiFetch<NodeRow[]>("/api/v1/nodes");
+}
+
+// Real endpoint (Roadmap Phase 19).
+export async function getNode(name: string): Promise<NodeDetail | undefined> {
+  try {
+    return await apiFetch<NodeDetail>(
+      `/api/v1/nodes/${encodeURIComponent(name)}`,
     );
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {

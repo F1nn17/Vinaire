@@ -65,7 +65,8 @@ function CustomResourcesPage() {
       <div className="flex flex-col gap-[18px] px-8 py-7">
         <div className="text-[15px] font-semibold">Custom Resources</div>
         <div className="text-sm text-text-muted">
-          Select a Custom Resource from the sidebar to see its real instances.
+          Select a Custom Resource from Settings &rarr; Custom Resources to see
+          its real instances.
         </div>
       </div>
     );

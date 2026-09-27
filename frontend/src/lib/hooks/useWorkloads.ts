@@ -3,6 +3,8 @@ import {
   getDaemonSet,
   getDeployment,
   getJob,
+  getNode,
+  getNodes,
   getPod,
   getStatefulSet,
   getWorkloads,
@@ -54,4 +56,14 @@ export function useJob(namespace: string, name: string) {
   return useSWR(["job", namespace, name, cluster], () =>
     getJob(namespace, name),
   );
+}
+
+export function useNodes() {
+  const cluster = useCurrentCluster();
+  return useSWR(["nodes", cluster], () => getNodes());
+}
+
+export function useNode(name: string) {
+  const cluster = useCurrentCluster();
+  return useSWR(["node", name, cluster], () => getNode(name));
 }

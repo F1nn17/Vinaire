@@ -188,12 +188,14 @@ export function LogsTab({
           <div className="font-mono text-xs text-text-faint">
             Historical log search unavailable: {search.data.reason}
           </div>
-        ) : search.data.lines.length === 0 ? (
+        ) : (search.data.lines ?? []).length === 0 ? (
           <div className="font-mono text-xs text-text-faint">
             No matching lines in this time range.
           </div>
         ) : (
-          search.data.lines.map((line, i) => <LogLine key={i} {...line} />)
+          (search.data.lines ?? []).map((line, i) => (
+            <LogLine key={i} {...line} />
+          ))
         )}
       </div>
     </div>

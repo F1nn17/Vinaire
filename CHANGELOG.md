@@ -367,6 +367,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Phase 10's original resource list, so Phases 8/13/14/15's endpoints were
   all silently 403ing on the real in-cluster deployment — fixed in both
   AGENTS.md's documented example and the live cluster.
+- **Roadmap Phase 19 (Nodes: cluster machine list + detail):** new
+  `GET /api/v1/nodes` and `GET /api/v1/nodes/{name}`, a new "Nodes" sidebar
+  entry, a nodes table (Name, Status, Roles, CPU/Memory, Age), and a detail
+  page (Capacity/Allocatable, Conditions, Taints, scheduled pods via
+  `spec.nodeName`). Live updates reuse the existing informer/hub/WebSocket
+  pipeline — `internal/stream`'s `Event.Row`/`registerInformer` were
+  generalized from a hardcoded `WorkloadRow` to a generic type parameter so
+  Nodes' differently-shaped row fits without a parallel pipeline; the
+  frontend does a partial-field merge on live diffs (not a full replace)
+  so a status-only event like a cordon doesn't blank out the last known
+  CPU/Memory reading. Verified against `k3d-vinaire-dev`: `kubectl cordon`/
+  `uncordon` flips the list's Status live with no reload, exactly this
+  phase's Definition of done.
+- Fixed a batch of issues found alongside Phase 19: Phase 15's Custom
+  Resources sidebar section (33 entries) moved into Settings as its own
+  tab instead of cluttering the main nav; `vinaire-viewer`'s ClusterRole
+  was missing the `metrics.k8s.io` API group entirely, so every
+  metrics-server call (Pod detail, the Dashboard, this phase's Node usage)
+  was silently 403ing and degrading to "—" — fixed in both AGENTS.md's
+  example and the live cluster, and the Dashboard's Cluster CPU/Memory
+  cards wired to real metrics-server data as a result (switched from a
+  planned Sparkline to a percentage bar, since there's no historical time
+  series to draw a real line from); the Dashboard's Namespaces card no
+  longer stretches to match the Events column's height; Healthy pods now
+  precedes Pods down; Settings gained a Russian-language "Справка" tab
+  walking through adding a cluster; Deployment detail was still 100% mock
+  data (`Deployment "default/other" not found in mock data"`) despite
+  Phase 9's write actions being real — replaced with a real
+  `GET /api/v1/deployments/{namespace}/{name}`; and the Gateway API tab
+  crashed the whole page on a cluster with zero Gateways/HTTPRoutes,
+  caused by Go's `omitempty` dropping an empty (but non-nil) slice's JSON
+  key entirely — fixed on that field and two others with the same latent
+  bug (Alertmanager's `alerts`, Loki search's `lines`).
 
 ### Changed
 

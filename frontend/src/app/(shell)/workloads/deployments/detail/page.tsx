@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useDeployment } from "@/lib/hooks/useWorkloads";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import type { DeploymentPodRow } from "@/lib/types";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
@@ -91,6 +92,7 @@ function DeploymentDetailPage() {
   const {
     data: deployment,
     isLoading,
+    error,
     mutate,
   } = useDeployment(deploymentNamespace, deploymentName);
   const [tab, setTab] = useState<Tab>("overview");
@@ -126,11 +128,19 @@ function DeploymentDetailPage() {
     } catch (err) {
       setToast({
         type: "error",
-        message: err instanceof Error ? err.message : "Action failed.",
+        message: friendlyErrorMessage(err),
       });
     } finally {
       setBusy(false);
     }
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 text-sm text-err">
+        Failed to load deployment: {friendlyErrorMessage(error)}
+      </div>
+    );
   }
 
   if (isLoading) {
@@ -141,7 +151,7 @@ function DeploymentDetailPage() {
     return (
       <div className="p-8 text-sm text-text-muted">
         Deployment &ldquo;{deploymentNamespace}/{deploymentName}&rdquo; not
-        found in mock data.
+        found.
       </div>
     );
   }

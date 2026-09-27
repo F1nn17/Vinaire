@@ -138,6 +138,8 @@ func main() {
 	r.Route("/api/v1", func(protected chi.Router) {
 		protected.Use(auth.Middleware)
 
+		protected.Get("/nodes", workloadsHandler.Nodes)
+		protected.Get("/nodes/{name}", workloadsHandler.NodeDetail)
 		protected.Get("/pods", workloadsHandler.Pods)
 		protected.Get("/deployments", workloadsHandler.Deployments)
 		protected.Get("/statefulsets", workloadsHandler.StatefulSets)
@@ -148,6 +150,7 @@ func main() {
 		protected.Get("/pods/{namespace}/{name}/logs", logsHandler)
 		protected.Get("/pods/{namespace}/{name}/logs/search", workloadsHandler.LogsSearch)
 		protected.Get("/pods/{namespace}/{name}/exec", execHandler)
+		protected.Get("/deployments/{namespace}/{name}", workloadsHandler.DeploymentDetail)
 		protected.Get("/statefulsets/{namespace}/{name}", workloadsHandler.StatefulSetDetail)
 		protected.Get("/daemonsets/{namespace}/{name}", workloadsHandler.DaemonSetDetail)
 		protected.Get("/jobs/{namespace}/{name}", workloadsHandler.JobDetail)

@@ -291,3 +291,20 @@ export function PodIcon({ size = 16, className }: IconProps) {
     </svg>
   );
 }
+
+export function ServerIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <rect x="3" y="4" width="18" height="6" rx="1.5" />
+      <rect x="3" y="14" width="18" height="6" rx="1.5" />
+      <path d="M7 7h.01M7 17h.01" />
+    </svg>
+  );
+}

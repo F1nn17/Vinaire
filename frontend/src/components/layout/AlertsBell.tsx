@@ -24,7 +24,7 @@ export function AlertsBell() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const alerts = data?.available ? data.alerts : [];
+  const alerts = data?.available ? (data.alerts ?? []) : [];
 
   return (
     <div ref={rootRef} className="relative">

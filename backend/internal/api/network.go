@@ -171,7 +171,7 @@ type GatewayRow struct {
 type GatewayResourcesResponse struct {
 	Available bool         `json:"available"`
 	Reason    string       `json:"reason,omitempty"`
-	Rows      []GatewayRow `json:"rows,omitempty"`
+	Rows      []GatewayRow `json:"rows"`
 }
 
 // GatewayRoutes handles GET /api/v1/gateway-routes?namespace=.

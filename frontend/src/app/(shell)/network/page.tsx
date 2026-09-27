@@ -159,7 +159,7 @@ export default function NetworkPage() {
         ) : (
           <DataTable
             columns={gatewayColumns}
-            rows={gatewayResult.rows}
+            rows={gatewayResult.rows ?? []}
             rowKey={(r) => `${r.namespace}/${r.kind}/${r.name}`}
             emptyLabel={`No Gateway API resources found${namespace ? ` in namespace "${namespace}"` : ""}.`}
           />

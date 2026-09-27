@@ -4,7 +4,6 @@ import { useDashboard } from "@/lib/hooks/useDashboard";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatCard } from "@/components/ui/StatCard";
 import { EventRow } from "@/components/ui/EventRow";
-import { Sparkline } from "@/components/ui/Sparkline";
 
 export default function DashboardPage() {
   const { data, isLoading, error } = useDashboard();
@@ -64,9 +63,14 @@ export default function DashboardPage() {
               )}
             </div>
             {data.cpu ? (
-              <Sparkline points={data.cpu.points} color="var(--accent)" />
+              <div className="h-2 overflow-hidden rounded bg-surface-2">
+                <div
+                  className="h-full bg-accent"
+                  style={{ width: `${data.cpu.pct}%` }}
+                />
+              </div>
             ) : (
-              <UnavailablePlaceholder text="Metrics coming in a later phase." />
+              <UnavailablePlaceholder text="metrics-server isn't installed or reachable." />
             )}
           </div>
 
@@ -80,13 +84,18 @@ export default function DashboardPage() {
               )}
             </div>
             {data.memory ? (
-              <Sparkline points={data.memory.points} color="var(--ok)" />
+              <div className="h-2 overflow-hidden rounded bg-surface-2">
+                <div
+                  className="h-full bg-warn"
+                  style={{ width: `${data.memory.pct}%` }}
+                />
+              </div>
             ) : (
-              <UnavailablePlaceholder text="Metrics coming in a later phase." />
+              <UnavailablePlaceholder text="metrics-server isn't installed or reachable." />
             )}
           </div>
 
-          <div className="flex-1 rounded-[10px] border border-border bg-surface p-[18px]">
+          <div className="rounded-[10px] border border-border bg-surface p-[18px]">
             <span className="text-[13px] font-semibold">Namespaces</span>
             <div className="mt-3 flex flex-col gap-2.5">
               {data.namespaces.length === 0 ? (

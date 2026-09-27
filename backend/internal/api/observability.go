@@ -113,7 +113,7 @@ type AlertRow struct {
 type alertsResponse struct {
 	Available bool       `json:"available"`
 	Reason    string     `json:"reason,omitempty"`
-	Alerts    []AlertRow `json:"alerts,omitempty"`
+	Alerts    []AlertRow `json:"alerts"`
 }
 
 // alertmanagerAlert mirrors just the fields this backend reads from
@@ -180,7 +180,7 @@ type LogLine struct {
 type logsSearchResponse struct {
 	Available bool      `json:"available"`
 	Reason    string    `json:"reason,omitempty"`
-	Lines     []LogLine `json:"lines,omitempty"`
+	Lines     []LogLine `json:"lines"`
 }
 
 const defaultLogsSearchSince = "1h"

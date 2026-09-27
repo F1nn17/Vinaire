@@ -17,6 +17,7 @@ go.work.sum
 /frontend/.next/
 /frontend/out/
 /frontend/build/
+/frontend/tsconfig.tsbuildinfo
 /frontend/.env
 /frontend/.env.*
 !/frontend/.env.example

@@ -1473,11 +1473,84 @@ cards show explicit stubs, not zeros.
 
 ---
 
-## Phase 19 — Nodes (cluster machine list + detail)
+## Phase 19 — Nodes (cluster machine list + detail) ✅ done
 
 **Goal:** a Nodes section shows the real machines in the cluster, with a
 detail view for each covering capacity, conditions, taints, and which pods
 are actually scheduled there.
+
+> **Outcome note:** shipped alongside a batch of seven other fixes/polish
+> items the project owner asked for together, all verified end-to-end
+> against `k3d-vinaire-dev` before this single combined build+deploy+commit:
+>
+> 1. **Custom Resources decluttered from the sidebar.** Phase 15's dynamic
+>    per-CRD sidebar section (33 entries on this cluster) moved into
+>    Settings as its own "Custom Resources" tab instead — same list, same
+>    links into `/custom-resources?crd=`, just out of the main nav.
+> 2. **Dashboard/Node/Pod metrics were silently all "—".** Root cause
+>    wasn't Phase 16 (Prometheus) at all — it was RBAC: `vinaire-viewer`
+>    never granted the `metrics.k8s.io` API group, so every metrics-server
+>    call (Pod detail's gauges, this phase's Node usage, the Dashboard) was
+>    getting a 403 that the existing "degrade to unavailable" handling
+>    quietly swallowed. Fixed by granting `get`/`list` on
+>    `metrics.k8s.io`'s `pods`/`nodes` (see AGENTS.md's updated example
+>    ClusterRole) — applied to the live cluster's `vinaire-viewer` role.
+>    Once that was fixed, the Dashboard's Cluster CPU/Memory cards were
+>    wired to real data too: `GET /api/v1/dashboard/summary` now computes
+>    cluster-wide usage from Node allocatable capacity + `NodeMetricses`
+>    (the same metrics-server source Pod detail already used, not the
+>    Prometheus proxy the original Phase 18 draft assumed — no historical
+>    time series exists to draw a real Sparkline, so the card switched from
+>    a Sparkline to the same used/limit percentage bar Pod detail already
+>    uses, rather than fabricating a flat line to fill one).
+> 3. **Dashboard's Namespaces card no longer stretches.** Removed a leftover
+>    `flex-1` that made it match the Recent Events column's height even
+>    when its own content was short.
+> 4. **Dashboard stat card order:** Healthy pods now precedes Pods down.
+> 5. **Settings gained a "Справка" (help) tab**, in Russian per the
+>    project owner's request, walking through the exact
+>    ServiceAccount/ClusterRole/token/form steps this file's own
+>    ClusterRole example above documents — so a first-time user adding a
+>    cluster via Phase 24's UI doesn't have to go find AGENTS.md.
+> 6. **Deployment detail was still 100% mock data** (`getDeployment()`
+>    looked up a name-only, five-entry hardcoded table) despite Phase 9's
+>    restart/delete/rollback actions already being real — the exact bug
+>    the project owner hit as `Deployment "default/other" not found in
+>    mock data`. Fixed with a real `GET /api/v1/deployments/{namespace}/
+>    {name}`: pods matched via the Deployment's own label selector (same
+>    approach Phase 9's rollback already uses to find ReplicaSets),
+>    revisions from ReplicaSets carrying the
+>    `deployment.kubernetes.io/revision` annotation (same mechanism
+>    `kubectl rollout history` reads).
+> 7. **Gateway API tab crashed the whole page** ("This page couldn't load")
+>    whenever a cluster had zero Gateways/HTTPRoutes. Root cause: Go's
+>    `omitempty` on a slice field drops the JSON key entirely when the
+>    slice is empty (regardless of nil vs. non-nil) — `rows` disappeared
+>    from the response, and the frontend crashed calling `.length` on
+>    `undefined`. Same bug existed (not yet triggered) on the Alertmanager
+>    and Loki search responses' `alerts`/`lines` fields — fixed all three
+>    by dropping `omitempty` from response-only slice fields (they're
+>    always initialized via `make([]T, 0, n)`, never actually nil), plus
+>    added defensive `?? []` on the frontend read sites as a second layer.
+>
+> For Phase 19 itself: the roadmap draft above assumed Node CPU/Memory
+> would come from Phase 16's Prometheus proxy, but `PROMETHEUS_URL` isn't
+> configured on this dev cluster (only metrics-server is) — used
+> metrics-server's `NodeMetricses` instead, consistent with the fix for
+> item 2 above. Since informer callbacks don't carry a metrics-server
+> snapshot, the live-streamed row (`stream.Event` for `kind: "nodes"`)
+> never includes CPU/Memory — `internal/stream`'s `Event.Row`/
+> `registerInformer` were generalized from a hardcoded `api.WorkloadRow` to
+> a generic type parameter so Nodes' differently-shaped row could reuse the
+> exact same informer/hub/WebSocket plumbing without a parallel pipeline;
+> the frontend's `useNodesStream` does a partial-field merge (keeping
+> whatever CPU/Memory the last REST fetch found) rather than
+> `useWorkloadsStream`'s full-row replace, so a live status-only diff
+> (e.g. a cordon) doesn't blank out the usage bars. Verified against
+> `k3d-vinaire-dev`'s single node: real Capacity/Allocatable/Conditions/
+> Taints/scheduled-pods in the detail view, and — per this phase's own
+> definition of done — `kubectl cordon`/`uncordon` flipped the list's
+> Status between "Ready" and "Ready,SchedulingDisabled" live, no refresh.
 
 **Backend**
 - `GET /api/v1/nodes` (list) and `GET /api/v1/nodes/{name}` (detail) — the

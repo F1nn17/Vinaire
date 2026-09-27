@@ -7,16 +7,18 @@ package stream
 import (
 	"log/slog"
 	"sync"
-
-	"github.com/shiraku/vinaire/backend/internal/api"
 )
 
-// Event is one add/modify/delete diff for a single workload resource,
-// broadcast to every connected WebSocket client as JSON.
+// Event is one add/modify/delete diff for a single resource, broadcast to
+// every connected WebSocket client as JSON. Row's concrete shape depends on
+// Kind (api.WorkloadRow for "pods"/"deployments"/"statefulsets"/
+// "daemonsets"/"jobs", api.NodeRow for "nodes") — kept as `any` rather than
+// a shared struct since different resource kinds' rows genuinely have
+// different fields (see registerInformer's generic rowOf parameter).
 type Event struct {
-	Type string          `json:"type"` // "added" | "modified" | "deleted"
-	Kind string          `json:"kind"` // "pods" | "deployments" | "statefulsets" | "daemonsets" | "jobs"
-	Row  api.WorkloadRow `json:"row"`
+	Type string `json:"type"` // "added" | "modified" | "deleted"
+	Kind string `json:"kind"` // "pods" | "deployments" | "statefulsets" | "daemonsets" | "jobs" | "nodes"
+	Row  any    `json:"row"`
 }
 
 // eventBufferSize bounds how many events a single slow client can lag

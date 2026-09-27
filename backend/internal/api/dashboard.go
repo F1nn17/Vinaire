@@ -2,15 +2,21 @@ package api
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
 
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 )
@@ -31,11 +37,10 @@ type NamespacePodCount struct {
 }
 
 // DashboardSummaryResponse matches the frontend's DashboardSummary type.
-// PVC-near-capacity and CPU/Memory deliberately aren't included here —
-// they stay explicit frontend-side "unavailable" stubs at this stage (see
-// this phase's own scope note in ROADMAP.md): Phase 13/16 built the real
-// data sources, but wiring them into the Dashboard isn't part of this
-// phase.
+// PVC-near-capacity deliberately isn't included here — it stays an
+// explicit frontend-side "unavailable" stub at this stage (see this
+// phase's own scope note in ROADMAP.md): Phase 13 built the real data
+// source, but wiring it into the Dashboard isn't part of this phase.
 type DashboardSummaryResponse struct {
 	PodsDown        int                 `json:"podsDown"`
 	PodsDownSample  []string            `json:"podsDownSample"`
@@ -44,6 +49,12 @@ type DashboardSummaryResponse struct {
 	ArgoCDAvailable bool                `json:"argoCDAvailable"`
 	DriftedCount    int                 `json:"driftedCount"`
 	DriftedSample   []string            `json:"driftedSample"`
+	// CPU/Memory are nil when metrics-server isn't installed/reachable —
+	// the same degrade-gracefully rule pod_detail.go's podResourceUsage
+	// already follows, applied cluster-wide via Node capacity + NodeMetricses
+	// instead of one pod's limits + PodMetricses.
+	CPU    *ResourceUsage `json:"cpu,omitempty"`
+	Memory *ResourceUsage `json:"memory,omitempty"`
 }
 
 // DashboardSummary handles GET /api/v1/dashboard/summary — aggregates
@@ -51,7 +62,7 @@ type DashboardSummaryResponse struct {
 // pod list Phase 1 already fetches (no new Kubernetes API surface for
 // that), plus an ArgoCD Application-drift check.
 func (h *Handler) DashboardSummary(w http.ResponseWriter, r *http.Request) {
-	_, clientset, ok := h.resolveCluster(w, r)
+	cluster, clientset, ok := h.resolveCluster(w, r)
 	if !ok {
 		return
 	}
@@ -87,6 +98,7 @@ func (h *Handler) DashboardSummary(w http.ResponseWriter, r *http.Request) {
 		HealthyPods:    len(pods) - podsDown,
 		Namespaces:     namespaces,
 	}
+	resp.CPU, resp.Memory = h.clusterResourceUsage(r.Context(), clientset, cluster.MetricsClientset)
 
 	// A discarding ResponseWriter: resolveDynamic writes its own HTTP error
 	// on failure, but an ArgoCD-detection hiccup should only make this one
@@ -96,6 +108,62 @@ func (h *Handler) DashboardSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, resp)
+}
+
+// clusterResourceUsage reports current cluster-wide CPU/memory usage (via
+// metrics-server, if available) against every Node's allocatable capacity —
+// the same "degrade to nil rather than fail the request" rule
+// podResourceUsage (pod_detail.go) follows for a single pod, applied
+// cluster-wide. Returns (nil, nil) if metrics-server isn't installed, isn't
+// reachable, or Nodes/NodeMetricses can't be listed.
+func (h *Handler) clusterResourceUsage(ctx context.Context, clientset *kubernetes.Clientset, metricsClientset *metricsclientset.Clientset) (cpu, memory *ResourceUsage) {
+	if metricsClientset == nil {
+		return nil, nil
+	}
+
+	nodes, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		slog.Warn("cluster node list unavailable for dashboard metrics", "error", err)
+		return nil, nil
+	}
+
+	cpuCapacity := resource.Quantity{}
+	memCapacity := resource.Quantity{}
+	for _, n := range nodes.Items {
+		if q, ok := n.Status.Allocatable[corev1.ResourceCPU]; ok {
+			cpuCapacity.Add(q)
+		}
+		if q, ok := n.Status.Allocatable[corev1.ResourceMemory]; ok {
+			memCapacity.Add(q)
+		}
+	}
+
+	nodeMetrics, err := metricsClientset.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		slog.Warn("cluster node metrics unavailable for dashboard metrics", "error", err)
+		return nil, nil
+	}
+
+	var cpuUsedMilli, memUsedBytes int64
+	for _, m := range nodeMetrics.Items {
+		if q, ok := m.Usage[corev1.ResourceCPU]; ok {
+			cpuUsedMilli += q.MilliValue()
+		}
+		if q, ok := m.Usage[corev1.ResourceMemory]; ok {
+			memUsedBytes += q.Value()
+		}
+	}
+
+	cpu = &ResourceUsage{Used: fmt.Sprintf("%dm", cpuUsedMilli), Limit: formatQuantity(cpuCapacity, formatMilli)}
+	memory = &ResourceUsage{Used: fmt.Sprintf("%dMi", memUsedBytes/(1024*1024)), Limit: formatQuantity(memCapacity, formatMebibytes)}
+
+	if capMilli := cpuCapacity.MilliValue(); capMilli > 0 {
+		cpu.Pct = int(cpuUsedMilli * 100 / capMilli)
+	}
+	if capBytes := memCapacity.Value(); capBytes > 0 {
+		memory.Pct = int(memUsedBytes * 100 / capBytes)
+	}
+	return cpu, memory
 }
 
 var argoCDApplicationGVR = schema.GroupVersionResource{

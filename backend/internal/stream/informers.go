@@ -30,6 +30,7 @@ func StartWorkloadInformers(ctx context.Context, clientset *kubernetes.Clientset
 	registerInformer(factory.Apps().V1().StatefulSets().Informer(), "statefulsets", hub, api.StatefulSetRow)
 	registerInformer(factory.Apps().V1().DaemonSets().Informer(), "daemonsets", hub, api.DaemonSetRow)
 	registerInformer(factory.Batch().V1().Jobs().Informer(), "jobs", hub, api.JobRow)
+	registerInformer(factory.Core().V1().Nodes().Informer(), "nodes", hub, api.NodeRowOf)
 
 	factory.Start(ctx.Done())
 
@@ -39,6 +40,7 @@ func StartWorkloadInformers(ctx context.Context, clientset *kubernetes.Clientset
 		factory.Apps().V1().StatefulSets().Informer().HasSynced,
 		factory.Apps().V1().DaemonSets().Informer().HasSynced,
 		factory.Batch().V1().Jobs().Informer().HasSynced,
+		factory.Core().V1().Nodes().Informer().HasSynced,
 	) {
 		slog.Error("stream: informer caches failed to sync before shutdown")
 		return
@@ -50,9 +52,11 @@ func StartWorkloadInformers(ctx context.Context, clientset *kubernetes.Clientset
 }
 
 // registerInformer wires generic added/modified/deleted handling for one
-// resource type onto informer, mapping each object to a WorkloadRow via
-// rowOf and broadcasting it on hub tagged with kind.
-func registerInformer[T any](informer cache.SharedIndexInformer, kind string, hub *Hub, rowOf func(T) api.WorkloadRow) {
+// resource type onto informer, mapping each object to its row shape R via
+// rowOf and broadcasting it on hub tagged with kind. R varies by resource
+// kind (api.WorkloadRow for most, api.NodeRow for "nodes") — Event.Row is
+// `any`, so any concrete row type satisfies it.
+func registerInformer[T any, R any](informer cache.SharedIndexInformer, kind string, hub *Hub, rowOf func(T) R) {
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
 			if v, ok := asResource[T](obj); ok {

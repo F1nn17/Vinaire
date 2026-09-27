@@ -1,22 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 import {
   ConfigMapIcon,
   GridIcon,
   GrapeLogo,
   LayersIcon,
   NetworkIcon,
-  PuzzleIcon,
   SecretIcon,
+  ServerIcon,
   SettingsIcon,
   ShieldIcon,
   StorageIcon,
   TopologyIcon,
 } from "@/components/icons";
-import { useCRDs } from "@/lib/hooks/useCRDs";
 
 type NavItem = {
   href: string;
@@ -45,6 +44,12 @@ const groups: NavGroup[] = [
         label: "Topology",
         icon: <TopologyIcon />,
         isActive: (p) => p.startsWith("/topology"),
+      },
+      {
+        href: "/nodes",
+        label: "Nodes",
+        icon: <ServerIcon />,
+        isActive: (p) => p.startsWith("/nodes"),
       },
     ],
   },
@@ -131,45 +136,6 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-// A dynamic sidebar section built from whatever CRDs are actually installed
-// on the connected cluster (Roadmap Phase 15) — no hardcoded per-CRD nav
-// entries. Split out from Sidebar so only this part needs the Suspense
-// boundary useSearchParams requires.
-function CustomResourcesNav({ pathname }: { pathname: string }) {
-  const searchParams = useSearchParams();
-  const { data: crds } = useCRDs();
-  const activeCRD = searchParams.get("crd");
-
-  if (!crds || crds.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="px-2.5 pb-1 pt-0.5 text-[10.5px] uppercase tracking-wider text-text-faint">
-        Custom Resources
-      </span>
-      {crds.map((crd) => {
-        const href = `/custom-resources?crd=${encodeURIComponent(crd.name)}`;
-        const active =
-          pathname.startsWith("/custom-resources") && activeCRD === crd.name;
-        return (
-          <NavLink
-            key={crd.name}
-            item={{
-              href,
-              label: crd.kind,
-              icon: <PuzzleIcon />,
-              isActive: () => active,
-            }}
-            active={active}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 export function Sidebar() {
   const pathname = usePathname();
 
@@ -199,10 +165,6 @@ export function Sidebar() {
           ))}
         </div>
       ))}
-
-      <Suspense fallback={null}>
-        <CustomResourcesNav pathname={pathname} />
-      </Suspense>
 
       <div className="mt-auto flex flex-col gap-0.5">
         <NavLink

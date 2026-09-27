@@ -6,10 +6,10 @@ import type {
 } from "@/lib/types";
 import { apiFetch } from "./http";
 
-// Real endpoints (Roadmap Phase 18). PVC-near-capacity and CPU/Memory stay
-// explicit "not available yet" stubs here — Phase 13/16 built the real
-// data sources, but wiring them into the Dashboard is out of this phase's
-// scope (see ROADMAP.md's Phase 18 outcome note).
+// Real endpoints (Roadmap Phase 18, CPU/Memory wired up as a follow-up).
+// PVC-near-capacity stays an explicit "not available yet" stub — Phase 13
+// built the real data source, but wiring it into the Dashboard is still
+// out of scope (see ROADMAP.md's Phase 18 outcome note).
 export async function getDashboard(): Promise<DashboardData> {
   const [summary, events] = await Promise.all([
     apiFetch<DashboardSummary>("/api/v1/dashboard/summary"),
@@ -18,6 +18,12 @@ export async function getDashboard(): Promise<DashboardData> {
 
   const statCards: StatCardData[] = [
     {
+      title: "Healthy pods",
+      dotColor: "ok",
+      value: summary.healthyPods,
+      caption: `across ${summary.namespaces.length} namespace${summary.namespaces.length === 1 ? "" : "s"}`,
+    },
+    {
       title: "Pods down",
       dotColor: summary.podsDown > 0 ? "err" : "ok",
       value: summary.podsDown,
@@ -25,12 +31,6 @@ export async function getDashboard(): Promise<DashboardData> {
         summary.podsDownSample.length > 0
           ? summary.podsDownSample.join(", ")
           : "All pods healthy",
-    },
-    {
-      title: "Healthy pods",
-      dotColor: "ok",
-      value: summary.healthyPods,
-      caption: `across ${summary.namespaces.length} namespace${summary.namespaces.length === 1 ? "" : "s"}`,
     },
     {
       title: "PVC near capacity",
@@ -53,8 +53,20 @@ export async function getDashboard(): Promise<DashboardData> {
         }
       : null,
     events,
-    cpu: null,
-    memory: null,
+    cpu: summary.cpu
+      ? {
+          used: summary.cpu.used,
+          total: summary.cpu.limit,
+          pct: summary.cpu.pct,
+        }
+      : null,
+    memory: summary.memory
+      ? {
+          used: summary.memory.used,
+          total: summary.memory.limit,
+          pct: summary.memory.pct,
+        }
+      : null,
     namespaces: summary.namespaces,
   };
 }

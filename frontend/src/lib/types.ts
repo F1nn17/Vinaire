@@ -23,6 +23,72 @@ export type WorkloadRow = {
 export type WorkloadKind =
   "deployments" | "pods" | "statefulsets" | "daemonsets" | "jobs";
 
+// Matches the backend's api.NodeRow (Roadmap Phase 19). cpu/memory are null
+// when metrics-server isn't installed/reachable, same rule as everywhere
+// else this shape appears.
+export type NodeRow = {
+  name: string;
+  status: string;
+  statusColor: StatusColor;
+  roles: string;
+  cpu: { used: string; limit: string; pct: number } | null;
+  memory: { used: string; limit: string; pct: number } | null;
+  age: string;
+};
+
+// Matches the backend's api.NodeResources (Roadmap Phase 19) — raw
+// resource.Quantity strings, not a reformatted unit.
+export type NodeResources = {
+  cpu: string;
+  memory: string;
+  pods: string;
+};
+
+// Matches the backend's api.NodeConditionRow (Roadmap Phase 19).
+export type NodeConditionRow = {
+  type: string;
+  status: string;
+  reason: string;
+  message: string;
+};
+
+// Matches the backend's api.NodeTaintRow (Roadmap Phase 19).
+export type NodeTaintRow = {
+  key: string;
+  value: string;
+  effect: string;
+};
+
+// Matches the backend's api.NodeScheduledPodRow (Roadmap Phase 19).
+export type NodeScheduledPodRow = {
+  name: string;
+  namespace: string;
+  ready: string;
+  status: string;
+  statusColor: StatusColor;
+  age: string;
+};
+
+// Matches the backend's api.NodeDetailResponse (Roadmap Phase 19).
+export type NodeDetail = {
+  name: string;
+  status: string;
+  statusColor: StatusColor;
+  roles: string;
+  age: string;
+  kubeletVersion: string;
+  os: string;
+  capacity: NodeResources;
+  allocatable: NodeResources;
+  cpu: { used: string; limit: string; pct: number } | null;
+  memory: { used: string; limit: string; pct: number } | null;
+  conditions: NodeConditionRow[];
+  taints: NodeTaintRow[];
+  pods: NodeScheduledPodRow[];
+  labels: Record<string, string>;
+  yaml: string;
+};
+
 export type ContainerSummary = {
   name: string;
   statusColor: StatusColor;
@@ -411,6 +477,10 @@ export type DashboardSummary = {
   argoCDAvailable: boolean;
   driftedCount: number;
   driftedSample: string[];
+  // null when metrics-server isn't installed/reachable — see ResourceUsage
+  // in workloads.ts for the identical shape Pod detail already uses.
+  cpu: { used: string; limit: string; pct: number } | null;
+  memory: { used: string; limit: string; pct: number } | null;
 };
 
 export type DashboardData = {
@@ -423,10 +493,12 @@ export type DashboardData = {
     caption: string;
   } | null;
   events: ClusterEvent[];
-  // null until Phase 16's Prometheus proxy is wired into the Dashboard —
-  // shows an honest placeholder instead of a drawn (fabricated) line.
-  cpu: { used: string; total: string; points: number[] } | null;
-  memory: { used: string; total: string; points: number[] } | null;
+  // null when metrics-server isn't installed/reachable — an honest
+  // placeholder instead of a drawn (fabricated) line. No history is
+  // stored, so this is a live snapshot (used/total/pct) rendered as a
+  // percentage bar, not a Sparkline.
+  cpu: { used: string; total: string; pct: number } | null;
+  memory: { used: string; total: string; pct: number } | null;
   namespaces: NamespacePodCount[];
 };
 

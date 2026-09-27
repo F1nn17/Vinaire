@@ -147,8 +147,18 @@ rules:
         "serviceaccounts",
         "persistentvolumeclaims",
         "persistentvolumes",
+        "nodes",
       ]
     verbs: ["get", "list", "watch"]
+  # metrics-server's aggregated API (Phase 3's Pod CPU/Memory gauges, the
+  # Dashboard's cluster-wide usage, and Phase 19's per-node usage) is a
+  # separate API group from core Pods/Nodes above — granting "pods"/"nodes"
+  # doesn't imply this. Every metrics call already degrades to "unavailable"
+  # rather than failing outright, so a missing grant here silently shows "—"
+  # everywhere instead of an obvious error — easy to miss.
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]
