@@ -49,11 +49,31 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new ApiError(
-      res.status,
-      body || `Request to ${path} failed with status ${res.status}`,
-    );
+    throw new ApiError(res.status, extractErrorMessage(body, res.status, path));
   }
 
   return res.json() as Promise<T>;
+}
+
+// Every backend error response is `{"error": "<message>"}` (see
+// backend/internal/api/respond.go's respondError) — extract that message
+// instead of surfacing the raw `{"error":"..."}` JSON blob verbatim in the
+// UI. Falls back to the raw text (or a generic message) if the body isn't
+// JSON, e.g. a proxy/gateway error page.
+function extractErrorMessage(
+  body: string,
+  status: number,
+  path: string,
+): string {
+  if (body) {
+    try {
+      const parsed = JSON.parse(body) as { error?: unknown };
+      if (typeof parsed.error === "string" && parsed.error) {
+        return parsed.error;
+      }
+    } catch {
+      // Not JSON — fall through to the raw text below.
+    }
+  }
+  return body || `Request to ${path} failed with status ${status}`;
 }

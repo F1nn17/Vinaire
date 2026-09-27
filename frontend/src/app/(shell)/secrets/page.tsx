@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSecrets } from "@/lib/hooks/useSecrets";
 import { revealSecretKey } from "@/lib/api/secrets";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import { ListDetailSplit } from "@/components/ui/ListDetailSplit";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { PlusIcon, SecretIcon } from "@/components/icons";
@@ -55,7 +56,7 @@ export default function SecretsPage() {
 
       {error ? (
         <div className="text-sm text-err">
-          Failed to load Secrets: {error.message}
+          Failed to load Secrets: {friendlyErrorMessage(error)}
         </div>
       ) : isLoading || !data ? (
         <ListSkeleton />

@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useTopology } from "@/lib/hooks/useTopology";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import type { TopologyNode, TopologyNodeKind } from "@/lib/types";
 import { StatusDot } from "@/components/ui/StatusDot";
 import {
@@ -103,7 +104,7 @@ export default function TopologyPage() {
 
       {error ? (
         <div className="text-sm text-err">
-          Failed to load topology: {error.message}
+          Failed to load topology: {friendlyErrorMessage(error)}
         </div>
       ) : isLoading || !data ? (
         <div className="text-sm text-text-muted">Loading…</div>

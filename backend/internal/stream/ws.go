@@ -29,7 +29,7 @@ import (
 // informers (expensive) or a per-event RBAC check (also expensive); out of
 // scope for this phase, flagged for whoever revisits this stream's trust
 // model next.
-func ServeWS(hubs map[string]*Hub, defaultCluster string, allowedOrigins []string, auth *authn.Manager) http.HandlerFunc {
+func ServeWS(hubs *HubRegistry, defaultCluster string, allowedOrigins []string, auth *authn.Manager) http.HandlerFunc {
 	upgrader := websocket.Upgrader{CheckOrigin: originChecker(allowedOrigins)}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +41,7 @@ func ServeWS(hubs map[string]*Hub, defaultCluster string, allowedOrigins []strin
 		if clusterName == "" {
 			clusterName = defaultCluster
 		}
-		hub, ok := hubs[clusterName]
+		hub, ok := hubs.Get(clusterName)
 		if !ok {
 			http.Error(w, "unknown cluster", http.StatusBadRequest)
 			return

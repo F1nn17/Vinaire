@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useGatewayResources, useIngresses } from "@/lib/hooks/useNetwork";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import type { GatewayRow, IngressRow } from "@/lib/types";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PillTabs } from "@/components/ui/Tabs";
@@ -130,7 +131,7 @@ export default function NetworkPage() {
       {tab === "ingress" &&
         (ingressError ? (
           <div className="text-sm text-err">
-            Failed to load Ingresses: {ingressError.message}
+            Failed to load Ingresses: {friendlyErrorMessage(ingressError)}
           </div>
         ) : (
           <DataTable
@@ -145,7 +146,8 @@ export default function NetworkPage() {
       {tab === "gateway" &&
         (gatewayError ? (
           <div className="text-sm text-err">
-            Failed to load Gateway API resources: {gatewayError.message}
+            Failed to load Gateway API resources:{" "}
+            {friendlyErrorMessage(gatewayError)}
           </div>
         ) : gatewayLoading || !gatewayResult ? (
           <TableSkeleton columns={gatewayColumns.length} />

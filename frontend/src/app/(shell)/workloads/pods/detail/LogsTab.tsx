@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLogsStream } from "@/lib/hooks/useLogsStream";
 import { useLogsSearch } from "@/lib/hooks/useObservability";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import { LogLine } from "@/components/ui/LogLine";
 import type { ContainerSummary } from "@/lib/types";
 
@@ -179,7 +180,9 @@ export function LogsTab({
           </div>
         ) : !search.data ? (
           <div className="font-mono text-xs text-text-faint">
-            {search.error ? `Failed: ${search.error.message}` : "Searching…"}
+            {search.error
+              ? `Failed: ${friendlyErrorMessage(search.error)}`
+              : "Searching…"}
           </div>
         ) : !search.data.available ? (
           <div className="font-mono text-xs text-text-faint">

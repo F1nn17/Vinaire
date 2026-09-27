@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { usePVCs, usePVs, useStorageClasses } from "@/lib/hooks/useStorage";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import type { PVCRow, PVRow, StorageClassRow } from "@/lib/types";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PillTabs } from "@/components/ui/Tabs";
@@ -213,7 +214,7 @@ export default function StoragePage() {
 
       {active.error ? (
         <div className="text-sm text-err">
-          Failed to load {tab}: {active.error.message}
+          Failed to load {tab}: {friendlyErrorMessage(active.error)}
         </div>
       ) : tab === "pvcs" ? (
         <DataTable

@@ -48,7 +48,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	registry := buildClusterRegistry(cfg)
+	registry, hubRegistry := buildClusterRegistry(ctx, cfg)
 
 	// Unlike the per-cluster clients below, a misconfigured AUTH_MODE=oidc
 	// is fatal at boot — this phase's own risk note: fail loudly here, not
@@ -69,12 +69,25 @@ func main() {
 	}
 	slog.Info("auth provider initialized", "mode", auth.Mode)
 
-	hubs := make(map[string]*stream.Hub, len(registry.Names()))
-	for _, name := range registry.Names() {
-		entry, _ := registry.Get(name)
-		hub := stream.NewHub()
-		hubs[name] = hub
-		go stream.StartWorkloadInformers(ctx, entry.Clientset, hub)
+	// Cluster management via the web UI: a Secret in this backend's own
+	// namespace, written with its own in-cluster identity (not available at
+	// all outside a cluster — see internal/clusters.Store). Loaded now so
+	// clusters added in a previous run survive this restart.
+	clusterStore, clusterStoreOK := clusters.NewStore()
+	if !clusterStoreOK {
+		slog.Info("cluster management via the web UI is unavailable (not running in-cluster)")
+	} else if stored, err := clusterStore.Load(ctx); err != nil {
+		slog.Warn("failed to load persisted clusters", "error", err)
+	} else {
+		for _, sc := range stored {
+			entry, err := clusters.EntryFromStored(sc)
+			if err != nil {
+				slog.Warn("failed to restore persisted cluster", "cluster", sc.Name, "error", err)
+				continue
+			}
+			registry.AddDynamic(entry)
+			slog.Info("restored persisted cluster", "cluster", sc.Name)
+		}
 	}
 
 	workloadsHandler := api.NewHandler(registry, auth, api.ObservabilityConfig{
@@ -83,13 +96,16 @@ func main() {
 		AlertmanagerURL: cfg.AlertmanagerURL,
 	})
 	workloadsHandler.Audit = audit.NewLogger(cfg.AuditLogPath)
+	if clusterStoreOK {
+		workloadsHandler.ClusterStore = clusterStore
+	}
 	writeLimiter := api.NewWriteRateLimiter(writeRateLimit, writeRateBurst)
 
 	streamHandler := unavailableWSHandler
 	logsHandler := unavailableWSHandler
 	execHandler := unavailableWSHandler
 	if !registry.Empty() {
-		streamHandler = stream.ServeWS(hubs, registry.Default().Name, cfg.CORSAllowedOrigins, auth)
+		streamHandler = stream.ServeWS(hubRegistry, registry.Default().Name, cfg.CORSAllowedOrigins, auth)
 		logsHandler = stream.ServeLogs(registry, auth, cfg.CORSAllowedOrigins)
 		execHandler = stream.ServeExec(registry, auth, cfg.CORSAllowedOrigins)
 	}
@@ -142,6 +158,8 @@ func main() {
 		protected.Get("/ingresses", workloadsHandler.Ingresses)
 		protected.Get("/gateway-routes", workloadsHandler.GatewayRoutes)
 		protected.Get("/clusters", workloadsHandler.ListClusters)
+		protected.Post("/clusters", workloadsHandler.AddCluster)
+		protected.Delete("/clusters/{name}", workloadsHandler.RemoveCluster)
 		protected.Get("/pvcs", workloadsHandler.PersistentVolumeClaims)
 		protected.Get("/pvcs/{namespace}/{name}", workloadsHandler.PersistentVolumeClaimDetail)
 		protected.Get("/pvs", workloadsHandler.PersistentVolumes)
@@ -222,18 +240,36 @@ func main() {
 // preserving pre-Phase-11 single-cluster behavior exactly. A context that
 // fails to build a clientset is skipped (logged, non-fatal), same
 // resilience pattern as the per-cluster metrics/Gateway API clients below.
-func buildClusterRegistry(cfg config.Config) *clusters.Registry {
+//
+// It also wires the Registry's lifecycle hook (cluster management via the
+// web UI): every cluster — these env-configured ones and any added later,
+// live or restored from Store — starts its live-update informers through
+// this exact same hook, so there's one code path for "a cluster just
+// became known to this Registry," not two.
+func buildClusterRegistry(ctx context.Context, cfg config.Config) (*clusters.Registry, *stream.HubRegistry) {
 	registry := clusters.NewRegistry()
+	hubRegistry := stream.NewHubRegistry()
+
+	registry.SetLifecycleHook(func(e *clusters.Entry) func() {
+		hub := stream.NewHub()
+		hubRegistry.Set(e.Name, hub)
+		clusterCtx, cancel := context.WithCancel(ctx)
+		go stream.StartWorkloadInformers(clusterCtx, e.Clientset, hub)
+		return func() {
+			cancel()
+			hubRegistry.Delete(e.Name)
+		}
+	})
 
 	if len(cfg.ClusterContexts) == 0 {
 		clientset, restConfig, err := k8s.NewClientset(cfg.KubeconfigPath)
 		if err != nil {
 			slog.Warn("kubernetes client unavailable", "error", err)
-			return registry
+			return registry, hubRegistry
 		}
-		registry.Add(newClusterEntry("default", clientset, restConfig))
+		registry.AddDynamic(newClusterEntry("default", clientset, restConfig))
 		slog.Info("kubernetes client initialized", "cluster", "default")
-		return registry
+		return registry, hubRegistry
 	}
 
 	for _, name := range cfg.ClusterContexts {
@@ -242,10 +278,10 @@ func buildClusterRegistry(cfg config.Config) *clusters.Registry {
 			slog.Warn("kubernetes client unavailable for cluster", "cluster", name, "error", err)
 			continue
 		}
-		registry.Add(newClusterEntry(name, clientset, restConfig))
+		registry.AddDynamic(newClusterEntry(name, clientset, restConfig))
 		slog.Info("kubernetes client initialized", "cluster", name)
 	}
-	return registry
+	return registry, hubRegistry
 }
 
 func newClusterEntry(name string, clientset *kubernetes.Clientset, restConfig *rest.Config) *clusters.Entry {

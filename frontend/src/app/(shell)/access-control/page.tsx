@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import {
   useClusterRoleBindings,
   useClusterRoles,
@@ -255,7 +256,7 @@ export default function AccessControlPage() {
 
       {active.error ? (
         <div className="text-sm text-err">
-          Failed to load {tab}: {active.error.message}
+          Failed to load {tab}: {friendlyErrorMessage(active.error)}
         </div>
       ) : tab === "roles" ? (
         <DataTable

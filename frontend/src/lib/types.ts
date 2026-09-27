@@ -4,6 +4,9 @@ export type StatusColor = "ok" | "warn" | "err";
 export type Cluster = {
   name: string;
   default: boolean;
+  // false for the env-var-configured cluster(s) — cluster management (the
+  // web UI's Settings page) can't remove those.
+  removable: boolean;
 };
 
 export type WorkloadRow = {

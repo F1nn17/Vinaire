@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { usePod } from "@/lib/hooks/useWorkloads";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { CodeBlock } from "@/components/ui/CodeBlock";
@@ -46,7 +47,7 @@ function PodDetailPage() {
   if (error) {
     return (
       <div className="p-8 text-sm text-err">
-        Failed to load pod: {error.message}
+        Failed to load pod: {friendlyErrorMessage(error)}
       </div>
     );
   }

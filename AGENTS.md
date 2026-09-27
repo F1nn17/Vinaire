@@ -24,9 +24,20 @@ flow.
 - `DELETE /api/v1/deployments/{namespace}/{name}` — a plain `Delete()`.
 - `POST /api/v1/deployments/{namespace}/{name}/rollback` — patches
   `spec.template` from a prior revision's ReplicaSet.
+- `POST /api/v1/clusters` / `DELETE /api/v1/clusters/{name}` — cluster
+  management via the web UI (Settings page): create/get/update on exactly
+  one Secret (`vinaire-clusters`, in this backend's own namespace, via a
+  dedicated narrow `Role`/`RoleBinding` — never the broad, cluster-wide
+  read-only `ClusterRole` every *browsed* cluster's resources go through).
+  This is a fundamentally different kind of write from the three above:
+  it's Vinaire managing its **own** infrastructure config (which clusters
+  it's aware of), using its **own** in-cluster identity, not a per-user
+  action against a target cluster's resources with the caller's own RBAC.
+  It's unavailable (503) when the backend isn't running in-cluster, since
+  there's nowhere to durably persist to otherwise.
 
 Every other resource kind (Pods, ConfigMaps, Secrets, Ingress, ...) and
-every other verb stays read-only.
+every other verb, on any cluster a user browses, stays read-only.
 
 **Rules for touching this list:**
 - Do not add a write verb to `internal/k8s` (`Create*`, `Update*`,
@@ -39,11 +50,13 @@ every other verb stays read-only.
   called it, what action, which object). Non-negotiable; this is the hook
   Phase 10's real authentication plugs into later without touching this
   code again.
-- Secrets stay list/describe metadata only. Decoded values are returned
-  **only** through the explicit, audited
+- A *browsed* cluster's Secrets stay list/describe metadata only. Decoded
+  values are returned **only** through the explicit, audited
   `POST /api/v1/secrets/{namespace}/{name}/reveal` endpoint (Phase 6) —
   never from a list/get endpoint. This part of the original rule is
-  unchanged.
+  unchanged. (The `vinaire-clusters` Secret above is a different thing
+  entirely — Vinaire's own config, in its own namespace, never exposed
+  through any browse/list endpoint at all.)
 
 If a request conflicts with this — asks for a write action on a resource
 kind or verb not already covered above — stop and flag it rather than
@@ -83,6 +96,26 @@ resolves its target cluster from the `X-Cluster` request header (or the
 first configured cluster if absent) before doing anything else — see
 `Handler.resolveCluster`.
 
+**Cluster management via the web UI** extends this: `Registry` is no
+longer populated once at startup and left read-only — `AddDynamic`/
+`Remove` let a cluster be added or removed while the app is serving
+traffic (guarded by `Registry`'s own mutex), each triggering a lifecycle
+hook `main.go` wires up to start/stop that cluster's live-update informers
+(`internal/stream.HubRegistry`, itself mutex-guarded for the same reason).
+A cluster added this way (`POST /api/v1/clusters` — name + server URL +
+bearer token + optional CA cert, from the Settings page) is durably
+persisted via `internal/clusters.Store`, a Secret (`vinaire-clusters`) in
+this backend's own namespace, written with its own in-cluster identity —
+see the core rule above for the RBAC this needs. `Store` is only
+constructed when the backend detects it's actually running in-cluster
+(`clusters.NewStore`); outside a cluster, `Handler.ClusterStore` is `nil`
+and `AddCluster`/`RemoveCluster` report themselves unavailable (503) rather
+than pretending to work with nowhere to persist to. `Entry.Removable`
+distinguishes an env-var-configured cluster (`false`, the Settings page
+won't offer to remove it — it would just reappear on the next restart)
+from one added dynamically (`true`, whether just added or restored from
+`Store` at startup).
+
 ### Example: a minimal ClusterRole for Vinaire (not cluster-admin)
 
 Since Phase 10 makes the *caller's own* RBAC the only authorization check,
@@ -111,7 +144,34 @@ rules:
         "ingresses",
         "events",
         "replicasets",
+        "serviceaccounts",
+        "persistentvolumeclaims",
+        "persistentvolumes",
       ]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways", "httproutes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+  # Phase 15's generic CRD viewer can only list a CRD's *instances* if this
+  # role also grants read on that CRD's own API group — there's no way to
+  # grant this generically without a full apiGroups: ["*"] wildcard, which
+  # would cross the "not cluster-admin" line this file draws elsewhere. List
+  # the actual groups installed on your cluster here instead (this example:
+  # a k3d dev cluster with Traefik Hub, Gateway API, and k3s/Helm-controller
+  # CRDs) and add more as new CRDs show up — the Custom Resources page will
+  # 403 on any CRD instance whose group isn't listed here, same as any other
+  # RBAC gap.
+  - apiGroups: ["hub.traefik.io", "traefik.io", "helm.cattle.io", "k3s.cattle.io"]
+    resources: ["*"]
     verbs: ["get", "list", "watch"]
   # Phase 9's three write actions — omit this block for a read-only login.
   - apiGroups: ["apps"]

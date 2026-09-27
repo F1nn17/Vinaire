@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { usePVC } from "@/lib/hooks/useStorage";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { CodeBlock } from "@/components/ui/CodeBlock";
@@ -41,7 +42,7 @@ function PVCDetailPage() {
   if (error) {
     return (
       <div className="p-8 text-sm text-err">
-        Failed to load PVC: {error.message}
+        Failed to load PVC: {friendlyErrorMessage(error)}
       </div>
     );
   }

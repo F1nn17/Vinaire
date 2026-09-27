@@ -1,6 +1,7 @@
 "use client";
 
 import { useDashboard } from "@/lib/hooks/useDashboard";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatCard } from "@/components/ui/StatCard";
 import { EventRow } from "@/components/ui/EventRow";
 import { Sparkline } from "@/components/ui/Sparkline";
@@ -11,7 +12,7 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="p-8 text-sm text-err">
-        Failed to load dashboard: {error.message}
+        Failed to load dashboard: {friendlyErrorMessage(error)}
       </div>
     );
   }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useWorkloads } from "@/lib/hooks/useWorkloads";
 import { useWorkloadsStream } from "@/lib/hooks/useWorkloadsStream";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import { workloadTabs } from "@/lib/mock/workloads";
 import type { WorkloadKind, WorkloadRow } from "@/lib/types";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
@@ -92,7 +93,7 @@ export default function WorkloadsPage() {
 
       {error ? (
         <div className="text-sm text-err">
-          Failed to load {tab}: {error.message}
+          Failed to load {tab}: {friendlyErrorMessage(error)}
         </div>
       ) : (
         <DataTable

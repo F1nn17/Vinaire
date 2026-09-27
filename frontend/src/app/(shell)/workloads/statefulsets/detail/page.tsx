@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useStatefulSet } from "@/lib/hooks/useWorkloads";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { CodeBlock } from "@/components/ui/CodeBlock";
@@ -42,7 +43,7 @@ function StatefulSetDetailPage() {
   if (error) {
     return (
       <div className="p-8 text-sm text-err">
-        Failed to load statefulset: {error.message}
+        Failed to load statefulset: {friendlyErrorMessage(error)}
       </div>
     );
   }

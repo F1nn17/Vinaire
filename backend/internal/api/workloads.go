@@ -46,6 +46,12 @@ type Handler struct {
 	Clusters *clusters.Registry
 	Auth     *authn.Manager
 
+	// ClusterStore backs cluster management via the web UI
+	// (internal/api/clusters.go's AddCluster/RemoveCluster) — nil when this
+	// backend isn't running in-cluster, in which case those two handlers
+	// report themselves unavailable rather than failing.
+	ClusterStore *clusters.Store
+
 	// PrometheusURL/LokiURL/AlertmanagerURL back the Roadmap Phase 16
 	// observability proxies (internal/api/observability.go) — empty means
 	// "not configured," and every handler using one degrades to an

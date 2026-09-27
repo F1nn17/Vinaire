@@ -341,6 +341,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   browser. Along the way, fixed a real bug: an empty Go slice declared
   with `var x []string` marshals to JSON `null`, not `[]`, which crashed
   the frontend's `.length` check — fixed with `make([]string, 0, n)`.
+- **Roadmap Phase 24 (Cluster management via the web UI):** connect a
+  second (or third, ...) cluster entirely from the Settings page — no
+  editing Deployment env vars, no mounting a kubeconfig Secret by hand, no
+  redeploy. `internal/clusters.Registry` gained `AddDynamic`/`Remove`
+  (mutex-guarded — it previously had none, safe only because nothing
+  mutated it after startup) and a lifecycle hook that starts/stops a
+  cluster's live-update informers (`internal/stream.HubRegistry`, also
+  newly mutex-guarded); persistence is a Secret (`vinaire-clusters`) in
+  this backend's own namespace, written with its own in-cluster identity
+  via a dedicated, narrow `Role`/`RoleBinding` — a genuinely new write
+  path, flagged and confirmed with the project owner first per AGENTS.md's
+  core rule, and clearly distinct from Phase 9's three (this is Vinaire
+  managing its own config, not a per-user action on a browsed cluster's
+  resources). `POST /api/v1/clusters` verifies submitted credentials
+  against a real API call before persisting anything. Verified end-to-end:
+  added a real second cluster live through the UI, saw its distinct real
+  data immediately after a Topbar cluster switch, survived a full pod
+  restart with zero reconfiguration, and removed cleanly through the same
+  UI. Also fixed two real bugs surfaced along the way: `apiFetch` was
+  showing raw `{"error":"..."}` JSON blobs as error text everywhere (now
+  parsed into a clean message, plus a new `friendlyErrorMessage` helper
+  mapping status codes to human copy, wired into all sixteen list/detail
+  pages); and `vinaire-viewer`'s `ClusterRole` had never been updated past
+  Phase 10's original resource list, so Phases 8/13/14/15's endpoints were
+  all silently 403ing on the real in-cluster deployment — fixed in both
+  AGENTS.md's documented example and the live cluster.
 
 ### Changed
 

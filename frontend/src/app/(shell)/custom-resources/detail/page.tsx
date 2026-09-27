@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useCRDInstance, useCRDs } from "@/lib/hooks/useCRDs";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 
@@ -47,7 +48,7 @@ function CustomResourceDetailPage() {
   if (error) {
     return (
       <div className="p-8 text-sm text-err">
-        Failed to load instance: {error.message}
+        Failed to load instance: {friendlyErrorMessage(error)}
       </div>
     );
   }

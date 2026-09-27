@@ -1656,3 +1656,135 @@ stop/logs on failure).
 **Definition of done**
 A push with a deliberately broken endpoint (e.g. a wrong namespace in a
 request) fails CI, instead of going green.
+
+---
+
+## Phase 24 — Cluster management via the web UI ✅ done
+
+**Goal:** connect a second (or third, ...) cluster entirely through
+Vinaire's own Settings page — no editing Deployment env vars, no mounting
+a kubeconfig Secret by hand, no redeploy. Added not from this roadmap's
+original planning but from direct need: the project owner asked "how do I
+even connect a second cluster in prod?" after multi-cluster (Phase 11) was
+found to only support a static, env-var-configured list.
+
+> ⚠ **This adds a genuinely new write path — the app writing its own
+> Secret — flagged and confirmed explicitly with the project owner before
+> implementing, per AGENTS.md's core rule.** It's a different *kind* of
+> write from Phase 9's three (which act on a user-browsed resource, with
+> the caller's own identity): this is Vinaire managing its own
+> infrastructure config, with its own in-cluster identity, never exposed
+> through any browse/list endpoint. See AGENTS.md's core rule for the
+> full description and the narrow, namespace-scoped `Role`/`RoleBinding`
+> this needed (create-only on `secrets`, get/update scoped to exactly one
+> `resourceName`) — deliberately *not* an addition to the broad, cluster-
+> wide read-only `ClusterRole` every browsed cluster's resources go
+> through.
+>
+> **Outcome note:** `internal/clusters.Registry` stopped being "populated
+> once at startup, read-only forever" — it now has a mutex (previously
+> none at all, safe only because nothing mutated it after boot) plus
+> `AddDynamic`/`Remove`, and a lifecycle hook (`SetLifecycleHook`) that
+> `main.go` wires to start/stop a cluster's live-update informers. The
+> hook exists specifically because `internal/stream` already imports
+> `internal/clusters` (for `clientsetFor`/`restConfigFor`) — `clusters`
+> importing `stream` back to start informers directly would cycle, so
+> `clusters` stays dependency-free and holds only an opaque
+> `func(e *Entry) (stop func())` value supplied once from `main.go`, which
+> is free to import both. The same fix needed for `stream.ServeWS`'s
+> `hubs` map, previously a plain `map[string]*Hub` built once and never
+> touched again — now a small mutex-guarded `HubRegistry` type. Persistence
+> (`internal/clusters.Store`) is one Secret (`vinaire-clusters`) in this
+> backend's own namespace (detected via the standard
+> `/var/run/secrets/kubernetes.io/serviceaccount/namespace` file — nothing
+> in this codebase read that before), written with a fresh
+> `rest.InClusterConfig()` client, deliberately not the possibly-
+> `CLUSTER_CONTEXTS`-overridden `Default()` entry — `NewStore` reports
+> unavailable (not an error) when the backend isn't running in-cluster at
+> all, the same explicit-unavailable pattern as metrics-server/Gateway
+> API/Prometheus. `POST /api/v1/clusters` verifies the submitted
+> `{name, server, token, caData}` against a real `Discovery().
+> ServerVersion()` call *before* persisting anything, so a bad token fails
+> loudly immediately. Verified end-to-end against `k3d-vinaire-dev` (in-
+> cluster deployment) and a real second cluster, `k3d-vinaire-dev-2`,
+> reached from inside the first cluster's pod network via
+> `host.docker.internal` (confirmed reachable — DNS resolves through
+> CoreDNS's forwarder, TCP connects — with a disposable `busybox` pod
+> before trusting the design): added live through the Settings page,
+> immediately showed real, distinct data (5 pods/1 namespace vs. the
+> default cluster's 7 pods/3 namespaces) in a live Chromium browser after
+> switching the Topbar picker, survived a full pod restart
+> (`kubectl delete pod`) with zero reconfiguration, and was removed
+> cleanly through the same UI (confirm modal → toast), verified gone both
+> in the UI and via `GET /api/v1/clusters`.
+>
+> Also fixed, discovered while building this: `frontend/src/lib/api/http.ts`
+> was surfacing raw `{"error":"..."}` JSON response bodies verbatim as
+> error messages across the whole app (reported directly by the project
+> owner, seeing it on Storage/Network/Access-control after those phases'
+> real RBAC gaps surfaced 403s) — `apiFetch` now extracts just the `error`
+> field, and a new shared `friendlyErrorMessage` helper
+> (`frontend/src/lib/api/errors.ts`) maps status codes to short, human
+> copy (403 → permission explanation, 404 → "Not found.", 502/503 →
+> "backend unavailable"), wired into all sixteen list/detail pages that
+> render a fetch error. Separately, the actual RBAC gap itself was fixed
+> too: `vinaire-viewer`'s `ClusterRole` (AGENTS.md's example, and the real
+> one bound in `k3d-vinaire-dev`) never got the `persistentvolumeclaims`/
+> `persistentvolumes`/`storageclasses`/`gateway.networking.k8s.io`/
+> `rbac.authorization.k8s.io`/`apiextensions.k8s.io` rules Phases 8/13/14/15
+> actually need — it was still exactly Phase 10's original list. Both
+> AGENTS.md's documented example and the live cluster's ClusterRole were
+> updated together.
+
+**Backend**
+- `internal/clusters.Registry` gains `AddDynamic`/`Remove` (mutex-guarded,
+  safe to call while the app is serving traffic) and a lifecycle hook
+  `main.go` uses to start/stop a cluster's informers via
+  `internal/stream.HubRegistry` (also newly mutex-guarded).
+- `internal/clusters.Store` persists dynamically-added clusters as a
+  Secret (`vinaire-clusters`) in this backend's own namespace, using its
+  own in-cluster identity — available only when actually running
+  in-cluster (`NewStore` reports this explicitly).
+- `internal/clusters.EntryFromStored`/`VerifyConnection` build a real
+  `*rest.Config`/clientset directly from a submitted
+  `{server, token, caData}` triple (bypassing kubeconfig entirely) and
+  confirm it actually works before anything is persisted.
+- `POST /api/v1/clusters` / `DELETE /api/v1/clusters/{name}` — add/remove,
+  both audited via the existing `Handler.auditLog` (Phase 17).
+  `GET /api/v1/clusters` (Phase 11) now also reports `removable` per
+  cluster.
+
+**Frontend**
+- A real "Clusters" section on the Settings page (previously a static
+  placeholder): the configured-clusters list (with a Remove button only
+  where `removable` is true), and a form to add one (name, server URL,
+  ServiceAccount token, optional PEM CA certificate — an explicit warning
+  when CA is omitted, since that means skipping TLS verification for that
+  cluster). Uses the existing `Toast`/`ConfirmModal` components.
+
+**Complexity:** L — the registry/hub concurrency-safety work and the
+import-cycle-driven lifecycle-hook design were the bulk of it; the
+Secret-backed persistence and the HTTP handlers themselves are simple by
+comparison.
+
+**New dependencies**
+- `go.mod`: none
+- `package.json`: none
+
+**Risks to check early**
+- Any authenticated Vinaire session can add/remove clusters — there's no
+  separate "admin vs. viewer" tier inside Vinaire itself (by design, per
+  AGENTS.md: no app-level policy layer, only the target cluster's own
+  RBAC). Fine for a single-trusted-operator instance; revisit before
+  exposing cluster management to multiple less-trusted users of the same
+  Vinaire instance.
+- An added cluster's credentials are only as safe as the Secret they're
+  stored in — same trust level as any other Kubernetes Secret in that
+  namespace, not an extra layer of encryption.
+
+**Definition of done**
+From Settings, paste a real cluster's server URL + a ServiceAccount token
+and submit — it appears in the Topbar picker immediately, no restart.
+Switching to it shows that cluster's own real data. Restarting the backend
+pod doesn't lose it. Removing it via Settings makes it disappear from both
+the UI and `GET /api/v1/clusters`.

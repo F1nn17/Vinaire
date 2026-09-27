@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useConfigMaps } from "@/lib/hooks/useConfigMaps";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import { ListDetailSplit } from "@/components/ui/ListDetailSplit";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { PlusIcon } from "@/components/icons";
@@ -37,7 +38,7 @@ export default function ConfigMapsPage() {
 
       {error ? (
         <div className="text-sm text-err">
-          Failed to load ConfigMaps: {error.message}
+          Failed to load ConfigMaps: {friendlyErrorMessage(error)}
         </div>
       ) : isLoading || !data ? (
         <ListSkeleton />

@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useCRDInstances, useCRDs } from "@/lib/hooks/useCRDs";
+import { friendlyErrorMessage } from "@/lib/api/errors";
 import type { CRDInstanceRow } from "@/lib/types";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 
@@ -94,7 +95,7 @@ function CustomResourcesPage() {
 
       {instances.error ? (
         <div className="text-sm text-err">
-          Failed to load instances: {instances.error.message}
+          Failed to load instances: {friendlyErrorMessage(instances.error)}
         </div>
       ) : (
         <DataTable
