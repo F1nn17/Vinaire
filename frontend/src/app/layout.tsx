@@ -1,18 +1,29 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { AppInit } from "@/components/providers/AppInit";
 import "./globals.css";
 
-const plexSans = IBM_Plex_Sans({
+// Self-hosted (latin subset, static woff2 files checked into the repo)
+// rather than next/font/google — that loader fetches font files from
+// Google's servers at build time, which made the Docker build fail
+// whenever that network hop was unreachable/flaky. Re-fetch instructions:
+// see frontend/src/app/fonts/README.md.
+const plexSans = localFont({
   variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  src: [
+    { path: "./fonts/IBMPlexSans-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/IBMPlexSans-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/IBMPlexSans-600.woff2", weight: "600", style: "normal" },
+  ],
 });
 
-const jetBrainsMono = JetBrains_Mono({
+const jetBrainsMono = localFont({
   variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  src: [
+    { path: "./fonts/JetBrainsMono-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/JetBrainsMono-600.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/JetBrainsMono-700.woff2", weight: "700", style: "normal" },
+  ],
 });
 
 export const metadata: Metadata = {
