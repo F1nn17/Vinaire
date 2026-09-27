@@ -41,14 +41,16 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-[1.6fr_1fr] gap-4">
-        <div className="flex flex-col rounded-[10px] border border-border bg-surface p-5">
+        <div className="flex max-h-110 flex-col rounded-[10px] border border-border bg-surface p-5">
           <div className="mb-3.5 text-[13px] font-semibold">Recent events</div>
-          <div className="flex flex-col gap-0.5 overflow-auto">
-            {data.events.length === 0 ? (
-              <div className="text-xs text-text-faint">No recent events.</div>
-            ) : (
-              data.events.map((event, i) => <EventRow key={i} {...event} />)
-            )}
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            <div className="flex flex-col gap-0.5">
+              {data.events.length === 0 ? (
+                <div className="text-xs text-text-faint">No recent events.</div>
+              ) : (
+                data.events.map((event, i) => <EventRow key={i} {...event} />)
+              )}
+            </div>
           </div>
         </div>
 

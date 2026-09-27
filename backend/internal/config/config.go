@@ -70,6 +70,16 @@ type Config struct {
 	// existed.
 	ClusterContexts []string
 
+	// ClusterName overrides the display name of the single cluster used in
+	// single-cluster mode (ClusterContexts empty). Kubernetes clusters have
+	// no self-reported name the API exposes, and running in-cluster (the
+	// common case for a real deployment) means there's no kubeconfig
+	// context name to fall back on either — so this is the only way to
+	// show something meaningful instead of the literal word "default" when
+	// running in-cluster. Ignored when ClusterContexts is set (each of
+	// those already has a real, distinct context name).
+	ClusterName string
+
 	// PrometheusURL/LokiURL/AlertmanagerURL point at an already-running
 	// observability stack (Roadmap Phase 16) — Vinaire never installs or
 	// manages these itself, it only proxies to them if configured. Empty
@@ -113,6 +123,7 @@ const (
 	envOIDCRedirectURL     = "OIDC_REDIRECT_URL"
 	envStaticDir           = "STATIC_DIR"
 	envClusterContexts     = "CLUSTER_CONTEXTS"
+	envClusterName         = "CLUSTER_NAME"
 	envPrometheusURL       = "PROMETHEUS_URL"
 	envLokiURL             = "LOKI_URL"
 	envAlertmanagerURL     = "ALERTMANAGER_URL"
@@ -137,6 +148,7 @@ func Load() Config {
 		OIDCRedirectURL:    getEnv(envOIDCRedirectURL, defaultOIDCRedirectURL),
 		StaticDir:          os.Getenv(envStaticDir),
 		ClusterContexts:    splitCSV(os.Getenv(envClusterContexts)),
+		ClusterName:        os.Getenv(envClusterName),
 		PrometheusURL:      os.Getenv(envPrometheusURL),
 		LokiURL:            os.Getenv(envLokiURL),
 		AlertmanagerURL:    os.Getenv(envAlertmanagerURL),

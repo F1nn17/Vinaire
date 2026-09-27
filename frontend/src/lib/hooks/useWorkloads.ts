@@ -9,6 +9,7 @@ import {
   getStatefulSet,
   getWorkloads,
 } from "@/lib/api/workloads";
+import { getCapacity } from "@/lib/api/capacity";
 import { useCurrentCluster } from "@/lib/clusterStore";
 import type { WorkloadKind } from "@/lib/types";
 
@@ -66,4 +67,9 @@ export function useNodes() {
 export function useNode(name: string) {
   const cluster = useCurrentCluster();
   return useSWR(["node", name, cluster], () => getNode(name));
+}
+
+export function useCapacity() {
+  const cluster = useCurrentCluster();
+  return useSWR(["capacity", cluster], () => getCapacity());
 }

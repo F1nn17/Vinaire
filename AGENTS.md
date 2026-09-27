@@ -96,6 +96,17 @@ resolves its target cluster from the `X-Cluster` request header (or the
 first configured cluster if absent) before doing anything else — see
 `Handler.resolveCluster`.
 
+With `CLUSTER_CONTEXTS` unset (single-cluster mode), the one cluster's
+display name in Vinaire's own UI comes from `CLUSTER_NAME` if set,
+otherwise the resolved kubeconfig's current-context name (meaningless when
+running in-cluster, where there's no kubeconfig file to read at all), and
+only falls back to the literal word `"default"` if neither is available —
+see `k8s.CurrentContextName` and `main.go`'s `buildClusterRegistry`.
+Kubernetes has no self-reported cluster name the API exposes, so
+`CLUSTER_NAME` is the only way to get something meaningful for a real
+in-cluster deployment; the Helm chart (Phase 21) defaults it to the
+release name.
+
 **Cluster management via the web UI** extends this: `Registry` is no
 longer populated once at startup and left read-only — `AddDynamic`/
 `Remove` let a cluster be added or removed while the app is serving

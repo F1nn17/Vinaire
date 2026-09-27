@@ -29,6 +29,8 @@ spec:
               containerPort: 8080
               protocol: TCP
           env:
+            - name: CLUSTER_NAME
+              value: {{ default .Release.Name .Values.clusterName | quote }}
             - name: AUTH_MODE
               value: {{ .Values.authMode | quote }}
             {{- if eq .Values.authMode "oidc" }}

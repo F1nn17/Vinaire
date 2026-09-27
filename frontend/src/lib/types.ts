@@ -97,6 +97,31 @@ export type NodeDetail = {
   yaml: string;
 };
 
+// Matches the backend's api.CapacityUsage (Roadmap Phase 22) — a
+// requests-based figure (what's reserved by pods), not live metrics-server
+// usage (what's actually running right now — see NodeRow's cpu/memory
+// instead for that).
+export type CapacityUsage = {
+  used: string;
+  total: string;
+  pct: number;
+  color: StatusColor;
+};
+
+// Matches the backend's api.NodeCapacityRow (Roadmap Phase 22).
+export type NodeCapacityRow = {
+  name: string;
+  cpu: CapacityUsage;
+  memory: CapacityUsage;
+  pods: CapacityUsage;
+};
+
+// Matches the backend's api.CapacityResponse (Roadmap Phase 22).
+export type CapacityResponse = {
+  nodes: NodeCapacityRow[];
+  cluster: NodeCapacityRow;
+};
+
 export type ContainerSummary = {
   name: string;
   statusColor: StatusColor;

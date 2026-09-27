@@ -139,6 +139,7 @@ func main() {
 		protected.Use(auth.Middleware)
 
 		protected.Get("/search", workloadsHandler.Search)
+		protected.Get("/capacity", workloadsHandler.Capacity)
 		protected.Get("/nodes", workloadsHandler.Nodes)
 		protected.Get("/nodes/{name}", workloadsHandler.NodeDetail)
 		protected.Get("/pods", workloadsHandler.Pods)
@@ -271,8 +272,15 @@ func buildClusterRegistry(ctx context.Context, cfg config.Config) (*clusters.Reg
 			slog.Warn("kubernetes client unavailable", "error", err)
 			return registry, hubRegistry
 		}
-		registry.AddDynamic(newClusterEntry("default", clientset, restConfig))
-		slog.Info("kubernetes client initialized", "cluster", "default")
+		name := cfg.ClusterName
+		if name == "" {
+			name = k8s.CurrentContextName(cfg.KubeconfigPath)
+		}
+		if name == "" {
+			name = "default"
+		}
+		registry.AddDynamic(newClusterEntry(name, clientset, restConfig))
+		slog.Info("kubernetes client initialized", "cluster", name)
 		return registry, hubRegistry
 	}
 

@@ -1784,10 +1784,66 @@ with a working token login and no manual manifest edits.
 
 ---
 
-## Phase 22 — Capacity planning (Nodes overview)
+## Phase 22 — Capacity planning (Nodes overview) ✅ done
 
 **Goal:** Vinaire shows, per node, how much room is actually left — not
 just a list of green numbers.
+
+> **Outcome note:** `GET /api/v1/capacity` sums Requests (CPU/memory, plus
+> a pod count) across every non-terminated pod per node — the same
+> "Non-terminated Pods" scope `kubectl describe node` uses, since a
+> Succeeded/Failed pod no longer holds any real allocation — against each
+> node's Allocatable, plus a cluster-wide total. `CapacityUsage` is its own
+> type (`used`/`total`/`pct`/`color`), deliberately not a reuse of the
+> existing metrics-server-backed `ResourceUsage` type: this phase's own
+> risk note warns against conflating "what's requested" with "what's
+> actually running," and giving them different Go/TS types makes that
+> mistake harder to make by accident later. Landed on the "dedicated
+> sub-tab on the Nodes page" option from the two the roadmap draft offered,
+> labeled explicitly as requests-based right in the UI, specifically so it
+> doesn't read as a duplicate of the Nodes tab's already-existing
+> metrics-server CPU/Memory columns. Hit and fixed a real bug while
+> building it: `resource.NewQuantity(200, ...).MilliValue()` returns
+> `200000`, not `200` — constructing a Quantity from an already-milli value
+> needs `NewMilliQuantity` instead, or CPU numbers come out 1000x too high;
+> memory/pod-count aren't affected since their formatters read `.Value()`,
+> not `.MilliValue()`. Thresholds match the roadmap's own text — warn at
+> 80%, err at 95% (deliberately short of 100, so a node gets flagged before
+> it's already full). Verified end-to-end against `k3d-vinaire-dev`,
+> including this phase's own Definition of done: scheduled a real
+> throwaway pod requesting 10Gi memory (this node's allocatable is
+> ~11.9Gi), watched the memory bar for that specific node turn from green
+> to yellow at 86% in a live browser, then deleted it.
+>
+> Also fixed three issues raised alongside this phase:
+> - **Recent events on Overview dragged the whole page down when there
+>   were enough of them.** Its `overflow-auto` never had a bounded height
+>   to actually clip against — a flex child's height only comes from its
+>   own content unless something constrains it. Fixed with a fixed
+>   `max-h-110` (440px) on the card, so it gets its own internal scrollbar
+>   instead of growing forever (confirmed via `main`'s own scroll metrics
+>   before/after, not just eyeballing it).
+> - **The cluster picker showed the literal word "Default"** — traced to
+>   `main.go`'s `buildClusterRegistry` hardcoding that exact string
+>   whenever `CLUSTER_CONTEXTS` is unset. Added a `CLUSTER_NAME` env var
+>   (the Helm chart now defaults it to the release name) plus, when that's
+>   unset, auto-derived the resolved kubeconfig's current-context name
+>   (`k8s.CurrentContextName`) — meaningless when running in-cluster (no
+>   kubeconfig file exists there at all, which is exactly the live
+>   deployment's actual situation), but genuinely useful for local
+>   `go run .` dev, confirmed showing "k3d-vinaire-dev" instead of
+>   "default" against the real kubeconfig. Set `CLUSTER_NAME=k3d-vinaire-dev`
+>   on the live Deployment to match.
+> - **Topology and the four "Create" buttons were investigated, not
+>   changed.** Topology turned out to already be fully real (Phase 7) —
+>   confirmed via a live pod/deployment/service/configmap graph with real
+>   Cluster IPs in the detail panel — the "still mock" impression came from
+>   the dev cluster having very little deployed, not from fake data. The
+>   four "Create" buttons (Workloads/ConfigMaps/Secrets/Network) are inert
+>   leftovers from the original mockup with no `onClick` at all; wiring
+>   real object creation would be a new write path this file's core rule
+>   says to raise first, not implement quietly — left exactly as-is
+>   pending that decision.
 
 **Backend**
 - `GET /api/v1/capacity` — a cluster-wide summary: total Allocatable vs.

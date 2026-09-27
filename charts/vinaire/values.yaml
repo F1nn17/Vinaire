@@ -17,6 +17,15 @@ service:
   type: ClusterIP
   port: 8080
 
+# What the cluster picker in Vinaire's own UI shows for this install.
+# Kubernetes has no self-reported cluster name the API exposes, and
+# running in-cluster (this chart's whole point) means there's no
+# kubeconfig context name to fall back on either — so this is the only
+# way to get something more meaningful than the literal word "default".
+# Defaults to the Helm release name, which is at least distinct across
+# multiple installs.
+clusterName: ""
+
 # AUTH_MODE: how Vinaire establishes who's calling (see AGENTS.md's
 # Authentication section) — "token" (paste a Kubernetes ServiceAccount
 # token on the login screen) is the safe default for a real install.

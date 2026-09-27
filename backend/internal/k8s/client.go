@@ -47,6 +47,25 @@ func NewClientset(kubeconfigPath string) (*kubernetes.Clientset, *rest.Config, e
 	return clientset, config, nil
 }
 
+// CurrentContextName returns the kubeconfig's current-context name, or ""
+// if there's no kubeconfig to read (e.g. running in-cluster, where
+// NewClientset never even looks at a kubeconfig file) or it can't be
+// loaded. Kubernetes clusters have no self-reported name of their own —
+// this is the best available real (not hardcoded) label for the
+// single-cluster/no-CLUSTER_CONTEXTS case, see main.go's
+// buildClusterRegistry.
+func CurrentContextName(kubeconfigPath string) string {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if kubeconfigPath != "" {
+		loadingRules.ExplicitPath = kubeconfigPath
+	}
+	rawConfig, err := loadingRules.Load()
+	if err != nil {
+		return ""
+	}
+	return rawConfig.CurrentContext
+}
+
 // NewClientsetForContext builds a clientset for one named kubeconfig
 // context, ignoring whatever the kubeconfig's own current-context is set
 // to. Used for Roadmap Phase 11 (multi-cluster): one call per configured

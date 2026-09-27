@@ -441,6 +441,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Terminal got an explicit 403 straight from Kubernetes even once the
   WebSocket connected. Both fixed and confirmed live: real streamed nginx
   logs and a working in-pod shell.
+- **Roadmap Phase 22 (Capacity planning):** `GET /api/v1/capacity` — total
+  Requests vs. Allocatable (CPU, memory, pod count) per node and
+  cluster-wide, as its own `CapacityUsage` type distinct from the existing
+  metrics-server-backed one, to keep "what's requested" and "what's
+  actually running" from being conflated. Shows as a new "Capacity" tab on
+  the Nodes page, color-coded (warn at 80%, err at 95%). Fixed a real bug
+  found while building it: constructing a `resource.Quantity` from an
+  already-millicore value with `NewQuantity` instead of `NewMilliQuantity`
+  made every CPU figure 1000x too high. Verified end-to-end: a real
+  throwaway pod requesting 10Gi memory turned that node's memory bar
+  yellow live in the browser, then cleaned up.
+- Fixed three more issues: the Dashboard's Recent events list could drag
+  the whole page down instead of scrolling on its own (no bounded height
+  for its `overflow-auto` to clip against — fixed with a fixed max-height
+  on the card); the cluster picker showed the literal word "Default"
+  instead of anything real (added a `CLUSTER_NAME` env var, defaulted to
+  the Helm release name, plus auto-derived the kubeconfig current-context
+  name as a fallback for local dev). Topology and the four "Create"
+  buttons were investigated and left as-is: Topology turned out to already
+  show real live data (Phase 7) — it just looked sparse because the dev
+  cluster has little deployed — and the "Create" buttons are inert mockup
+  leftovers with no handler at all, which the project owner asked to leave
+  alone for now rather than deciding a new write path on the spot.
 
 ### Changed
 
