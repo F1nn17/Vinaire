@@ -1470,3 +1470,189 @@ On a real cluster, Pods down/Healthy pods/Namespaces match
 `kubectl get events --sort-by=.lastTimestamp`; on a cluster without ArgoCD,
 the Drifted-from-Git card doesn't render at all, and the PVC/CPU-Memory
 cards show explicit stubs, not zeros.
+
+---
+
+## Phase 19 — Nodes (cluster machine list + detail)
+
+**Goal:** a Nodes section shows the real machines in the cluster, with a
+detail view for each covering capacity, conditions, taints, and which pods
+are actually scheduled there.
+
+**Backend**
+- `GET /api/v1/nodes` (list) and `GET /api/v1/nodes/{name}` (detail) — the
+  same informer pattern already used for every other resource.
+- The detail response includes Capacity/Allocatable (CPU, memory, pods),
+  Conditions (Ready, DiskPressure, MemoryPressure, etc.), Taints, and the
+  list of pods actually scheduled on that node (via `spec.nodeName`).
+
+**Frontend**
+- A new "Nodes" entry in the sidebar's Cluster group (next to Overview/
+  Topology).
+- A nodes table: Name, Status, Roles, CPU/Memory used (from the
+  already-wired Prometheus proxy — Phase 16), Age.
+- A detail page following the Pod/Deployment detail pattern, with an
+  Overview tab (capacity, taints, conditions) and a Pods tab (what's
+  running on it).
+
+**Complexity:** S
+
+**New dependencies**
+- `go.mod`: none
+- `package.json`: none
+
+**Risks to check early**
+- On clusters with autoscaling, the node list can change frequently — make
+  sure the informer correctly handles node additions/removals, not just
+  updates.
+
+**Definition of done**
+`kubectl cordon <node>` — the node's status in Vinaire flips to
+Unschedulable without a manual page refresh.
+
+---
+
+## Phase 20 — Global search (⌘K)
+
+**Goal:** the topbar's search field (currently decorative) becomes a real,
+live, cross-resource command palette.
+
+**Backend**
+- `GET /api/v1/search?q=...` — aggregates across every already-implemented
+  resource type (pods, deployments, services, configmaps, secrets, nodes,
+  etc.); a simple substring match on name for a first pass, no full-text
+  index needed since the data already lives in memory via the informers.
+
+**Frontend**
+- Wire up the existing topbar search field (currently decorative,
+  placeholder-only) — opens via ⌘K/Ctrl+K from anywhere in the app, live
+  results as you type, arrow-key navigation through results, Enter
+  navigates to the matching detail screen.
+
+**Complexity:** M — the search mechanics themselves are simple, but
+pulling different resource kinds into one unified result list with
+per-type icons takes real work.
+
+**New dependencies**
+- `go.mod`: none
+- `package.json`: none required on the frontend; a command-palette library
+  (e.g. `cmdk`) is optional — doable without one too.
+
+**Risks to check early**
+- The result list needs to stay as live/real-time as everything else (the
+  same informers) — otherwise search will surface already-deleted
+  resources.
+
+**Definition of done**
+From the Dashboard, press ⌘K, start typing a real pod's name — it shows up
+in results, Enter opens its Pod detail.
+
+---
+
+## Phase 21 — Packaging Vinaire for installation (Helm chart)
+
+**Goal:** Vinaire can be installed on any cluster via a standard Helm
+chart, not just this dev-cluster-specific manual setup.
+
+**Backend/Infra**
+- An official Helm chart under `/charts/vinaire` — Deployment (the single
+  combined image from Phase 10), Service, ServiceAccount + ClusterRole
+  templates with a minimal permission set (not cluster-admin), a
+  `values.yaml` with an `AUTH_MODE` switch (token/oidc/disabled) and
+  optional fields for `OIDC_ISSUER_URL`/`CLIENT_ID`/`SECRET` when
+  `AUTH_MODE=oidc`.
+
+**Documentation**
+- An "Installation" section in README, modeled on how Headlamp documents
+  it: `helm repo add` → `helm install` → `kubectl create token` → paste
+  into the login screen.
+
+**Complexity:** S
+
+**New dependencies**
+- Helm (packaging tooling only, not a project code dependency)
+
+**Risks to check early**
+- Forgetting the RBAC templates in the chart — the pod comes up fine, but
+  every API request fails with 403, and that's not immediately obvious
+  from the pod's own logs.
+
+**Definition of done**
+`helm install vinaire ./charts/vinaire -n vinaire --create-namespace` on a
+clean k3d cluster brings up a working pod, reachable via port-forward,
+with a working token login and no manual manifest edits.
+
+---
+
+## Phase 22 — Capacity planning (Nodes overview)
+
+**Goal:** Vinaire shows, per node, how much room is actually left — not
+just a list of green numbers.
+
+**Backend**
+- `GET /api/v1/capacity` — a cluster-wide summary: total Allocatable vs.
+  total Requests/Limits across all pods (CPU, memory, and pod count vs.
+  each node's max pods), broken down per node.
+
+**Frontend**
+- A new card/section on the Dashboard, or a dedicated sub-tab on the Nodes
+  page — visually showing "how much is actually left" per node, with
+  color coding (`--warn` above 80% usage, `--err` when close to the
+  pod-count or memory ceiling).
+
+**Complexity:** S — the data already exists from Phase 19 (nodes) and
+Phase 1 (pods + their requests/limits); this is aggregation, not a new
+data source.
+
+**New dependencies**
+- `go.mod`: none
+- `package.json`: none
+
+**Risks to check early**
+- Requests and actual usage are different things — the UI must explicitly
+  label this as requests-based capacity, not live usage (live usage needs
+  Prometheus, a different metric entirely).
+
+**Definition of done**
+On a cluster where one node is nearly exhausted on memory (as happened on
+a 2GB VPS), Vinaire clearly flags that specific node yellow/red — not just
+a list of green numbers.
+
+---
+
+## Phase 23 — Automated tests against a real k3d cluster in CI
+
+**Goal:** CI actually catches regressions against a real Kubernetes API,
+not just compiles/lints.
+
+**Backend**
+- Integration tests (`go test` behind an `integration` build tag) that
+  spin up a temporary k3d cluster in a GitHub Actions job and run real
+  requests against every major endpoint — a real API server, not mocked
+  client-go.
+
+**Frontend**
+- Basic e2e tests (Playwright) — token login, navigating through the
+  sidebar's main sections, confirming tables actually render data.
+
+**CI**
+- Extend `.github/workflows/ci.yml` (from Phase 0) with a job that stands
+  up k3d, applies test manifests, and runs both test suites.
+
+**Complexity:** M — the real difficulty isn't the tests themselves, it's
+standing up k3d inside the CI runner and managing its lifecycle (start/
+stop/logs on failure).
+
+**New dependencies**
+- `go.mod`: none (stdlib `testing`)
+- `package.json`: `@playwright/test`
+- CI: an action for installing k3d on the runner
+
+**Risks to check early**
+- Integration tests in CI are noticeably slower than unit tests — run
+  them on PRs into main / before a release, not on every push, to avoid
+  bloating iteration time.
+
+**Definition of done**
+A push with a deliberately broken endpoint (e.g. a wrong namespace in a
+request) fails CI, instead of going green.
