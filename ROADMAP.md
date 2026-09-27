@@ -2088,3 +2088,451 @@ and submit — it appears in the Topbar picker immediately, no restart.
 Switching to it shows that cluster's own real data. Restarting the backend
 pod doesn't lose it. Removing it via Settings makes it disappear from both
 the UI and `GET /api/v1/clusters`.
+
+---
+
+## Phase 25 — Full YAML editor (create + edit)
+
+**Goal:** every resource's YAML tab goes from a read-only `<pre>` block to
+a real create/edit surface, validated by the cluster itself before
+anything is applied.
+
+**Backend**
+- `POST /api/v1/{resource}/dry-run` — accepts YAML, runs it through a
+  server-side dry-run (client-go, `DryRun: []string{"All"}`) — uses the
+  Kubernetes API server itself as the schema/admission-webhook validator,
+  no need to bundle or maintain a separate copy of the OpenAPI schema.
+- `POST /api/v1/{resource}` (create) and
+  `PUT /api/v1/{resource}/{namespace}/{name}` (update) — the real apply,
+  only after a successful dry-run.
+- Extend the existing YAML tabs (Pod detail, Deployment detail, and every
+  other detail page with one) from read-only to edit mode.
+
+**Frontend**
+- Replace the static `<pre>` blocks with Monaco Editor
+  (`@monaco-editor/react`), YAML syntax highlighting, on every detail page
+  that currently shows read-only YAML.
+- An "Apply" button — first hits the dry-run endpoint and shows a diff
+  (before/after) in a modal; a second click confirms the real apply.
+- The existing decorative "+ Create" buttons (Workloads, ConfigMaps,
+  Secrets, Network — currently go nowhere) open an empty Monaco Editor
+  pre-filled with a template YAML for that resource kind, through the same
+  dry-run → apply flow.
+
+**Complexity:** M
+
+**New dependencies**
+- `go.mod`: none — dry-run is a standard client-go capability
+- `package.json`: `@monaco-editor/react`
+
+**Risks to check early**
+- Dry-run validates the schema but doesn't replace a full code review —
+  always show the diff before apply, so a change can't accidentally go out
+  wider than intended.
+
+**Definition of done**
+Editing a Deployment's image via YAML in the UI and clicking Apply —
+`kubectl get deployment -o yaml` shows the applied change. A deliberately
+invalid YAML (a typo'd field) gives a clear error from dry-run, without
+breaking anything in the cluster.
+
+---
+
+## Phase 26 — Browser-based port-forward
+
+**Goal:** open a port-forward to a pod straight from the browser, the same
+convenience `kubectl port-forward` gives on the command line.
+
+**Backend**
+- WebSocket endpoint `/api/v1/portforward/{namespace}/pod/{name}?port=N`
+  — via client-go (`tools/portforward` + the SPDY dialer) opens a stream
+  directly to the pod's port and proxies bytes between that stream and the
+  browser's WebSocket connection, without opening a local OS port on the
+  server itself.
+- Scope for this first iteration is HTTP(S) traffic (a reverse HTTP proxy
+  on an authenticated path), not general TCP — covers the large majority
+  of real use cases and is significantly simpler to implement.
+
+**Frontend**
+- A "Forward port" button on Pod/Service detail — pick a port (from the
+  spec's `containerPorts`), opens a new tab at a proxied address like
+  `/proxy/{namespace}/{pod}/{port}/`.
+
+**Complexity:** M
+
+**New dependencies**
+- `go.mod`: `k8s.io/client-go/tools/portforward`
+- `package.json`: none
+
+**Risks to check early**
+- The proxy session must close when the tab closes or the WebSocket
+  disconnects — otherwise forgotten connections to pods pile up.
+
+**Definition of done**
+A pod running any HTTP service inside it — the Forward port button opens
+its web UI in a new tab without a single terminal command.
+
+---
+
+## Phase 27 — Namespace as a managed resource
+
+**Goal:** Namespaces (and the quotas inside them) become a real,
+browsable, editable resource in Vinaire, not something only visible as a
+filter dropdown.
+
+**Backend**
+- `GET`/`POST`/`DELETE /api/v1/namespaces`, plus `GET`/`PUT` for the
+  `ResourceQuota` and `LimitRange` nested inside a namespace.
+
+**Frontend**
+- A new Namespaces page (Cluster group in the sidebar) — a list with
+  usage/quotas, creation via Phase 25's YAML editor, a detail screen with
+  an Overview tab (editable ResourceQuota/LimitRange) and a Resources tab
+  (what's actually inside it).
+
+**Complexity:** S
+
+**New dependencies**
+- `go.mod`: none
+- `package.json`: none
+
+**Risks to check early**
+- Deleting a namespace is an irreversible, cascading operation — require
+  double confirmation with typing the namespace's name into the modal, not
+  just a Yes/No.
+
+**Definition of done**
+Creating a namespace via the UI shows up in `kubectl get ns`; a
+ResourceQuota set through the UI actually blocks exceeding the limit.
+
+---
+
+## Phase 28 — Helm application catalog (App Marketplace)
+
+**Goal:** install real Helm charts onto the cluster from a browsable
+catalog inside Vinaire, without touching a terminal.
+
+**Backend**
+- Helm as a Go library (`helm.sh/helm/v3/pkg/action`, `pkg/repo`), **not**
+  shelling out to the `helm` binary.
+- `GET /api/v1/catalog/charts?search=...` — search across configured Helm
+  repositories (the repo list comes from config).
+- `GET /api/v1/catalog/charts/{repo}/{chart}` — description, versions, the
+  chart's default `values.yaml`, and `values.schema.json` if the chart
+  ships one.
+- `POST /api/v1/catalog/install` — repo+chart+version, namespace, release
+  name, values, including a `nodeSelector` when a specific node is chosen.
+- `GET /api/v1/catalog/releases`, `POST .../upgrade`, `POST .../rollback`,
+  `DELETE .../uninstall` — all via the Helm SDK.
+
+**Frontend**
+- A "Marketplace" section in the sidebar — chart cards, search.
+- An install page: a form generated from `values.schema.json` when
+  present, otherwise the YAML editor (Phase 25); a namespace picker,
+  release name field, and a node dropdown (Phase 19) for `nodeSelector`.
+- An "Installed releases" section — Upgrade/Rollback/Uninstall.
+
+**Complexity:** L
+
+**New dependencies**
+- `go.mod`: `helm.sh/helm/v3`
+- `package.json`: `react-jsonschema-form` (optional — only needed for the
+  schema-driven install form)
+
+**Risks to check early**
+- Vinaire's own ServiceAccount needs rights on Secrets in the target
+  namespace (Helm stores releases as a Secret).
+- Some charts require CRDs that Helm doesn't always install ahead of the
+  main chart — surface that failure explicitly rather than a generic
+  "install failed."
+- Keep the repository list configurable, not hardcoded.
+
+**Definition of done**
+Pick `postgres` from the catalog via the UI, specify a namespace and a
+specific node, click Install — `helm list` shows the release, and
+`kubectl get pods -o wide` shows the pod scheduled on exactly the chosen
+node.
+
+---
+
+## Phase 29 — GitOps sync with a choice of backend (ArgoCD or native)
+
+**Goal:** every registered cluster (Phase 11) can have its own GitOps
+story — a real ArgoCD it already runs, a minimal built-in poller for
+clusters that don't, or nothing at all.
+
+**Backend**
+- `GITOPS_MODE` as a setting on each individual registered cluster (not a
+  single global env var — different clusters in Phase 11's multi-cluster
+  setup may be in different situations): `"argocd"` | `"native"` |
+  `"off"`.
+- `"argocd"` — extends the existing ArgoCD-detection logic (`isArgoManaged`
+  from Phase 9): view/create `Application` resources via the dynamic
+  client.
+- `"native"` — a minimal in-house poller for clusters without ArgoCD: a
+  config of `{repoURL, path, targetRevision, cluster}`, a backend worker
+  periodically does a `git pull`, applies manifests via server-side apply
+  (Phase 25) to the target cluster, and stores the last-applied commit
+  hash plus a Synced/OutOfSync status.
+- `"off"` — the GitOps section isn't shown for that cluster at all.
+
+**Frontend**
+- A GitOps section in the sidebar (Cluster group) — a list of sync sources
+  per cluster, their status, and a "Sync now" button.
+
+**Complexity:** L
+
+**New dependencies**
+- `go.mod`: `go-git`, or alternatively an `os/exec` call to the `git`
+  binary
+- `package.json`: none
+
+**Risks to check early**
+- `"native"` mode is essentially a stripped-down ArgoCD of our own — stay
+  disciplined about not growing past simple poll+apply (no health checks,
+  sync waves, hooks).
+- Explicitly warn in the UI if a real ArgoCD is detected on a cluster at
+  the same time `"native"` mode is selected for it — that's an apply
+  conflict waiting to happen.
+
+**Definition of done**
+On a cluster without ArgoCD, configure a native source pointed at a test
+git repo, push a manifest there, and wait for sync (or click Sync now) —
+the resource appears with no manual `kubectl apply`.
+
+---
+
+## Phase 30 — Adding worker nodes via SSH
+
+**Goal:** grow a cluster by pointing Vinaire at a bare server's IP and
+credentials, instead of running the k3s install script by hand.
+
+**Backend**
+- `POST /api/v1/nodes/provision` — host, port (default 22), username,
+  auth (password **or** private key — support both, explicitly recommend
+  the key in the UI).
+- `golang.org/x/crypto/ssh` remotely runs the k3s agent install
+  (`curl -sfL https://get.k3s.io | K3S_URL=... K3S_TOKEN=... sh -`); the
+  token is pulled from the master node
+  (`/var/lib/rancher/k3s/server/node-token`), never hardcoded and never
+  logged.
+- The install output streams to the client over WebSocket in real time
+  (reuses the Phase 5/`TerminalPane` pattern).
+- The password/key are used once, for the duration of the request, and
+  never persisted to the backend's disk in any form.
+
+**Frontend**
+- An "Add node" button on the Nodes page (Phase 19) — an IP/port/login
+  form with a password/SSH-key toggle, and a live install log.
+
+**Complexity:** M
+
+**New dependencies**
+- `go.mod`: `golang.org/x/crypto/ssh`
+- `package.json`: none
+
+**Risks to check early**
+- This is the single most security-sensitive phase in the entire roadmap.
+  Credentials must travel only over HTTPS and never end up in access logs
+  or error traces, same standard as the Phase 10 Kubernetes token.
+- Remotely running a root-level install script with entered credentials is
+  a large attack surface if Vinaire itself is ever compromised.
+- Unlike Rancher (which just hands you a command to copy and run yourself,
+  never touching SSH credentials at all), this approach is more convenient
+  but a fundamentally riskier pattern — taken on deliberately, with eyes
+  open.
+
+**Definition of done**
+Enter a clean server's IP and credentials, click "Add node" — within a
+minute or two a new Node shows up in Vinaire's list and in
+`kubectl get nodes`, with zero manual commands run on the target server.
+
+---
+
+## Phase 31 — Create via a form, with a YAML toggle
+
+**Goal:** creating the most common resource kinds doesn't require knowing
+YAML at all, while staying on the exact same dry-run → apply path Phase 25
+already built.
+
+**Backend**
+- `GET /api/v1/forms/{resourceType}` — returns a simplified field schema
+  for the most common resource kinds (Deployment, ConfigMap, Secret,
+  Namespace) — not the full Kubernetes OpenAPI schema (overkill for a
+  form), just a small, hand-written set of fields per kind: for
+  Deployment — name, namespace, image, replicas, container port, env
+  variables (a key/value list), resource requests/limits; for
+  ConfigMap/Secret — name, namespace, a key/value list; for Namespace —
+  name, optionally a ResourceQuota.
+- The form's state is serialized to YAML on the frontend (see below); the
+  backend, exactly as in Phase 25, just receives the resulting YAML for
+  dry-run/apply — no new backend apply logic needed, the form is only a
+  friendlier way to assemble the same YAML.
+
+**Frontend**
+- The Create screen gets a "Form / YAML" toggle (a segmented control, the
+  same pattern already used on Workloads/Network).
+- Form mode: fields driven by `/api/v1/forms/{resourceType}`'s schema —
+  for Deployment, reuse the node dropdown from Phase 19 as an optional
+  `nodeSelector` (the same logic Phase 28's catalog install form uses).
+- Switching Form → YAML serializes the current form state into YAML and
+  shows it in Monaco Editor (Phase 25). Switching YAML → Form only works
+  if the YAML still matches the simple form's schema — if the resource is
+  more complex (custom fields the form doesn't cover), switching back is
+  blocked with a clear message ("this YAML is too complex to edit as a
+  form"), and the form itself never breaks or loses data on that attempt.
+- Past that point, the flow is unchanged: dry-run → diff preview → Apply,
+  exactly as Phase 25 already built it.
+
+**Complexity:** M — the form itself is simple, but keeping Form↔YAML in
+sync both ways (especially detecting "too complex for the form") needs
+careful implementation.
+
+**New dependencies**
+- `go.mod`: none
+- `package.json`: none beyond the Monaco Editor already added in Phase 25
+
+**Risks to check early**
+- The `/api/v1/forms` field schemas are hand-written for these 4 specific
+  kinds, not auto-generated from the Kubernetes OpenAPI schema — adding a
+  new resource kind's form later means writing its schema by hand again
+  each time. A deliberate simplicity-over-completeness tradeoff.
+
+**Definition of done**
+Creating a Deployment through the form (without typing a single line of
+YAML by hand) — switching to YAML shows a correctly assembled manifest;
+the created resource looks identical in `kubectl get` to one applied
+through the plain YAML path.
+
+---
+
+## Phase 32 — A Metrics tab (live charts, separate from Overview)
+
+**Goal:** a detailed, historical metrics view — added as an *additional*
+tab on Pod detail, Deployment detail, and Node detail (Phase 19), not a
+replacement for Overview's current-value cards (Phase 16/18). These serve
+different needs: Overview is a quick snapshot of right-now, Metrics is
+the detailed history.
+
+**Backend**
+- Extend Phase 16's Prometheus proxy: `GET /api/v1/metrics/range` with
+  `query`/`start`/`end`/`step` parameters — a wrapper over Prometheus's
+  `query_range` (not just the instant query the proxy only supported
+  before).
+- Purpose-built endpoints per metric type, so the frontend never has to
+  assemble PromQL itself:
+  `GET /api/v1/{resourceType}/{namespace}/{name}/metrics?type=cpu|memory|network|filesystem&range=1h|6h|24h|7d&resolution=low|medium|high`
+  (`resourceType`: `pods` | `deployments` | `nodes`).
+- `resolution` translates to Prometheus's own `step` parameter (`low` = a
+  coarser step/fewer points, `high` = a finer step/more points).
+- When Prometheus is unavailable, respond with an explicit `unavailable`
+  status (the same pattern used everywhere else in this app) — the
+  frontend must never see an empty `200` with an empty array and mistake
+  that for "no data yet."
+
+**Frontend**
+- A new "Metrics" tab alongside the existing ones (Overview/Logs/
+  Terminal/Events/YAML on Pod detail; Overview/Pods/Revisions/YAML on
+  Deployment detail).
+- A toolbar above the chart: Pause/Resume (actually freezes polling, not
+  just hides the chart), a segmented CPU / Memory / Network / Filesystem
+  switch, a time-range dropdown (1h/6h/24h/7d), and a resolution dropdown
+  (Low/Medium/High res.).
+- The chart itself is a step-line chart (recharts with `type="stepAfter"`,
+  or uPlot with equivalent interpolation), not a smoothed curve — visually
+  closer to how real metrics actually jump between scrape points.
+- A hover tooltip on the cursor: the exact date/time and metric value at
+  the hovered point (e.g. "Date: …, cpu (cores): …").
+- While the tab is active, poll for new points every 5–10 seconds; points
+  older than the selected range fall off the chart (a sliding window),
+  unless Pause is active.
+- The Network/Filesystem tabs can ship as a "coming soon" placeholder in
+  this first iteration if those metrics aren't in Prometheus yet
+  (cAdvisor's network/filesystem metrics sometimes need extra scrape
+  config) — don't block the whole phase on two tabs out of four.
+
+**Complexity:** M
+
+**New dependencies**
+- `go.mod`: none — extends the existing Phase 16 Prometheus client
+- `package.json`: `recharts` (or `uPlot`)
+
+**Risks to check early**
+- Network/Filesystem metrics depend on exactly what cAdvisor/
+  kube-state-metrics exports on a given cluster — some clusters may not
+  have this data at all. Show an explicit "metrics not available for this
+  resource" instead of an empty chart.
+
+**Definition of done**
+Open the Metrics tab on a real Deployment, switch the range from 1h to
+24h — the chart redraws with a different data step. Hover over a point —
+the exact value and time pop up. Click Pause — the chart stops updating
+and no new points arrive until Resume is clicked.
+
+---
+
+## Phase 33 — Scale and a consolidated resource action bar
+
+**Goal:** scaling, pausing a rollout, and deleting a pod are all real,
+audited actions — and every action on a detail page lives in one compact
+toolbar instead of scattered, oversized buttons.
+
+**Backend**
+- `POST /api/v1/deployments/{namespace}/{name}/scale` (body:
+  `{replicas: int}`) — via the Scale subresource
+  (`clientset.AppsV1().Deployments(ns).UpdateScale`), not a direct patch
+  of `spec.replicas` — this is the native Kubernetes mechanism, and it
+  works identically for Deployment/StatefulSet/ReplicaSet.
+- `POST /api/v1/statefulsets/{namespace}/{name}/scale` — the same thing,
+  extending Phase 12's StatefulSet support.
+- `POST /api/v1/deployments/{namespace}/{name}/pause` and `.../resume` —
+  the equivalent of `kubectl rollout pause`/`resume` (patching
+  `spec.paused: true`/`false`) — useful before a series of edits, so they
+  don't each trigger their own intermediate rollout.
+- `DELETE /api/v1/pods/{namespace}/{name}` — there was previously no
+  explicit pod-level delete anywhere (Phase 9 only ever covered
+  Deployments); add it now, with a backend-side check: if the pod is
+  controller-owned (has an `OwnerReference`), this is effectively a
+  "restart" (the pod gets recreated); if the pod is bare, with no owner,
+  this is a real, non-recoverable delete.
+
+**Frontend**
+- On Deployment detail and StatefulSet detail — a Scale control: the
+  current replica count shown as a number with +/- buttons and a manual
+  input field, confirmed through a small modal (Apply/Cancel); `0` is a
+  valid value (a way to temporarily "switch off" without deleting).
+- Before sending a Scale request, re-check the current replica count
+  against the server (a refetch), so a stale number doesn't overwrite
+  someone else's concurrent change made via `kubectl`.
+- Consolidate every action on a resource (Scale, Restart, Pause/Resume
+  rollout, Rollback — a quick jump to the Revisions tab, Delete) into a
+  compact icon toolbar in the detail page's header — modeled on Headlamp's
+  dense toolbar, replacing the stretched text buttons the mockups
+  currently have; every icon carries a tooltip label.
+- On Pod detail: the "Restart" button only shows when the pod has an
+  owner (a controller) — otherwise only "Delete" is shown, with an
+  explicit warning ("this pod has no controller, it will not be
+  recreated").
+- Pause/Resume rollout — a status indicator right on Deployment detail (a
+  "Rollout paused" badge), so it's never forgotten that auto-rollout is
+  currently disabled.
+
+**Complexity:** S
+
+**New dependencies**
+- `go.mod`: none — the Scale subresource is already part of client-go,
+  in use since Phase 1
+- `package.json`: none
+
+**Risks to check early**
+- A StatefulSet's scale-down kills pods one at a time, in descending
+  ordinal order (unlike a Deployment, where order isn't guaranteed) —
+  doesn't block the implementation, but call this out explicitly in the
+  Scale control's tooltip for StatefulSets, so the order isn't a surprise.
+
+**Definition of done**
+Move the Scale control from 2 to 4 replicas — `kubectl get deployment`
+shows `4/4` within a few seconds. Click "Pause rollout," then apply a new
+image via the YAML editor (Phase 25) — no new pods get created until
+"Resume" is clicked. Delete a bare pod with no owner — it's gone for good,
+confirmed via `kubectl get pods`.
