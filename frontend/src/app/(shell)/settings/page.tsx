@@ -19,6 +19,47 @@ const tabs: { id: SettingsTab; label: string }[] = [
   { id: "help", label: "Справка" },
 ];
 
+type HelpSection = "cluster" | "crds";
+
+const helpSections: { id: HelpSection; label: string }[] = [
+  { id: "cluster", label: "Подключение кластера" },
+  { id: "crds", label: "Кастомные ресурсы" },
+];
+
+const fullClusterRoleYaml = `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vinaire-viewer
+rules:
+  - apiGroups: ["", "apps", "batch", "networking.k8s.io"]
+    resources:
+      [
+        "pods", "deployments", "statefulsets", "daemonsets", "jobs",
+        "configmaps", "secrets", "services", "ingresses", "events",
+        "replicasets", "serviceaccounts", "persistentvolumeclaims",
+        "persistentvolumes", "nodes",
+      ]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways", "httproutes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+  # Разрешение на запись — ровно 3 действия с Deployment, ничего больше.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["patch", "delete"]`;
+
 // Cluster management via the web UI: adding a cluster here persists it (a
 // Secret in this backend's own namespace — see AGENTS.md's core rule) so
 // it survives a pod restart, and registers it live immediately, no
@@ -27,6 +68,7 @@ const tabs: { id: SettingsTab; label: string }[] = [
 // same way any other "unavailable" state is in this app.
 export default function SettingsPage() {
   const [tab, setTab] = useState<SettingsTab>("clusters");
+  const [helpSection, setHelpSection] = useState<HelpSection>("cluster");
   const { data: clusters, error, isLoading, mutate } = useClusters();
   const { data: crds, error: crdsError, isLoading: crdsLoading } = useCRDs();
 
@@ -226,7 +268,9 @@ export default function SettingsPage() {
         <div className="max-w-2xl rounded-[10px] border border-border bg-surface p-5">
           <div className="mb-1 text-[13px] font-semibold">Custom Resources</div>
           <div className="mb-4 text-xs text-text-muted">
-            Every CRD installed on the connected cluster (Roadmap Phase 15).
+            Every CRD installed on the connected cluster — see the
+            &ldquo;Справка&rdquo; tab for what these are and why they show up
+            here.
           </div>
 
           {crdsError ? (
@@ -262,106 +306,31 @@ export default function SettingsPage() {
       )}
 
       {tab === "help" && (
-        <div className="max-w-2xl rounded-[10px] border border-border bg-surface p-5 text-sm">
-          <div className="mb-1 text-[13px] font-semibold">
-            Как подключить кластер
-          </div>
-          <div className="mb-4 text-xs text-text-muted">
-            Пошаговая инструкция по добавлению кластера через вкладку «Clusters»
-            выше.
+        <div className="flex max-w-4xl gap-5">
+          <div className="flex w-52 shrink-0 flex-col gap-1">
+            {helpSections.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setHelpSection(s.id)}
+                className={`rounded-md px-3 py-2 text-left text-[12.5px] ${
+                  helpSection === s.id
+                    ? "bg-surface-2 font-semibold text-accent-text"
+                    : "text-text-muted"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
           </div>
 
-          <ol className="flex flex-col gap-4 text-[13px] text-text-muted">
-            <li>
-              <div className="font-semibold text-foreground">
-                1. Создайте ServiceAccount в целевом кластере
-              </div>
-              <pre className="mt-1.5 overflow-auto rounded-md bg-surface-2 p-2.5 font-mono text-[11px] text-foreground">
-                {`kubectl create serviceaccount vinaire-viewer -n <namespace>`}
-              </pre>
-            </li>
-            <li>
-              <div className="font-semibold text-foreground">
-                2. Выдайте роль (не cluster-admin)
-              </div>
-              <div className="mt-1">
-                Пример минимальной ClusterRole для Vinaire есть в файле{" "}
-                <code className="font-mono text-[11.5px]">AGENTS.md</code>{" "}
-                репозитория (раздел «Example: a minimal ClusterRole for
-                Vinaire»). Привяжите её через{" "}
-                <code className="font-mono text-[11.5px]">
-                  ClusterRoleBinding
-                </code>{" "}
-                или <code className="font-mono text-[11.5px]">RoleBinding</code>
-                , в зависимости от того, сколько кластера этой учётной записи
-                можно видеть.
-              </div>
-              <pre className="mt-1.5 overflow-auto rounded-md bg-surface-2 p-2.5 font-mono text-[11px] text-foreground">
-                {`kubectl create clusterrolebinding vinaire-viewer \\
-  --clusterrole=vinaire-viewer --serviceaccount=<namespace>:vinaire-viewer`}
-              </pre>
-            </li>
-            <li>
-              <div className="font-semibold text-foreground">
-                3. Получите токен ограниченного срока действия
-              </div>
-              <div className="mt-1">
-                Флаг <code className="font-mono text-[11.5px]">--duration</code>{" "}
-                напрямую задаёт срок жизни сессии — не выдавайте бессрочные
-                токены ни для чего, кроме одноразового локального теста.
-              </div>
-              <pre className="mt-1.5 overflow-auto rounded-md bg-surface-2 p-2.5 font-mono text-[11px] text-foreground">
-                {`kubectl create token vinaire-viewer -n <namespace> --duration=1h`}
-              </pre>
-            </li>
-            <li>
-              <div className="font-semibold text-foreground">
-                4. Заполните форму во вкладке «Clusters»
-              </div>
-              <ul className="mt-1 list-disc pl-5">
-                <li>
-                  <span className="font-semibold text-foreground">Name</span> —
-                  произвольное короткое имя, под которым кластер будет показан в
-                  переключателе кластеров (например,{" "}
-                  <span className="font-mono">prod-eu</span>).
-                </li>
-                <li>
-                  <span className="font-semibold text-foreground">
-                    Server URL
-                  </span>{" "}
-                  — адрес API-сервера целевого кластера (
-                  <span className="font-mono">https://host:6443</span>).
-                </li>
-                <li>
-                  <span className="font-semibold text-foreground">
-                    ServiceAccount token
-                  </span>{" "}
-                  — токен из шага 3.
-                </li>
-                <li>
-                  <span className="font-semibold text-foreground">
-                    CA certificate
-                  </span>{" "}
-                  — необязательно; без него проверка TLS-сертификата для этого
-                  кластера будет отключена (подходит только для тестовых
-                  окружений).
-                </li>
-              </ul>
-            </li>
-            <li>
-              <div className="font-semibold text-foreground">
-                5. Что происходит дальше
-              </div>
-              <div className="mt-1">
-                Vinaire проверяет подключение реальным вызовом к API-серверу
-                перед сохранением. Кластер сохраняется в Secret в собственном
-                namespace бэкенда и переживает перезапуск пода — повторно
-                добавлять его после редеплоя не нужно. Реальные права доступа
-                (RBAC) в подключённом кластере определяют, что можно увидеть и
-                сделать — Vinaire не добавляет собственных ограничений сверху.
-              </div>
-            </li>
-          </ol>
+          <div className="min-w-0 flex-1 rounded-[10px] border border-border bg-surface p-5 text-sm">
+            {helpSection === "cluster" ? (
+              <ClusterHelp />
+            ) : (
+              <CustomResourcesHelp />
+            )}
+          </div>
         </div>
       )}
 
@@ -376,6 +345,276 @@ export default function SettingsPage() {
         onCancel={() => setPendingRemove(null)}
       />
       <Toast toast={toast} onDismiss={() => setToast(null)} />
+    </div>
+  );
+}
+
+function Code({ children }: { children: string }) {
+  return (
+    <pre className="mt-1.5 overflow-auto rounded-md bg-surface-2 p-2.5 font-mono text-[11px] text-foreground">
+      {children}
+    </pre>
+  );
+}
+
+function ClusterHelp() {
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <div className="mb-1 text-[13px] font-semibold">
+          Как подключить кластер
+        </div>
+        <div className="text-xs text-text-muted">
+          Vinaire не хранит своих собственных прав доступа — она заходит в
+          подключаемый кластер под учётной записью (ServiceAccount), которую вы
+          создаёте сами, и видит/может делать ровно то, что этой учётной записи
+          разрешает RBAC в самом кластере. Ниже — как её создать и подключить,
+          шаг за шагом.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Если у вас несколько кластеров (например, два локальных k3d)
+        </div>
+        <div className="mt-1 text-text-muted">
+          Все команды <span className="font-mono">kubectl</span> ниже
+          выполняются в том кластере, который сейчас выбран у вас в терминале
+          (текущий «context»), а не в том, что открыт в самой Vinaire — это два
+          независимых понятия. Посмотрите список доступных кластеров и
+          переключитесь на нужный, прежде чем выполнять шаги 1–5:
+        </div>
+        <Code>
+          {`kubectl config get-contexts
+kubectl config use-context <имя-нужного-кластера>`}
+        </Code>
+        <div className="mt-1 text-text-muted">
+          Если сомневаетесь, какой context куда ведёт — сравните адрес сервера
+          ниже (шаг 4) с тем, что открывается в браузере/консоли провайдера.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          1. Namespace для служебной учётной записи
+        </div>
+        <div className="mt-1 text-text-muted">
+          Посмотреть, какие namespace уже есть в кластере:
+        </div>
+        <Code>{`kubectl get namespaces`}</Code>
+        <div className="mt-1 text-text-muted">
+          Можно использовать существующий (например,{" "}
+          <span className="font-mono">default</span>) или создать отдельный —
+          так проще потом найти и удалить всё, что относится к Vinaire, одной
+          командой:
+        </div>
+        <Code>{`kubectl create namespace vinaire-viewer`}</Code>
+        <div className="mt-1 text-text-muted">
+          Дальше везде подставляйте выбранный namespace вместо{" "}
+          <span className="font-mono">&lt;namespace&gt;</span>.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          2. Создайте ServiceAccount в этом namespace
+        </div>
+        <Code>{`kubectl create serviceaccount vinaire-viewer -n <namespace>`}</Code>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          3. Выдайте ей права (RBAC)
+        </div>
+        <div className="mt-1 text-text-muted">
+          Два варианта — выберите один.
+        </div>
+
+        <div className="mt-3 rounded-md border border-border p-3">
+          <div className="text-[12.5px] font-semibold text-foreground">
+            Вариант A (рекомендуется): роль под возможности Vinaire
+          </div>
+          <div className="mt-1 text-text-muted">
+            Даёт ровно то, что умеет Vinaire: просмотр Pods/Deployments/
+            ConfigMaps/Secrets/сеть/RBAC/метрики/кастомные ресурсы, плюс три
+            действия с Deployment (restart/delete/rollback) — без полного
+            cluster-admin. Сохраните в файл и примените:
+          </div>
+          <Code>{fullClusterRoleYaml}</Code>
+          <Code>
+            {`kubectl apply -f vinaire-viewer-role.yaml
+kubectl create clusterrolebinding vinaire-viewer \\
+  --clusterrole=vinaire-viewer --serviceaccount=<namespace>:vinaire-viewer`}
+          </Code>
+        </div>
+
+        <div className="mt-3 rounded-md border border-border p-3">
+          <div className="text-[12.5px] font-semibold text-foreground">
+            Вариант B: быстро, только для одноразового локального кластера
+          </div>
+          <div className="mt-1 text-text-muted">
+            Привязать встроенную роль{" "}
+            <span className="font-mono">cluster-admin</span> — без составления
+            своей роли, но полный доступ ко всему кластеру. Не используйте это
+            для чего-то важного или для чужого/боевого кластера:
+          </div>
+          <Code>
+            {`kubectl create clusterrolebinding vinaire-viewer \\
+  --clusterrole=cluster-admin --serviceaccount=<namespace>:vinaire-viewer`}
+          </Code>
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          4. Узнайте адрес API-сервера этого кластера
+        </div>
+        <Code>{`kubectl cluster-info`}</Code>
+        <div className="mt-1 text-text-muted">
+          Верхняя строка («Kubernetes control plane is running at ...») — это и
+          есть адрес для поля «Server URL» ниже.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          5. Получите токен ограниченного срока действия
+        </div>
+        <div className="mt-1 text-text-muted">
+          Флаг <span className="font-mono">--duration</span> напрямую задаёт
+          срок жизни сессии в Vinaire — не выдавайте бессрочные токены ни для
+          чего, кроме одноразового локального теста.
+        </div>
+        <Code>{`kubectl create token vinaire-viewer -n <namespace> --duration=1h`}</Code>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          6. Заполните форму во вкладке «Clusters»
+        </div>
+        <ul className="mt-1 list-disc pl-5 text-text-muted">
+          <li>
+            <span className="font-semibold text-foreground">Name</span> —
+            произвольное короткое имя, под которым кластер будет показан в
+            переключателе кластеров сверху (например,{" "}
+            <span className="font-mono">prod-eu</span>).
+          </li>
+          <li>
+            <span className="font-semibold text-foreground">Server URL</span> —
+            адрес из шага 4.
+          </li>
+          <li>
+            <span className="font-semibold text-foreground">
+              ServiceAccount token
+            </span>{" "}
+            — токен из шага 5.
+          </li>
+          <li>
+            <span className="font-semibold text-foreground">
+              CA certificate
+            </span>{" "}
+            — необязательно; без него проверка TLS-сертификата для этого
+            кластера будет отключена (подходит только для тестовых окружений, не
+            для прод-кластера за реальным сертификатом).
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          7. Что происходит дальше
+        </div>
+        <div className="mt-1 text-text-muted">
+          Vinaire проверяет подключение реальным вызовом к API-серверу перед
+          сохранением — если данные неверны, вы увидите ошибку и ничего не
+          сохранится. Кластер сохраняется в Secret в собственном namespace
+          бэкенда и переживает перезапуск пода — повторно добавлять его после
+          редеплоя Vinaire не нужно. Дальше именно RBAC-роль, которую вы выдали
+          на шаге 3, определяет, что можно увидеть и сделать — Vinaire ничего не
+          добавляет и не убавляет сверху.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">8. Ещё один кластер</div>
+        <div className="mt-1 text-text-muted">
+          Повторите шаги «Если у вас несколько кластеров» → 1–7 для каждого
+          следующего кластера (не забудьте{" "}
+          <span className="font-mono">kubectl config use-context</span> на
+          нужный). Подключённые кластеры видны и переключаются через выпадающий
+          список в верхней панели Vinaire, рядом с поиском.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CustomResourcesHelp() {
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <div className="mb-1 text-[13px] font-semibold">
+          Что такое кастомные ресурсы
+        </div>
+        <div className="text-xs text-text-muted">
+          В Kubernetes «из коробки» есть встроенные типы объектов — Pod,
+          Deployment, Service и так далее. Custom Resource Definition (CRD) —
+          это способ добавить в кластер свой собственный тип объекта. Обычно CRD
+          ставятся вместе с каким-то инструментом или оператором — например,
+          Traefik, cert-manager, ArgoCD, Helm — и описывают то, чем этот
+          инструмент управляет (правило маршрутизации, сертификат, приложение и
+          т.д.), тем же способом, что и встроенные объекты: с помощью YAML и{" "}
+          <span className="font-mono">kubectl get/describe</span>.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">Зачем это в Vinaire</div>
+        <div className="mt-1 text-text-muted">
+          Вкладка «Custom Resources» находит все CRD, которые реально
+          установлены на подключённом кластере, и позволяет посмотреть их
+          объекты в read-only режиме — так же, как вы смотрите Pods или
+          Deployments, но для того, что добавил конкретно ваш кластер (например,
+          маршруты Traefik или Applications ArgoCD), без необходимости открывать
+          kubectl.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Пустой список объектов — это нормально
+        </div>
+        <div className="mt-1 text-text-muted">
+          Если внутри конкретного типа ресурса ничего не показывается — это
+          означает, что такой тип установлен (CRD есть), но объектов этого типа
+          в кластере сейчас просто нет, а не то, что что-то сломано.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Ошибка доступа при открытии конкретного типа
+        </div>
+        <div className="mt-1 text-text-muted">
+          Список самих CRD виден благодаря правам на{" "}
+          <span className="font-mono">customresourcedefinitions</span> в роли из
+          раздела «Подключение кластера». Но чтобы посмотреть сами объекты
+          внутри конкретного CRD, роли нужно отдельное разрешение на его
+          API-группу — иначе кластер ответит ошибкой доступа именно при попытке
+          открыть этот тип (сам список CRD при этом виден). Добавьте в
+          ClusterRole ещё один блок с нужной группой, например:
+        </div>
+        <Code>
+          {`  - apiGroups: ["cert-manager.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]`}
+        </Code>
+        <div className="mt-1 text-text-muted">
+          Группу и версию нужного CRD видно прямо в списке на вкладке «Custom
+          Resources» (например,{" "}
+          <span className="font-mono">hub.traefik.io/v1alpha1</span>).
+        </div>
+      </div>
     </div>
   );
 }

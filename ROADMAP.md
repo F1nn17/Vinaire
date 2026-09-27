@@ -1585,10 +1585,66 @@ Unschedulable without a manual page refresh.
 
 ---
 
-## Phase 20 — Global search (⌘K)
+## Phase 20 — Global search (⌘K) ✅ done
 
 **Goal:** the topbar's search field (currently decorative) becomes a real,
 live, cross-resource command palette.
+
+> **Outcome note:** shipped alongside a rewrite of Settings' "Справка" help
+> tab, per the project owner's feedback that its first version read like
+> internal dev notes rather than something a real end user (or a colleague,
+> in production) could actually follow:
+>
+> - It referenced "Roadmap Phase 15" by name with no explanation — replaced
+>   throughout with plain descriptions of what a feature actually does, no
+>   internal phase numbers anywhere in user-facing copy (confirmed via a
+>   repo-wide search — the remaining "Phase N" mentions are all in code
+>   comments, never rendered text).
+> - It never explained *what a Custom Resource even is* or why the tab
+>   exists — added a real explanation (CRDs let tools like Traefik/
+>   cert-manager/ArgoCD/Helm define their own object types; this tab lists
+>   whatever's actually installed and lets you browse it read-only), plus
+>   what an empty list means (the type exists, no objects of it right now)
+>   versus a genuine access error (the connected identity's RBAC role needs
+>   that CRD's API group added).
+> - It gave a single flat set of steps with no way to jump between "add a
+>   cluster" and "custom resources" — restructured into a two-item side
+>   nav within the tab itself (matching the request for "a side menu, one
+>   item for adding a cluster, one for custom resources").
+> - It silently assumed one cluster/one context and gave a "minimal"
+>   ClusterRole framed as an example to customize — in practice unusable
+>   without already knowing what Phase 15 was. Rewritten to: call out
+>   explicitly that `kubectl` commands run against whatever context is
+>   currently selected (`kubectl config get-contexts` /
+>   `use-context`), which matters specifically because the project owner
+>   runs multiple local k3d clusters; explain choosing/creating a
+>   namespace (`kubectl get namespaces` / `create namespace`) instead of
+>   silently expecting one to already exist; give the *complete*,
+>   ready-to-apply ClusterRole YAML (not a "minimal example" requiring
+>   customization) as the recommended path, with a clearly-labeled
+>   `cluster-admin` binding offered as a fast alternative for a disposable
+>   local-only cluster; and explain finding the API server address
+>   (`kubectl cluster-info`) and repeating the whole flow per additional
+>   cluster, switching between connected ones via the topbar picker.
+>
+> For search itself: `GET /api/v1/search?q=` lists each already-browsable
+> resource kind live (the same `List()` call its own list endpoint already
+> makes — no shared informer cache plumbed into the `api` package, since
+> every other list endpoint in this codebase already does a live per-request
+> list and this stays consistent with that, at the cost of the roadmap
+> draft's suggested in-memory-cache optimization) and substring-matches on
+> name: Pods/Deployments/StatefulSets/DaemonSets/Jobs/Nodes/PVCs (deep-link
+> to their real detail page) plus ConfigMaps/Secrets/Ingresses (deep-link to
+> their list page — these don't have a per-object detail route in this app
+> at all yet, unrelated to this phase). Capped at 50 total results. The
+> frontend's command palette (`CommandPalette.tsx`) is only mounted by
+> Topbar while open, so every open is a fresh component instance — avoids
+> a whole class of "reset state when a prop flips to true" effect, which
+> `eslint-plugin-react-hooks`'s `set-state-in-effect` rule flags for good
+> reason (cascading renders). Verified end-to-end against `k3d-vinaire-dev`:
+> Ctrl+K opens from the Dashboard, typing a real pod's name returns it
+> live, arrow keys move the selection, Enter opens the exact matching
+> Pod/Deployment detail page and closes the palette.
 
 **Backend**
 - `GET /api/v1/search?q=...` — aggregates across every already-implemented

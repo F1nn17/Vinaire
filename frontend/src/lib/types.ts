@@ -9,6 +9,14 @@ export type Cluster = {
   removable: boolean;
 };
 
+// Matches the backend's api.SearchResult (Roadmap Phase 20).
+export type SearchResult = {
+  kind: string;
+  name: string;
+  namespace: string;
+  href: string;
+};
+
 export type WorkloadRow = {
   name: string;
   namespace: string;

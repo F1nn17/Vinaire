@@ -400,6 +400,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   caused by Go's `omitempty` dropping an empty (but non-nil) slice's JSON
   key entirely — fixed on that field and two others with the same latent
   bug (Alertmanager's `alerts`, Loki search's `lines`).
+- **Roadmap Phase 20 (Global search / ⌘K):** the topbar's previously
+  decorative search field is now a real command palette — `GET
+  /api/v1/search?q=` substring-matches on name across Pods, Deployments,
+  StatefulSets, DaemonSets, Jobs, Nodes, and PVCs (deep-linking to their
+  real detail pages) plus ConfigMaps/Secrets/Ingresses (to their list
+  pages), capped at 50 results. Opens via Ctrl/Cmd+K from anywhere or by
+  clicking the search field; arrow keys move the selection, Enter
+  navigates and closes it, Escape closes it.
+- Rewrote Settings' "Справка" (help) tab after feedback that it read like
+  internal dev notes: dropped the bare "Phase 15" reference, added a plain
+  explanation of what Custom Resources actually are and what an empty
+  list vs. an access error means, split it into a two-item side nav
+  ("Подключение кластера" / "Кастомные ресурсы"), and rewrote the
+  cluster-connection steps to cover multiple local clusters (`kubectl
+  config get-contexts`/`use-context`), choosing or creating a namespace,
+  the complete ready-to-apply ClusterRole YAML (not a "customize this
+  example" framing) alongside a clearly-labeled `cluster-admin` shortcut
+  for disposable local clusters, and finding the API server address.
 
 ### Changed
 

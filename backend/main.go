@@ -138,6 +138,7 @@ func main() {
 	r.Route("/api/v1", func(protected chi.Router) {
 		protected.Use(auth.Middleware)
 
+		protected.Get("/search", workloadsHandler.Search)
 		protected.Get("/nodes", workloadsHandler.Nodes)
 		protected.Get("/nodes/{name}", workloadsHandler.NodeDetail)
 		protected.Get("/pods", workloadsHandler.Pods)
