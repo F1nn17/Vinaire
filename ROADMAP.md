@@ -2311,7 +2311,14 @@ credentials, instead of running the k3s install script by hand.
 - `POST /api/v1/nodes/provision` — host, port (default 22), username,
   auth (password **or** private key — support both, explicitly recommend
   the key in the UI).
-- `golang.org/x/crypto/ssh` remotely runs the k3s agent install
+- Installation and join are done through a `ClusterProvisioner` interface
+  (`Preflight`, `PrepareNode`, `InstallControlPlane`, `JoinWorker`,
+  `FetchKubeconfig`). The k3s implementation is described here (via
+  `get.k3s.io`); a kubeadm implementation is Phase 35 (joining via
+  `kubeadm join`, with the join command obtained on the control-plane
+  through `kubeadm token create --print-join-command`).
+- The k3s provider's `JoinWorker` uses `golang.org/x/crypto/ssh` to
+  remotely run the k3s agent install
   (`curl -sfL https://get.k3s.io | K3S_URL=... K3S_TOKEN=... sh -`); the
   token is pulled from the master node
   (`/var/lib/rancher/k3s/server/node-token`), never hardcoded and never
@@ -2320,6 +2327,10 @@ credentials, instead of running the k3s install script by hand.
   (reuses the Phase 5/`TerminalPane` pattern).
 - The password/key are used once, for the duration of the request, and
   never persisted to the backend's disk in any form.
+- Server host key verification: on first connection, the backend returns
+  the fingerprint, the UI shows it to the user for confirmation, and the
+  SSH session only continues once confirmed. Use `ssh.FixedHostKey` / a
+  custom `HostKeyCallback`, **not** `ssh.InsecureIgnoreHostKey`.
 
 **Frontend**
 - An "Add node" button on the Nodes page (Phase 19) — an IP/port/login
@@ -2536,3 +2547,176 @@ shows `4/4` within a few seconds. Click "Pause rollout," then apply a new
 image via the YAML editor (Phase 25) — no new pods get created until
 "Resume" is clicked. Delete a bare pod with no owner — it's gone for good,
 confirmed via `kubectl get pods`.
+
+---
+
+## Phase 34 — Adding a cluster via SSH (create new / connect existing)
+
+**Goal:** onboard a cluster the same way Phase 30 onboards a node — point
+Vinaire at a server's SSH credentials, either to import an existing k3s
+install or to turn a clean server into a brand-new one.
+
+**Backend**
+- Provisioning is done through the `ClusterProvisioner` interface from
+  Phase 30; this phase implements the k3s provider — the kubeadm provider
+  is Phase 35. The wizard includes a distribution choice (only k3s is
+  available for now).
+- Reuses Phase 30's SSH layer (credentials held in memory only for the
+  duration of the request, never persisted to disk; the same WebSocket
+  log stream; the same mandatory host key verification).
+- **Import mode:** `POST /api/v1/clusters/import-ssh` — host, port, user,
+  auth (password or key), an optional explicit server URL. The backend
+  reads `/etc/rancher/k3s/k3s.yaml` (as root, or via sudo — the sudo
+  password comes from what was already entered and is passed over stdin,
+  never persisted), substitutes the real address in place of `127.0.0.1`,
+  and checks connectivity (`GET /version` against the resulting
+  kubeconfig) **before** registering it.
+- **Create mode:** `POST /api/v1/clusters/create-ssh` — on a clean server,
+  installs k3s server with `--tls-san <public IP or domain>` (required,
+  otherwise TLS verification against the external address will fail),
+  waits for the API to be ready (`/readyz`), then runs the same steps as
+  import mode. A pre-check refuses (with a clear message, without
+  overwriting anything) if `/etc/rancher/k3s` already exists on the server
+  or port 6443 is already in use.
+- A dynamic cluster registry (extends Phase 11's static config): each
+  kubeconfig is stored encrypted (AES-GCM, key from an env var or a Secret
+  in Vinaire's own namespace) — never in plaintext, never in logs. The
+  confirmed host key fingerprint is stored alongside it.
+- `DELETE /api/v1/clusters/{name}` — removes only Vinaire's own
+  registration, never touches the actual cluster.
+- Single-server k3s only for this phase; multi-control-plane HA is out of
+  scope.
+- **Import-kubeconfig mode:** `POST /api/v1/clusters/import-kubeconfig`
+  accepts a kubeconfig (pasted as text or uploaded as a file) with **no**
+  SSH involved. Works with any distribution and with managed clusters.
+  Checks connectivity (`GET /version`) before saving, same as the SSH
+  modes above. The UI shows a recommendation next to it: use a dedicated
+  ServiceAccount with only the needed permissions instead of an
+  admin-level kubeconfig.
+
+**Frontend**
+- The cluster picker in the Topbar (Phase 11) gets an "Add cluster" entry
+  — a step-by-step wizard: mode (Import existing / Create new / Import via
+  kubeconfig) → SSH details (host/port/user + a password/key toggle, or,
+  for the kubeconfig mode, a paste-or-upload field instead) → fingerprint
+  confirmation (SSH modes only) → a live log (SSH modes only) → success.
+  For Create new, an optional final "Add worker nodes" step leads into
+  Phase 30.
+- A Clusters page (Cluster group in the sidebar): the list of registered
+  clusters, their connectivity status, and a Remove button explicitly
+  labeled "only removes the connection in Vinaire — the cluster itself is
+  untouched."
+
+**Complexity:** M — the foundation (SSH, log streaming) already exists
+from Phase 30 and Phase 11.
+
+**New dependencies**
+- `go.mod`: `golang.org/x/crypto/ssh` (already added in Phase 30);
+  `crypto/aes`/`crypto/cipher` from the stdlib for encryption
+- `package.json`: none
+
+**Risks to check early**
+- TLS SAN: k3s issues its certificate without the public IP by default —
+  importing by the external address will fail with an x509 error. Show a
+  clear explanation in the UI, plus a "server URL" field to work around
+  it.
+- SSH might work while port 6443 is unreachable from wherever Vinaire
+  itself runs (a VPS firewall, NetBird-style routing) — this is exactly
+  why connectivity is checked before anything is saved.
+- All connected clusters' admin kubeconfigs living in one place is the
+  single most valuable object in the whole system — if Vinaire itself is
+  compromised, an attacker gets full access to every connected cluster.
+  Consider issuing a dedicated, narrowly-scoped ServiceAccount right after
+  import and storing its token instead of the admin certificate (tradeoff:
+  a long-lived token).
+
+**Definition of done**
+Import: enter a working k3s server's credentials — the cluster appears in
+the picker, and switching to it shows its real pods. Create: a clean
+server becomes a working cluster in a couple of minutes with zero manual
+commands run on it. Running create again against a server that already has
+k3s installed refuses cleanly, without breaking anything. Swapping the
+host key mid-connection aborts the session.
+
+---
+
+## Phase 35 — A kubeadm provider (full upstream Kubernetes)
+
+**Goal:** the same create/join experience as Phase 30/34, but for a real
+upstream Kubernetes install via kubeadm, not just k3s.
+
+**Backend**
+- A `ClusterProvisioner` implementation for kubeadm. Debian/Ubuntu only —
+  OS detection via `/etc/os-release`, refusing with a clear message on
+  anything unsupported (an RHEL-family implementation is separate, later
+  work). Uses the same SSH layer, log streaming, and host key verification
+  as Phase 30/34.
+  - **Preflight:** root/sudo access; at least 2 CPUs and 2 GB RAM; swap
+    status; the required ports are free (6443, 2379-2380, 10250-10259);
+    `pkgs.k8s.io` and `registry.k8s.io` are reachable; hostname/MAC/
+    `product_uuid` are unique among the cluster's existing nodes.
+  - **PrepareNode:** `swapoff` plus removing swap from `fstab`; the
+    `overlay` and `br_netfilter` kernel modules (made persistent via
+    `/etc/modules-load.d`); `sysctl`
+    `net.bridge.bridge-nf-call-iptables=1` and `net.ipv4.ip_forward=1`
+    (via `/etc/sysctl.d`); installing containerd with
+    `SystemdCgroup=true`; adding the `pkgs.k8s.io` repository for the
+    chosen minor version; installing `kubelet`/`kubeadm`/`kubectl`; and
+    pinning those packages (`apt-mark hold`).
+  - **InstallControlPlane:** `kubeadm init` with `--pod-network-cidr`
+    matching the chosen CNI, `--apiserver-cert-extra-sans <public IP or
+    domain>`, and optional `--control-plane-endpoint`/
+    `--kubernetes-version`; installs the chosen CNI (Flannel by default,
+    or Calico, or Cilium) from manifests at **pinned versions in the
+    backend's own config**, never "latest"; waits for the node to be
+    Ready and for CoreDNS to be Running.
+  - A "single-node" option: removes the
+    `node-role.kubernetes.io/control-plane` taint, so workloads can be
+    scheduled on the control-plane node too.
+  - **FetchKubeconfig:** reads `/etc/kubernetes/admin.conf`, then
+    registers the cluster the same way Phase 34 does.
+  - **JoinWorker:** `kubeadm token create --print-join-command` on the
+    control-plane, then runs that join command on the worker after its
+    own Preflight+PrepareNode.
+  - **Reset:** a `kubeadm reset -f` action, clearing CNI config and
+    iptables rules, for a node whose install failed partway through or
+    that's being removed from the cluster — gated behind double
+    confirmation.
+  - The list of supported Kubernetes minor versions lives in the backend's
+    own config, not hardcoded — defaulting to the latest stable at release
+    time.
+
+**Frontend**
+- In Phase 34's wizard, a "Kubernetes (kubeadm)" distribution option,
+  version and CNI dropdowns, a "single-node" checkbox, and an optional
+  control-plane endpoint field (a VIP or DNS name) with the hint "set this
+  now if you're planning HA — adding it later is hard." A final checklist
+  of "what to install next" (an Ingress controller, a StorageClass,
+  metrics-server), linking to the Marketplace (Phase 28).
+
+**Complexity:** L — the heaviest provisioning phase in terms of step count
+and OS-specific detail.
+
+**New dependencies**
+- `go.mod`: none
+- `package.json`: none
+
+**Risks to check early**
+- The pod CIDR must match what the chosen CNI expects, or pods won't get
+  networking — and the failure doesn't show up immediately.
+- Not setting a control-plane endpoint at `init` time makes turning the
+  cluster into an HA one later practically impossible.
+- A partially-failed install leaves the node in an undefined state, which
+  is exactly why Reset is mandatory.
+- A kubeadm cluster has no Ingress, StorageClass, or metrics-server out of
+  the box — without them, Phase 3 (metrics) and Phase 32 (charts) will
+  show "unavailable" until they're installed.
+- Clock drift between nodes breaks join and certificates — add an NTP/
+  chrony check to Preflight.
+
+**Definition of done**
+A clean Ubuntu server becomes a working cluster through the wizard with
+zero manual commands — `kubectl get nodes` shows Ready. Adding a worker
+through Phase 30 with kubeadm selected ends with a Ready node. A
+deliberately interrupted install recovers via Reset and can be retried
+from scratch.
