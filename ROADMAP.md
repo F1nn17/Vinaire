@@ -2720,3 +2720,164 @@ zero manual commands — `kubectl get nodes` shows Ready. Adding a worker
 through Phase 30 with kubeadm selected ends with a Ready node. A
 deliberately interrupted install recovers via Reset and can be retried
 from scratch.
+
+---
+
+## Phase 36 — Security audit and hardening
+
+**Goal:** verify specific security properties across the whole project
+(Phases 1–35) and lock them in with automated CI checks. This is not a
+guarantee of "no vulnerabilities" — it's a set of checkable claims. The
+audit's outcome is written up in `docs/security.md` (a short threat model
++ the list of verified properties + known residual risks).
+
+**Backend**
+1. **Authorization on informer-cache reads.** Informers run under the
+   backend's own ServiceAccount, so cached data is **not** naturally
+   scoped to a calling user's RBAC. Before serving anything out of the
+   cache, check the caller's own permissions via `SelfSubjectAccessReview`
+   (using their own token — verb, resource, namespace), caching that
+   result briefly (seconds). A resource the caller can't `list`/`get`
+   must never be served or surfaced — including in search (Phase 20),
+   topology (Phase 7), or the Dashboard. This applies per cluster in the
+   registry (Phase 11, 34) independently.
+2. **Secrets:** never hold decoded Secret values in the informer cache
+   (metadata only, or the `data` field stripped) — a value is only ever
+   returned through the explicit reveal endpoint (Phase 6), audit-logged,
+   and permission-checked.
+3. **Cluster registry (Phase 34):** kubeconfigs are stored encrypted only
+   (AES-GCM, key from an env var or a Secret — never from the repo or the
+   image); the decrypted value lives in memory only for the duration of a
+   request; a kubeconfig never appears in the API or in logs, including
+   error responses; the encryption key can be rotated without losing the
+   registry (re-encrypt in place).
+4. **SSH provisioning (Phase 30, 34, 35):** host key verification is
+   mandatory everywhere (`FixedHostKey`, never
+   `InsecureIgnoreHostKey` — enforced via a codebase grep and a linter
+   rule); passwords, keys, and sudo passwords are never written to disk
+   and never end up in logs, error traces, or the log stream sent to the
+   client; commands run on the remote server are built from fixed
+   templates, with user input (host, username, versions, CIDR, endpoint)
+   validated against strict formats and never interpolated into a shell
+   string unescaped; Kubernetes/CNI versions only ever come from the
+   backend's own config list; join tokens and k3s tokens are never logged.
+5. **Logs:** a middleware that strips the `Authorization` header,
+   `Cookie`/`Set-Cookie`, Kubernetes tokens, Secret values, SSH
+   credentials, kubeconfigs, and request bodies on login/reveal/
+   provision/import from every log line. A canary-value test: a token, an
+   SSH password, and a recognizably-tagged kubeconfig fragment, run
+   through the main flows, then confirm the tag appears in no log output
+   at all.
+6. **Sessions:** `HttpOnly` + `Secure` + `SameSite=Strict`, random session
+   IDs of sufficient length (`crypto/rand`), full invalidation on logout
+   and at TTL expiry, a fresh session ID issued after login (session
+   fixation protection), and a login-attempt rate limit (per IP and per
+   account, with backoff).
+7. **CSRF and WebSocket:** check `Origin`/`Sec-Fetch-Site` on every
+   mutating request and on every WebSocket endpoint's handshake (logs,
+   exec, port-forward, the event stream, the provisioning log stream) as
+   defense in depth on top of `SameSite`.
+8. **Headers and CORS:** `Content-Security-Policy` (no `unsafe-inline`
+   where avoidable), HSTS, `X-Content-Type-Options: nosniff`,
+   `frame-ancestors 'none'`, `Referrer-Policy`. CORS only via an explicit
+   origin allowlist — never `*` together with credentials.
+9. **SSRF and path traversal:** the port-forward proxy (Phase 26) only
+   ever reaches pods through the Kubernetes API, never an arbitrary
+   user-supplied host/URL; the Helm repository list (Phase 28) is
+   validated (HTTPS only, internal addresses blocked unless explicitly
+   allowed); a cluster-import server URL (Phase 34) is validated the same
+   way; path checks everywhere a path is built from user input (Phase
+   29's git paths, chart extraction).
+10. **Dangerous actions:** exec (Phase 5), YAML apply (Phase 25), Helm
+    install (Phase 28), SSH provisioning (Phase 30, 34, 35), adding/
+    removing clusters (Phase 34), Scale/Delete (Phase 9, 33) — for each
+    one, confirm the request either runs under the caller's own token or
+    goes through an explicit permission check (actions on Vinaire itself,
+    like adding a cluster or SSH provisioning, need their own role/
+    permission, not available to ordinary users), and that the action
+    lands in the audit log (who, when, what, result).
+11. **Vinaire's own permissions:** verify its ServiceAccount's RBAC with
+    `kubectl auth can-i --list --as=system:serviceaccount:<ns>:<name>` —
+    no wildcard rules (`"*"`), no cluster-admin; rights on Secrets only
+    where actually needed (Helm, Phase 28).
+12. **Dependencies and repo secrets:** `govulncheck`, `gosec` for Go;
+    `npm audit` for the frontend; `gitleaks` across the full git history;
+    Dependabot.
+
+**Frontend**
+1. Data coming from the cluster is untrusted input (pod names,
+   annotations, labels, event messages, log lines, provisioning output).
+   Forbid `dangerouslySetInnerHTML` for this data (an ESLint rule), render
+   it as text only; for ANSI-colored logs, use a safe parser that never
+   inserts HTML.
+2. Tokens, kubeconfigs, and SSH credentials are never stored in
+   `localStorage`/`sessionStorage` and never end up in a URL, a query
+   parameter, analytics, or an error message; password and kubeconfig
+   fields in the Phase 34 wizard are cleared from state immediately after
+   submission.
+3. Secret values shown via "Show" are cleared from state when leaving the
+   page and after a short timeout (auto-hide).
+
+**Infrastructure**
+1. The image (Phase 10): non-root, `readOnlyRootFilesystem`, drop `ALL`
+   capabilities, `seccompProfile: RuntimeDefault`,
+   `allowPrivilegeEscalation: false`, explicit requests/limits — reflected
+   as defaults in the Helm chart (Phase 21).
+2. A `NetworkPolicy` in the chart: inbound only from the Ingress
+   controller; outbound only to the Kubernetes API (including external
+   clusters in the registry), provisioning servers' SSH port, DNS, and the
+   configured Prometheus/Loki/Alertmanager/Helm repositories.
+3. A deployment recommendation in the README: don't expose Vinaire
+   directly to the internet — access it over a VPN/NetBird; if it must be
+   exposed, only behind HTTPS with cert-manager-issued TLS. Separately
+   flag that Vinaire, once it holds a cluster registry, is a single point
+   with access to every connected cluster.
+4. A "security" CI job (extending `ci.yml` from Phase 0/23):
+   `govulncheck`, `gosec`, `npm audit`, `gitleaks`, and `trivy` against the
+   built image (failing on fixable HIGH/CRITICAL findings). Runs on a
+   schedule too, not only on PRs.
+5. A dynamic check: an OWASP ZAP baseline scan against an instance running
+   on k3d.
+
+**Process**
+- Add a "Security checklist for every phase" section to AGENTS.md: never
+  log tokens, secrets, kubeconfigs, or SSH credentials; check the caller's
+  permissions before returning data; validate any input that ends up in a
+  path/URL/command; audit-log every mutating action. Applies to every
+  future phase.
+
+**Complexity:** M — most of the real work is in the cache-authorization
+and SSH/cluster-registry items; the rest is largely configuration and CI.
+
+**New dependencies**
+- `go.mod`: none — the audit tooling (`govulncheck`, `gosec`, `gitleaks`,
+  `trivy`, ZAP) runs in CI and isn't a project code dependency
+- `package.json`: none
+
+**Risks to check early**
+- Automated scanners don't catch logical flaws (an RBAC bypass via the
+  cache, an incorrect permission check, an injection into an SSH command)
+  — verify these by hand and with real tests, not by trusting a green CI
+  run. Before exposing Vinaire outside a trusted network, an independent
+  manual review of the critical paths is recommended: login/sessions,
+  exec, secret reveal, YAML apply, SSH provisioning, and kubeconfig
+  storage.
+
+**Definition of done**
+A token scoped to read-only access on one namespace sees only that
+namespace through both the UI and the API, even though the informer
+cache holds the whole cluster (verified with direct API requests,
+including search, topology, and the Dashboard). The canary-value test
+finds the tagged values in no log output. The registry's stored
+kubeconfigs can't be read in the clear from a storage dump; with the
+wrong encryption key, the registry fails to decrypt rather than returning
+garbage. Swapping a server's host key aborts the SSH connection; a
+codebase grep finds no `InsecureIgnoreHostKey`. Passing shell
+metacharacters in a host or version field is rejected by validation. A
+WebSocket connection from a foreign Origin is rejected. CI fails if a
+dependency with a known vulnerability is added, or a test key is
+committed. `kubectl auth can-i --list` for Vinaire's ServiceAccount
+contains no `"*"`. The image runs as non-root with
+`readOnlyRootFilesystem`. The ZAP baseline scan finds nothing High.
+`docs/security.md` exists: threat model, verified properties, known
+risks.
