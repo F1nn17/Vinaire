@@ -479,6 +479,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failure), caught two real bugs in the test suite itself along the way,
   ran the e2e suite against a live token-mode backend, and dry-ran the
   CI job's k3d cluster setup on a genuinely fresh cluster.
+- **Roadmap Phase 33 (Scale and a consolidated resource action bar):**
+  four new write actions extending AGENTS.md's core rule beyond Phase 9's
+  original three and Phase 24's cluster management — Deployment/
+  StatefulSet Scale (via the Scale subresource's `GetScale`/`UpdateScale`,
+  not a direct `spec.replicas` patch), Deployment Pause/Resume rollout,
+  and pod-level Delete (owned pods effectively restart once their
+  controller recreates them; bare pods are gone for good —
+  `PodDetailResponse.HasController` is what the frontend uses to show
+  "Restart" vs. "Delete"). Every detail page's actions (Scale, Restart,
+  Pause/Resume, jump-to-Revisions, Delete) are now a compact icon toolbar
+  instead of scattered text buttons. `vinaire-viewer`'s ClusterRole
+  (AGENTS.md's example and the live cluster) gained the new subresource
+  grants this needed. Verified end-to-end: scaling 1→3 replicas matched
+  `kubectl get deployment` within seconds; pausing a rollout and then
+  changing the image via `kubectl set image` left every pod on the old
+  image until Resume was clicked; an owned pod's action bar showed only
+  "Restart" (confirmed it gets recreated), a bare pod's showed only
+  "Delete" (confirmed gone via `kubectl get pod` returning NotFound); all
+  six write calls landed in the audit log.
 
 ### Changed
 

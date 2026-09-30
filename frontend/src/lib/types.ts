@@ -159,6 +159,10 @@ export type PodDetail = {
   events: ClusterEvent[];
   yaml: string;
   deploymentName?: string;
+  // Roadmap Phase 33: true when this pod has an owning controller — the
+  // action bar shows "Restart" (effectively a delete+recreate) only when
+  // true, otherwise just "Delete" with an explicit warning.
+  hasController: boolean;
 };
 
 export type Revision = {
@@ -184,6 +188,10 @@ export type DeploymentDetail = {
   statusColor: StatusColor;
   readySummary: string;
   replicas: string;
+  // Roadmap Phase 33: desiredReplicas backs the Scale control;
+  // paused backs the "Rollout paused" badge and Pause/Resume action.
+  desiredReplicas: number;
+  paused: boolean;
   strategy: string;
   image: string;
   managedBy: string;
@@ -200,6 +208,8 @@ export type StatefulSetDetail = {
   status: string;
   statusColor: StatusColor;
   ready: string;
+  // Roadmap Phase 33: backs the Scale control.
+  desiredReplicas: number;
   serviceName: string;
   updateStrategy: string;
   image: string;

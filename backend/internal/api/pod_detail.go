@@ -62,6 +62,11 @@ type PodDetailResponse struct {
 	Containers  []PodContainerSummary `json:"containers"`
 	Events      []PodEventRow         `json:"events"`
 	YAML        string                `json:"yaml"`
+	// HasController is true when this pod has an owning controller
+	// (ReplicaSet/StatefulSet/DaemonSet/Job/...) — Roadmap Phase 33 uses
+	// this to decide whether "Delete" in the UI is effectively a restart
+	// (the controller recreates it) or a real, non-recoverable delete.
+	HasController bool `json:"hasController"`
 }
 
 // PodDetail handles GET /api/v1/pods/{namespace}/{name}.
@@ -115,22 +120,23 @@ func (h *Handler) buildPodDetail(ctx context.Context, metricsClientset *metricsc
 	yaml := marshalYAML(pod)
 
 	return PodDetailResponse{
-		Name:        pod.Name,
-		Namespace:   pod.Namespace,
-		Status:      status,
-		StatusColor: string(color),
-		Node:        pod.Spec.NodeName,
-		PodIP:       pod.Status.PodIP,
-		QOSClass:    string(pod.Status.QOSClass),
-		Restarts:    podRestarts(pod),
-		Image:       image,
-		Age:         formatAge(pod.CreationTimestamp.Time),
-		Labels:      labels,
-		CPU:         cpu,
-		Memory:      memory,
-		Containers:  containerSummaries(pod),
-		Events:      eventRows,
-		YAML:        yaml,
+		Name:          pod.Name,
+		Namespace:     pod.Namespace,
+		Status:        status,
+		StatusColor:   string(color),
+		Node:          pod.Spec.NodeName,
+		PodIP:         pod.Status.PodIP,
+		QOSClass:      string(pod.Status.QOSClass),
+		Restarts:      podRestarts(pod),
+		Image:         image,
+		Age:           formatAge(pod.CreationTimestamp.Time),
+		Labels:        labels,
+		CPU:           cpu,
+		Memory:        memory,
+		Containers:    containerSummaries(pod),
+		Events:        eventRows,
+		YAML:          yaml,
+		HasController: len(pod.OwnerReferences) > 0,
 	}
 }
 

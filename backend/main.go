@@ -184,15 +184,21 @@ func main() {
 		protected.Get("/dashboard/summary", workloadsHandler.DashboardSummary)
 		protected.Get("/events", workloadsHandler.Events)
 
-		// Write actions (Roadmap Phase 9) — the deliberate, narrow, audited
-		// exception to the read-only rule. See AGENTS.md's core rule and
-		// internal/k8s/deployment_actions.go before adding another one.
+		// Write actions (Roadmap Phase 9, extended by Phase 33) — the
+		// deliberate, narrow, audited exception to the read-only rule. See
+		// AGENTS.md's core rule and internal/k8s/deployment_actions.go /
+		// scale_actions.go / pod_actions.go before adding another one.
 		// Rate-limited per identity (Roadmap Phase 17) — see writeLimiter.
 		protected.Group(func(w chi.Router) {
 			w.Use(writeLimiter.Middleware)
 			w.Post("/deployments/{namespace}/{name}/restart", workloadsHandler.RestartDeployment)
 			w.Delete("/deployments/{namespace}/{name}", workloadsHandler.DeleteDeployment)
 			w.Post("/deployments/{namespace}/{name}/rollback", workloadsHandler.RollbackDeployment)
+			w.Post("/deployments/{namespace}/{name}/scale", workloadsHandler.ScaleDeployment)
+			w.Post("/deployments/{namespace}/{name}/pause", workloadsHandler.PauseDeploymentRollout)
+			w.Post("/deployments/{namespace}/{name}/resume", workloadsHandler.ResumeDeploymentRollout)
+			w.Post("/statefulsets/{namespace}/{name}/scale", workloadsHandler.ScaleStatefulSet)
+			w.Delete("/pods/{namespace}/{name}", workloadsHandler.DeletePod)
 		})
 	})
 

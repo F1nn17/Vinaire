@@ -15,18 +15,20 @@ import (
 // StatefulSetDetailResponse matches the frontend's StatefulSetDetail type
 // (frontend/src/lib/types.ts).
 type StatefulSetDetailResponse struct {
-	Name           string            `json:"name"`
-	Namespace      string            `json:"namespace"`
-	Status         string            `json:"status"`
-	StatusColor    string            `json:"statusColor"`
-	Ready          string            `json:"ready"`
-	ServiceName    string            `json:"serviceName"`
-	UpdateStrategy string            `json:"updateStrategy"`
-	Image          string            `json:"image"`
-	Age            string            `json:"age"`
-	Labels         map[string]string `json:"labels"`
-	Events         []PodEventRow     `json:"events"`
-	YAML           string            `json:"yaml"`
+	Name        string `json:"name"`
+	Namespace   string `json:"namespace"`
+	Status      string `json:"status"`
+	StatusColor string `json:"statusColor"`
+	Ready       string `json:"ready"`
+	// DesiredReplicas backs Roadmap Phase 33's Scale control.
+	DesiredReplicas int32             `json:"desiredReplicas"`
+	ServiceName     string            `json:"serviceName"`
+	UpdateStrategy  string            `json:"updateStrategy"`
+	Image           string            `json:"image"`
+	Age             string            `json:"age"`
+	Labels          map[string]string `json:"labels"`
+	Events          []PodEventRow     `json:"events"`
+	YAML            string            `json:"yaml"`
 }
 
 // StatefulSetDetail handles GET /api/v1/statefulsets/{namespace}/{name}.
@@ -82,17 +84,18 @@ func buildStatefulSetDetail(s appsv1.StatefulSet, events []corev1.Event) Statefu
 	yaml := marshalYAML(s)
 
 	return StatefulSetDetailResponse{
-		Name:           s.Name,
-		Namespace:      s.Namespace,
-		Status:         status,
-		StatusColor:    string(color),
-		Ready:          formatReady(s.Status.ReadyReplicas, desired),
-		ServiceName:    s.Spec.ServiceName,
-		UpdateStrategy: string(s.Spec.UpdateStrategy.Type),
-		Image:          image,
-		Age:            formatAge(s.CreationTimestamp.Time),
-		Labels:         labels,
-		Events:         eventRows,
-		YAML:           yaml,
+		Name:            s.Name,
+		Namespace:       s.Namespace,
+		Status:          status,
+		StatusColor:     string(color),
+		Ready:           formatReady(s.Status.ReadyReplicas, desired),
+		DesiredReplicas: desired,
+		ServiceName:     s.Spec.ServiceName,
+		UpdateStrategy:  string(s.Spec.UpdateStrategy.Type),
+		Image:           image,
+		Age:             formatAge(s.CreationTimestamp.Time),
+		Labels:          labels,
+		Events:          eventRows,
+		YAML:            yaml,
 	}
 }

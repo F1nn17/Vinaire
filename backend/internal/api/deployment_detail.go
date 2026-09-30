@@ -35,19 +35,24 @@ type DeploymentRevisionRow struct {
 // DeploymentDetailResponse matches the frontend's DeploymentDetail type
 // (frontend/src/lib/types.ts).
 type DeploymentDetailResponse struct {
-	Name         string                  `json:"name"`
-	Namespace    string                  `json:"namespace"`
-	Status       string                  `json:"status"`
-	StatusColor  string                  `json:"statusColor"`
-	ReadySummary string                  `json:"readySummary"`
-	Replicas     string                  `json:"replicas"`
-	Strategy     string                  `json:"strategy"`
-	Image        string                  `json:"image"`
-	ManagedBy    string                  `json:"managedBy"`
-	Age          string                  `json:"age"`
-	Pods         []DeploymentPodRow      `json:"pods"`
-	Revisions    []DeploymentRevisionRow `json:"revisions"`
-	YAML         string                  `json:"yaml"`
+	Name         string `json:"name"`
+	Namespace    string `json:"namespace"`
+	Status       string `json:"status"`
+	StatusColor  string `json:"statusColor"`
+	ReadySummary string `json:"readySummary"`
+	Replicas     string `json:"replicas"`
+	// DesiredReplicas/Paused back Roadmap Phase 33's Scale control and
+	// "Rollout paused" badge — Replicas above stays the existing
+	// human-readable "N/M ready" string the Overview tab already renders.
+	DesiredReplicas int32                   `json:"desiredReplicas"`
+	Paused          bool                    `json:"paused"`
+	Strategy        string                  `json:"strategy"`
+	Image           string                  `json:"image"`
+	ManagedBy       string                  `json:"managedBy"`
+	Age             string                  `json:"age"`
+	Pods            []DeploymentPodRow      `json:"pods"`
+	Revisions       []DeploymentRevisionRow `json:"revisions"`
+	YAML            string                  `json:"yaml"`
 }
 
 // DeploymentDetail handles GET /api/v1/deployments/{namespace}/{name} —
@@ -157,19 +162,21 @@ func buildDeploymentDetail(d appsv1.Deployment, pods *corev1.PodList, replicaSet
 	yaml := marshalYAML(d)
 
 	return DeploymentDetailResponse{
-		Name:         d.Name,
-		Namespace:    d.Namespace,
-		Status:       status,
-		StatusColor:  string(color),
-		ReadySummary: fmt.Sprintf("%s · %s", status, formatReady(d.Status.ReadyReplicas, desired)),
-		Replicas:     fmt.Sprintf("%s ready", formatReady(d.Status.ReadyReplicas, desired)),
-		Strategy:     string(d.Spec.Strategy.Type),
-		Image:        image,
-		ManagedBy:    managedBy,
-		Age:          formatAge(d.CreationTimestamp.Time),
-		Pods:         podRows,
-		Revisions:    revisionRows,
-		YAML:         yaml,
+		Name:            d.Name,
+		Namespace:       d.Namespace,
+		Status:          status,
+		StatusColor:     string(color),
+		ReadySummary:    fmt.Sprintf("%s · %s", status, formatReady(d.Status.ReadyReplicas, desired)),
+		Replicas:        fmt.Sprintf("%s ready", formatReady(d.Status.ReadyReplicas, desired)),
+		DesiredReplicas: desired,
+		Paused:          d.Spec.Paused,
+		Strategy:        string(d.Spec.Strategy.Type),
+		Image:           image,
+		ManagedBy:       managedBy,
+		Age:             formatAge(d.CreationTimestamp.Time),
+		Pods:            podRows,
+		Revisions:       revisionRows,
+		YAML:            yaml,
 	}
 }
 

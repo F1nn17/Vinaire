@@ -24,6 +24,20 @@ flow.
 - `DELETE /api/v1/deployments/{namespace}/{name}` — a plain `Delete()`.
 - `POST /api/v1/deployments/{namespace}/{name}/rollback` — patches
   `spec.template` from a prior revision's ReplicaSet.
+- `POST /api/v1/deployments/{namespace}/{name}/scale` and
+  `POST /api/v1/statefulsets/{namespace}/{name}/scale` (Roadmap Phase 33)
+  — via the Scale subresource (`UpdateScale`), not a direct `spec.replicas`
+  patch.
+- `POST /api/v1/deployments/{namespace}/{name}/pause` /
+  `.../resume` (Phase 33) — patches `spec.paused`
+  (`kubectl rollout pause`/`resume`'s mechanism).
+- `DELETE /api/v1/pods/{namespace}/{name}` (Phase 33) — a plain `Delete()`
+  on the Pod itself (not the Deployment). If the pod has a controller
+  (`OwnerReferences` non-empty), the controller recreates it — effectively
+  a restart; a bare pod is gone for good. The frontend tells the two cases
+  apart (`PodDetailResponse.HasController`) and shows "Restart" vs.
+  "Delete" accordingly — the backend's `Delete()` call is identical either
+  way.
 - `POST /api/v1/clusters` / `DELETE /api/v1/clusters/{name}` — cluster
   management via the web UI (Settings page): create/get/update on exactly
   one Secret (`vinaire-clusters`, in this backend's own namespace, via a
@@ -205,10 +219,24 @@ rules:
   - apiGroups: ["hub.traefik.io", "traefik.io", "helm.cattle.io", "k3s.cattle.io"]
     resources: ["*"]
     verbs: ["get", "list", "watch"]
-  # Phase 9's three write actions — omit this block for a read-only login.
+  # Phase 9's three write actions (restart/delete/rollback all patch or
+  # delete the Deployment object itself) plus Phase 33's Pause/Resume
+  # (also a plain Deployment patch) — omit this whole block for a
+  # read-only login.
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["patch", "delete"]
+  # Phase 33's Scale control — a separate subresource from "deployments"/
+  # "statefulsets" above, needs its own grant (the same way pods/log and
+  # pods/exec are separate from "pods" earlier in this file).
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale", "statefulsets/scale"]
+    verbs: ["get", "update"]
+  # Phase 33's pod-level Delete (owned pods: effectively a restart once
+  # the controller recreates them; bare pods: gone for good).
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]
 ```
 
 Bind it cluster-wide or to a single namespace (`RoleBinding` instead of

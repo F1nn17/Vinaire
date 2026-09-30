@@ -38,3 +38,41 @@ export async function rollbackDeployment(
     },
   );
 }
+
+// Roadmap Phase 33 — Scale via the Scale subresource (not a spec.replicas
+// patch), and Pause/Resume rollout (kubectl rollout pause/resume's
+// mechanism).
+export async function scaleDeployment(
+  namespace: string,
+  name: string,
+  replicas: number,
+): Promise<void> {
+  await apiFetch(
+    `/api/v1/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/scale`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ replicas }),
+    },
+  );
+}
+
+export async function pauseDeploymentRollout(
+  namespace: string,
+  name: string,
+): Promise<void> {
+  await apiFetch(
+    `/api/v1/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/pause`,
+    { method: "POST" },
+  );
+}
+
+export async function resumeDeploymentRollout(
+  namespace: string,
+  name: string,
+): Promise<void> {
+  await apiFetch(
+    `/api/v1/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/resume`,
+    { method: "POST" },
+  );
+}

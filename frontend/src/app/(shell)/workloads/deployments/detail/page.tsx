@@ -12,10 +12,23 @@ import { CodeBlock } from "@/components/ui/CodeBlock";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Toast, type ToastState } from "@/components/ui/Toast";
+import { ActionBar, ActionButton } from "@/components/ui/ActionBar";
+import { ScaleModal } from "@/components/ui/ScaleModal";
+import {
+  HistoryIcon,
+  PauseIcon,
+  PlayIcon,
+  RestartIcon,
+  ScaleIcon,
+  TrashIcon,
+} from "@/components/icons";
 import {
   deleteDeployment,
+  pauseDeploymentRollout,
   restartDeployment,
+  resumeDeploymentRollout,
   rollbackDeployment,
+  scaleDeployment,
 } from "@/lib/api/deploymentActions";
 
 type PendingAction =
@@ -99,6 +112,49 @@ function DeploymentDetailPage() {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
+  const [scaleOpen, setScaleOpen] = useState(false);
+  const [scaleBusy, setScaleBusy] = useState(false);
+
+  async function handleOpenScale() {
+    // Refetch *before* mounting the modal, so a stale number can't
+    // silently overwrite a concurrent `kubectl scale` — ScaleModal seeds
+    // its input once, from whatever `deployment.desiredReplicas` is at
+    // mount time.
+    await mutate();
+    setScaleOpen(true);
+  }
+
+  async function handleScale(replicas: number) {
+    setScaleBusy(true);
+    try {
+      await scaleDeployment(deploymentNamespace, deploymentName, replicas);
+      setToast({
+        type: "success",
+        message: `Scaled to ${replicas} replica${replicas === 1 ? "" : "s"}.`,
+      });
+      setScaleOpen(false);
+      await mutate();
+    } catch (err) {
+      setToast({ type: "error", message: friendlyErrorMessage(err) });
+    } finally {
+      setScaleBusy(false);
+    }
+  }
+
+  async function handlePauseResume() {
+    try {
+      if (deployment?.paused) {
+        await resumeDeploymentRollout(deploymentNamespace, deploymentName);
+        setToast({ type: "success", message: "Rollout resumed." });
+      } else {
+        await pauseDeploymentRollout(deploymentNamespace, deploymentName);
+        setToast({ type: "success", message: "Rollout paused." });
+      }
+      await mutate();
+    } catch (err) {
+      setToast({ type: "error", message: friendlyErrorMessage(err) });
+    }
+  }
 
   async function handleConfirm() {
     if (!pending) return;
@@ -172,24 +228,41 @@ function DeploymentDetailPage() {
               <StatusDot color={deployment.statusColor} />
               {deployment.readySummary}
             </span>
+            {deployment.paused && (
+              <span className="rounded-full border border-warn px-2.5 py-[3px] text-xs text-warn">
+                Rollout paused
+              </span>
+            )}
           </div>
         </div>
-        <div className="flex shrink-0 gap-2.5">
-          <button
-            type="button"
+        <ActionBar>
+          <ActionButton
+            icon={<ScaleIcon />}
+            label="Scale"
+            onClick={handleOpenScale}
+          />
+          <ActionButton
+            icon={<RestartIcon />}
+            label="Restart rollout"
             onClick={() => setPending({ kind: "restart" })}
-            className="rounded-lg border border-border bg-surface px-3.5 py-2 text-[12.5px]"
-          >
-            Restart rollout
-          </button>
-          <button
-            type="button"
+          />
+          <ActionButton
+            icon={deployment.paused ? <PlayIcon /> : <PauseIcon />}
+            label={deployment.paused ? "Resume rollout" : "Pause rollout"}
+            onClick={handlePauseResume}
+          />
+          <ActionButton
+            icon={<HistoryIcon />}
+            label="Revisions"
+            onClick={() => setTab("revisions")}
+          />
+          <ActionButton
+            icon={<TrashIcon />}
+            label="Delete"
+            danger
             onClick={() => setPending({ kind: "delete" })}
-            className="rounded-lg border border-err px-3.5 py-2 text-[12.5px] text-err"
-          >
-            Delete
-          </button>
-        </div>
+          />
+        </ActionBar>
       </div>
 
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
@@ -271,6 +344,15 @@ function DeploymentDetailPage() {
         onConfirm={handleConfirm}
         onCancel={() => setPending(null)}
       />
+      {scaleOpen && (
+        <ScaleModal
+          resourceName={deploymentName}
+          currentReplicas={deployment.desiredReplicas}
+          busy={scaleBusy}
+          onApply={handleScale}
+          onCancel={() => setScaleOpen(false)}
+        />
+      )}
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );

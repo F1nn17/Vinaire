@@ -2482,11 +2482,63 @@ and no new points arrive until Resume is clicked.
 
 ---
 
-## Phase 33 — Scale and a consolidated resource action bar
+## Phase 33 — Scale and a consolidated resource action bar ✅ done
 
 **Goal:** scaling, pausing a rollout, and deleting a pod are all real,
 audited actions — and every action on a detail page lives in one compact
 toolbar instead of scattered, oversized buttons.
+
+> **Outcome note:** this is a genuinely new extension to AGENTS.md's core
+> rule — four new write actions (Scale ×2, Pause/Resume, pod-level
+> Delete) beyond Phase 9's original three and Phase 24's cluster
+> management — flagged and updated in AGENTS.md's "What's actually
+> allowed to write" list and its example ClusterRole (new subresource
+> grants: `deployments/scale`+`statefulsets/scale` get/update, and
+> `pods` delete — separate from the existing `pods/log`/`pods/exec`
+> grants, the same way those are separate from plain `pods` read access)
+> as part of implementing this phase, the same way Phase 9 and Phase 24
+> themselves were explicit, discussed changes rather than quiet additions.
+> Scale uses `GetScale` then `UpdateScale` (not a direct `spec.replicas`
+> patch) specifically so the update carries the current
+> `ResourceVersion` — the same optimistic-concurrency guard `kubectl
+> scale` itself relies on. Pod-level delete is a single `Delete()` call
+> either way; `PodDetailResponse.HasController` (from
+> `len(pod.OwnerReferences) > 0`) is what lets the frontend show "Restart"
+> (owned — the controller recreates it) vs. "Delete" (bare — gone for
+> good) without any different backend logic. The action-bar icons
+> (Scale/Restart/Pause/Resume/History/Delete) are new additions to
+> `components/icons.tsx`; tooltips use the native `title` attribute
+> rather than a bespoke Tooltip component. `ScaleModal` mirrors
+> `CommandPalette`'s reset-on-mount pattern from Phase 20 (rendered only
+> while `open`, so `useState(currentReplicas)` always starts fresh — no
+> reset-on-prop-change effect, which `eslint-plugin-react-hooks`'s
+> `set-state-in-effect` rule flags) — the caller refetches
+> (`await mutate()`) *before* mounting it, not after, so the seeded value
+> is never one refetch behind.
+>
+> Verified end-to-end against `k3d-vinaire-dev` with throwaway
+> Deployment/StatefulSet/bare-pod fixtures, in a real browser via
+> Playwright: Scale from 1→3 replicas showed `3/3 ready` within seconds
+> and matched `kubectl get deployment`; the Pause/Resume DoD specifically
+> — paused, then a real `kubectl set image` while paused left all pods on
+> the old image, and only after clicking Resume did a new ReplicaSet's pod
+> appear with the new image, confirmed via `kubectl get pods -o
+> jsonpath`; StatefulSet Scale showed the ordinal-order warning in the
+> modal and scaled correctly; an owned pod's action bar showed only
+> "Restart" (deleting it correctly triggered a same-named-prefix
+> replacement pod) and a bare pod's showed only "Delete" with the
+> "won't be recreated" warning (confirmed gone via
+> `kubectl get pod` returning NotFound); every one of the 6 write calls
+> (scale ×2, pause, resume, delete-pod ×2) appeared correctly in the
+> structured audit log. Also confirmed the updated `vinaire-viewer`
+> ClusterRole actually grants the new subresource permissions against the
+> real in-cluster ServiceAccount (`kubectl auth can-i update deployments
+> --subresource=scale`, `... statefulsets --subresource=scale`, `delete
+> pods`, all `--as=system:serviceaccount:vinaire:vinaire`) — the bare
+> `resource/subresource` string form of `can-i` gives a false "no" for a
+> real subresource grant in this kubectl version (the same quirk hit
+> earlier for `pods/exec`); `--subresource=` is the form that actually
+> reflects the real permission.
 
 **Backend**
 - `POST /api/v1/deployments/{namespace}/{name}/scale` (body:

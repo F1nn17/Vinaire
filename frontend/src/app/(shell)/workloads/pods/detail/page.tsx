@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import { usePod } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
@@ -9,6 +9,11 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { EventRow } from "@/components/ui/EventRow";
+import { ActionBar, ActionButton } from "@/components/ui/ActionBar";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { Toast, type ToastState } from "@/components/ui/Toast";
+import { RestartIcon, TrashIcon } from "@/components/icons";
+import { deletePod } from "@/lib/api/podActions";
 import { LogsTab } from "./LogsTab";
 import { TerminalTab } from "./TerminalTab";
 
@@ -38,11 +43,32 @@ export default function PodDetailPageRoute() {
 }
 
 function PodDetailPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const podNamespace = searchParams.get("namespace") ?? "";
   const podName = searchParams.get("name") ?? "";
   const { data: pod, isLoading, error } = usePod(podNamespace, podName);
   const [tab, setTab] = useState<Tab>("overview");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<ToastState>(null);
+
+  async function handleDelete() {
+    setBusy(true);
+    try {
+      await deletePod(podNamespace, podName);
+      setToast({
+        type: "success",
+        message: pod?.hasController
+          ? "Pod deleted — its controller will recreate it."
+          : "Pod deleted.",
+      });
+      router.push("/workloads");
+    } catch (err) {
+      setToast({ type: "error", message: friendlyErrorMessage(err) });
+      setBusy(false);
+    }
+  }
 
   if (error) {
     return (
@@ -80,22 +106,14 @@ function PodDetailPage() {
             </span>
           </div>
         </div>
-        <div className="flex shrink-0 gap-2.5">
-          <button
-            type="button"
-            title="TODO: wire up to backend — proposes a GitOps PR, does not call the Kubernetes API directly"
-            className="rounded-lg border border-border bg-surface px-3.5 py-2 text-[12.5px]"
-          >
-            Restart
-          </button>
-          <button
-            type="button"
-            title="TODO: wire up to backend — proposes a GitOps PR, does not call the Kubernetes API directly"
-            className="rounded-lg border border-err px-3.5 py-2 text-[12.5px] text-err"
-          >
-            Delete
-          </button>
-        </div>
+        <ActionBar>
+          <ActionButton
+            icon={pod.hasController ? <RestartIcon /> : <TrashIcon />}
+            label={pod.hasController ? "Restart" : "Delete"}
+            danger={!pod.hasController}
+            onClick={() => setConfirmOpen(true)}
+          />
+        </ActionBar>
       </div>
 
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
@@ -200,6 +218,22 @@ function PodDetailPage() {
       )}
 
       {tab === "yaml" && <CodeBlock code={pod.yaml} />}
+
+      <ConfirmModal
+        open={confirmOpen}
+        title={pod.hasController ? "Restart pod?" : "Delete pod?"}
+        message={
+          pod.hasController
+            ? `This deletes "${pod.name}" — its controller will recreate it shortly, same as a restart.`
+            : `This pod has no controller — it will not be recreated. This permanently deletes "${pod.name}".`
+        }
+        confirmLabel={pod.hasController ? "Restart" : "Delete"}
+        danger={!pod.hasController}
+        busy={busy}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

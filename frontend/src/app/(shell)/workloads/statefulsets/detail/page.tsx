@@ -9,6 +9,11 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { EventRow } from "@/components/ui/EventRow";
+import { ActionBar, ActionButton } from "@/components/ui/ActionBar";
+import { ScaleModal } from "@/components/ui/ScaleModal";
+import { Toast, type ToastState } from "@/components/ui/Toast";
+import { ScaleIcon } from "@/components/icons";
+import { scaleStatefulSet } from "@/lib/api/statefulsetActions";
 
 type Tab = "overview" | "events" | "yaml";
 
@@ -37,8 +42,40 @@ function StatefulSetDetailPage() {
   const searchParams = useSearchParams();
   const namespace = searchParams.get("namespace") ?? "";
   const name = searchParams.get("name") ?? "";
-  const { data: sts, isLoading, error } = useStatefulSet(namespace, name);
+  const {
+    data: sts,
+    isLoading,
+    error,
+    mutate,
+  } = useStatefulSet(namespace, name);
   const [tab, setTab] = useState<Tab>("overview");
+  const [scaleOpen, setScaleOpen] = useState(false);
+  const [scaleBusy, setScaleBusy] = useState(false);
+  const [toast, setToast] = useState<ToastState>(null);
+
+  async function handleOpenScale() {
+    // Refetch *before* mounting the modal — see the Deployment detail
+    // page's identical comment for why.
+    await mutate();
+    setScaleOpen(true);
+  }
+
+  async function handleScale(replicas: number) {
+    setScaleBusy(true);
+    try {
+      await scaleStatefulSet(namespace, name, replicas);
+      setToast({
+        type: "success",
+        message: `Scaled to ${replicas} replica${replicas === 1 ? "" : "s"}.`,
+      });
+      setScaleOpen(false);
+      await mutate();
+    } catch (err) {
+      setToast({ type: "error", message: friendlyErrorMessage(err) });
+    } finally {
+      setScaleBusy(false);
+    }
+  }
 
   if (error) {
     return (
@@ -76,6 +113,13 @@ function StatefulSetDetailPage() {
             </span>
           </div>
         </div>
+        <ActionBar>
+          <ActionButton
+            icon={<ScaleIcon />}
+            label="Scale"
+            onClick={handleOpenScale}
+          />
+        </ActionBar>
       </div>
 
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
@@ -116,6 +160,18 @@ function StatefulSetDetailPage() {
       )}
 
       {tab === "yaml" && <CodeBlock code={sts.yaml} />}
+
+      {scaleOpen && (
+        <ScaleModal
+          resourceName={name}
+          currentReplicas={sts.desiredReplicas}
+          busy={scaleBusy}
+          orderNote="Scaling down a StatefulSet terminates pods one at a time, in descending ordinal order — unlike a Deployment."
+          onApply={handleScale}
+          onCancel={() => setScaleOpen(false)}
+        />
+      )}
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }
