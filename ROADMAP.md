@@ -2383,7 +2383,24 @@ minute or two a new Node shows up in Vinaire's list and in
 
 ---
 
-## Phase 31 — Create via a form, with a YAML toggle
+## Phase 31 — Create via a form, with a YAML toggle ✅ done
+
+> **Outcome note:** Built as specced, with three deviations. (1) The
+> optional ResourceQuota on the Namespace form was left out: it's a second
+> object, and Phase 25's apply path is deliberately one document at a time
+> (a quota can't even be dry-run before its namespace exists) — it belongs
+> with Phase 27's namespace/quota management. (2) `package.json` gained the
+> small `yaml` package: reading YAML back into the form needs a real parser.
+> (3) The Namespace form is reachable from the Workloads "Create" template
+> picker until Phase 27 adds a Namespaces page. "Too complex for the form"
+> is detected by a round trip (YAML -> form state -> manifest must equal the
+> original), not a field allowlist, so any extra field, sidecar container or
+> `valueFrom` env correctly blocks the switch. Verified in a real browser:
+> a Deployment created without typing YAML (image, 2 replicas, port, env,
+> requests/limits, node) matches the expected `kubectl get`; the generated
+> YAML round-trips back into the form; adding `x-extra: 1` blocks the switch
+> with the form state intact; ConfigMap, Secret (value stored, input masked)
+> and Namespace forms create correctly.
 
 **Goal:** creating the most common resource kinds doesn't require knowing
 YAML at all, while staying on the exact same dry-run → apply path Phase 25

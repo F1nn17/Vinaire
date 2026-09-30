@@ -140,6 +140,7 @@ func main() {
 
 		protected.Get("/search", workloadsHandler.Search)
 		protected.Get("/capacity", workloadsHandler.Capacity)
+		protected.Get("/forms/{resourceType}", workloadsHandler.FormSchemaByType)
 		protected.Get("/nodes", workloadsHandler.Nodes)
 		protected.Get("/nodes/{name}", workloadsHandler.NodeDetail)
 		protected.Get("/pods", workloadsHandler.Pods)

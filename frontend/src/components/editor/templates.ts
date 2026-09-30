@@ -1,4 +1,11 @@
-export type ResourceTemplate = { label: string; yaml: string };
+// `formType` (Roadmap Phase 31) names the form schema/converter that can
+// assemble this kind without hand-written YAML; templates without one are
+// YAML-only.
+export type ResourceTemplate = {
+  label: string;
+  yaml: string;
+  formType?: string;
+};
 
 // Starter manifests for the "+ Create" buttons (Roadmap Phase 25). Kept
 // minimal — just enough that the cluster's own dry-run has something valid to
@@ -6,6 +13,7 @@ export type ResourceTemplate = { label: string; yaml: string };
 
 const deployment: ResourceTemplate = {
   label: "Deployment",
+  formType: "deployment",
   yaml: `apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -107,6 +115,7 @@ spec:
 
 const configMap: ResourceTemplate = {
   label: "ConfigMap",
+  formType: "configmap",
   yaml: `apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -119,6 +128,7 @@ data:
 
 const secret: ResourceTemplate = {
   label: "Secret",
+  formType: "secret",
   yaml: `apiVersion: v1
 kind: Secret
 metadata:
@@ -127,6 +137,16 @@ metadata:
 type: Opaque
 stringData:
   key: value
+`,
+};
+
+const namespace: ResourceTemplate = {
+  label: "Namespace",
+  formType: "namespace",
+  yaml: `apiVersion: v1
+kind: Namespace
+metadata:
+  name: my-namespace
 `,
 };
 
@@ -169,7 +189,7 @@ spec:
 };
 
 export const workloadTemplates: Record<string, ResourceTemplate[]> = {
-  deployments: [deployment],
+  deployments: [deployment, namespace],
   statefulsets: [statefulset],
   daemonsets: [daemonset],
   jobs: [job],

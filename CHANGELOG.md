@@ -514,6 +514,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to a `resourceVersion` so busy resources don't spuriously conflict, and
   every real write is audited. The Helm chart's ClusterRole also gained the
   Phase 33 scale/pod-delete grants it had missed.
+- Create via a form, with a YAML toggle (Roadmap Phase 31). The "+ Create"
+  modal opens in Form mode for Deployment (name, namespace, image, replicas,
+  port, env vars, CPU/memory requests and limits, optional node from the
+  Phase 19 node list), ConfigMap, Secret (values masked) and Namespace; a
+  Form/YAML segmented control switches between the form and the generated
+  manifest in Monaco. YAML -> Form only succeeds if the form can represent
+  the manifest exactly (read it into form state, serialize back, require
+  equality) — otherwise switching is refused with "too complex to edit as a
+  form" and nothing is lost. Everything after that is Phase 25's unchanged
+  dry-run -> diff -> apply. New read-only `GET /api/v1/forms/{resourceType}`
+  serves the hand-written field schemas; no new write path.
 
 ### Changed
 
