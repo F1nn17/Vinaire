@@ -7,7 +7,7 @@ import { useStatefulSet } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { CodeBlock } from "@/components/ui/CodeBlock";
+import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
 import { ActionBar, ActionButton } from "@/components/ui/ActionBar";
 import { ScaleModal } from "@/components/ui/ScaleModal";
@@ -159,7 +159,9 @@ function StatefulSetDetailPage() {
         </div>
       )}
 
-      {tab === "yaml" && <CodeBlock code={sts.yaml} />}
+      {tab === "yaml" && (
+        <YamlPanel yaml={sts.yaml} onApplied={() => mutate()} />
+      )}
 
       {scaleOpen && (
         <ScaleModal

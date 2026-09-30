@@ -43,6 +43,11 @@ func respondK8sError(w http.ResponseWriter, err error) {
 		status = http.StatusUnauthorized
 	case apierrors.IsNotFound(err):
 		status = http.StatusNotFound
+	case apierrors.IsConflict(err), apierrors.IsAlreadyExists(err):
+		status = http.StatusConflict
+	case apierrors.IsInvalid(err), apierrors.IsBadRequest(err):
+		status = http.StatusUnprocessableEntity
+		message = statusMessage(err)
 	}
 	respondError(w, status, message)
 }
@@ -56,6 +61,17 @@ func respondK8sError(w http.ResponseWriter, err error) {
 // front of it. errors.As unwraps through that wrapping to find the
 // underlying *apierrors.StatusError.
 func forbiddenMessage(err error) string {
+	var statusErr *apierrors.StatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.Status().Message
+	}
+	return err.Error()
+}
+
+// statusMessage pulls the API server's own explanation out of a StatusError
+// (for a dry-run rejection that's the specific field-level validation
+// failure), not this backend's wrapping prefix.
+func statusMessage(err error) string {
 	var statusErr *apierrors.StatusError
 	if errors.As(err, &statusErr) {
 		return statusErr.Status().Message

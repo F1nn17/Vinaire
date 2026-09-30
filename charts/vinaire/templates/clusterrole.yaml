@@ -57,9 +57,18 @@ rules:
   {{- with .Values.rbac.extraRules }}
   {{- toYaml . | nindent 2 }}
   {{- end }}
-  # The exact three write actions AGENTS.md's core rule allows — nothing
-  # else, on any resource kind, should ever be added here.
+  # The fixed write actions AGENTS.md's core rule allows (Phase 9's
+  # restart/delete/rollback, Phase 33's pause/resume/scale/pod delete).
+  # Phase 25's generic YAML create/update is deliberately NOT granted here:
+  # add the create/update verbs you want on the kinds you want through
+  # rbac.extraRules, so what Vinaire may write stays an explicit decision.
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale", "statefulsets/scale"]
+    verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]
 {{- end }}

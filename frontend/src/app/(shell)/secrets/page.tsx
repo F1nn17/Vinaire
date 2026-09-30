@@ -6,6 +6,8 @@ import { revealSecretKey } from "@/lib/api/secrets";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { ListDetailSplit } from "@/components/ui/ListDetailSplit";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { CreateResourceModal } from "@/components/editor/CreateResourceModal";
+import { secretTemplates } from "@/components/editor/templates";
 import { PlusIcon, SecretIcon } from "@/components/icons";
 import type { SecretDetail } from "@/lib/types";
 
@@ -16,7 +18,8 @@ type RevealState =
 
 export default function SecretsPage() {
   const [namespace, setNamespace] = useState("");
-  const { data, isLoading, error } = useSecrets(namespace);
+  const { data, isLoading, error, mutate } = useSecrets(namespace);
+  const [createOpen, setCreateOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Revealed values live only in this component's state — never in the SWR
   // cache — so navigating to another secret (or away and back) re-masks
@@ -36,6 +39,7 @@ export default function SecretsPage() {
         <div className="text-[15px] font-semibold">Secrets</div>
         <button
           type="button"
+          onClick={() => setCreateOpen(true)}
           className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
         >
           <PlusIcon />
@@ -71,6 +75,13 @@ export default function SecretsPage() {
           onSelect={selectSecret}
           revealState={revealState}
           setRevealState={setRevealState}
+        />
+      )}
+      {createOpen && (
+        <CreateResourceModal
+          templates={secretTemplates}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => void mutate()}
         />
       )}
     </div>

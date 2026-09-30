@@ -116,7 +116,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.CORSAllowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "X-Cluster"},
 		AllowCredentials: true, // the session cookie (Roadmap Phase 10) needs this
 		MaxAge:           300,
@@ -189,6 +189,9 @@ func main() {
 		// AGENTS.md's core rule and internal/k8s/deployment_actions.go /
 		// scale_actions.go / pod_actions.go before adding another one.
 		// Rate-limited per identity (Roadmap Phase 17) — see writeLimiter.
+		// Dry-run persists nothing, so it stays outside the write limiter —
+		// a user iterating on a manifest shouldn't burn their write budget.
+		protected.Post("/resources/dry-run", workloadsHandler.ApplyDryRun)
 		protected.Group(func(w chi.Router) {
 			w.Use(writeLimiter.Middleware)
 			w.Post("/deployments/{namespace}/{name}/restart", workloadsHandler.RestartDeployment)
@@ -199,6 +202,11 @@ func main() {
 			w.Post("/deployments/{namespace}/{name}/resume", workloadsHandler.ResumeDeploymentRollout)
 			w.Post("/statefulsets/{namespace}/{name}/scale", workloadsHandler.ScaleStatefulSet)
 			w.Delete("/pods/{namespace}/{name}", workloadsHandler.DeletePod)
+			// Roadmap Phase 25's generic YAML create/update (any kind the
+			// cluster serves; the caller's own RBAC decides) — see
+			// internal/k8s/apply.go and AGENTS.md.
+			w.Post("/resources", workloadsHandler.CreateResource)
+			w.Put("/resources", workloadsHandler.UpdateResource)
 		})
 	})
 

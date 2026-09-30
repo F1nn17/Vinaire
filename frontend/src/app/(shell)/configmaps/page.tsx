@@ -5,11 +5,14 @@ import { useConfigMaps } from "@/lib/hooks/useConfigMaps";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { ListDetailSplit } from "@/components/ui/ListDetailSplit";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { CreateResourceModal } from "@/components/editor/CreateResourceModal";
+import { configMapTemplates } from "@/components/editor/templates";
 import { PlusIcon } from "@/components/icons";
 
 export default function ConfigMapsPage() {
   const [namespace, setNamespace] = useState("");
-  const { data, isLoading, error } = useConfigMaps(namespace);
+  const { data, isLoading, error, mutate } = useConfigMaps(namespace);
+  const [createOpen, setCreateOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   return (
@@ -18,6 +21,7 @@ export default function ConfigMapsPage() {
         <div className="text-[15px] font-semibold">ConfigMaps</div>
         <button
           type="button"
+          onClick={() => setCreateOpen(true)}
           className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
         >
           <PlusIcon />
@@ -51,6 +55,13 @@ export default function ConfigMapsPage() {
           data={data}
           selectedId={selectedId}
           onSelect={setSelectedId}
+        />
+      )}
+      {createOpen && (
+        <CreateResourceModal
+          templates={configMapTemplates}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => void mutate()}
         />
       )}
     </div>

@@ -6,7 +6,7 @@ import { Suspense, useState } from "react";
 import { useCRDInstance, useCRDs } from "@/lib/hooks/useCRDs";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { CodeBlock } from "@/components/ui/CodeBlock";
+import { YamlPanel } from "@/components/editor/YamlPanel";
 
 type Tab = "overview" | "yaml";
 
@@ -42,6 +42,7 @@ function CustomResourceDetailPage() {
     data: instance,
     isLoading,
     error,
+    mutate,
   } = useCRDInstance(crdName, name, namespace);
   const [tab, setTab] = useState<Tab>("overview");
 
@@ -111,7 +112,9 @@ function CustomResourceDetailPage() {
         </div>
       )}
 
-      {tab === "yaml" && <CodeBlock code={instance.yaml} />}
+      {tab === "yaml" && (
+        <YamlPanel yaml={instance.yaml} onApplied={() => mutate()} />
+      )}
     </div>
   );
 }

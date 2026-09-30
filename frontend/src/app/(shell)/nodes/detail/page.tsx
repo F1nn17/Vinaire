@@ -8,7 +8,7 @@ import { friendlyErrorMessage } from "@/lib/api/errors";
 import type { NodeScheduledPodRow } from "@/lib/types";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { CodeBlock } from "@/components/ui/CodeBlock";
+import { YamlPanel } from "@/components/editor/YamlPanel";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 
 type Tab = "overview" | "pods" | "yaml";
@@ -73,7 +73,7 @@ export default function NodeDetailPageRoute() {
 function NodeDetailPage() {
   const searchParams = useSearchParams();
   const name = searchParams.get("name") ?? "";
-  const { data: node, isLoading, error } = useNode(name);
+  const { data: node, isLoading, error, mutate } = useNode(name);
   const [tab, setTab] = useState<Tab>("overview");
 
   if (error) {
@@ -224,7 +224,9 @@ function NodeDetailPage() {
         />
       )}
 
-      {tab === "yaml" && <CodeBlock code={node.yaml} />}
+      {tab === "yaml" && (
+        <YamlPanel yaml={node.yaml} onApplied={() => mutate()} />
+      )}
     </div>
   );
 }

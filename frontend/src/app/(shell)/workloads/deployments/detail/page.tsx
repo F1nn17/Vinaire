@@ -8,7 +8,7 @@ import { friendlyErrorMessage } from "@/lib/api/errors";
 import type { DeploymentPodRow } from "@/lib/types";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { CodeBlock } from "@/components/ui/CodeBlock";
+import { YamlPanel } from "@/components/editor/YamlPanel";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Toast, type ToastState } from "@/components/ui/Toast";
@@ -332,7 +332,9 @@ function DeploymentDetailPage() {
         </div>
       )}
 
-      {tab === "yaml" && <CodeBlock code={deployment.yaml} />}
+      {tab === "yaml" && (
+        <YamlPanel yaml={deployment.yaml} onApplied={() => mutate()} />
+      )}
 
       <ConfirmModal
         open={pending !== null}

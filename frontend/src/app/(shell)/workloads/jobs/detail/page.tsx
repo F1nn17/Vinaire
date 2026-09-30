@@ -7,7 +7,7 @@ import { useJob } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { CodeBlock } from "@/components/ui/CodeBlock";
+import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
 
 type Tab = "overview" | "events" | "yaml";
@@ -37,7 +37,7 @@ function JobDetailPage() {
   const searchParams = useSearchParams();
   const namespace = searchParams.get("namespace") ?? "";
   const name = searchParams.get("name") ?? "";
-  const { data: job, isLoading, error } = useJob(namespace, name);
+  const { data: job, isLoading, error, mutate } = useJob(namespace, name);
   const [tab, setTab] = useState<Tab>("overview");
 
   if (error) {
@@ -117,7 +117,9 @@ function JobDetailPage() {
         </div>
       )}
 
-      {tab === "yaml" && <CodeBlock code={job.yaml} />}
+      {tab === "yaml" && (
+        <YamlPanel yaml={job.yaml} onApplied={() => mutate()} />
+      )}
     </div>
   );
 }

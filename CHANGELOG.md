@@ -498,6 +498,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Restart" (confirmed it gets recreated), a bare pod's showed only
   "Delete" (confirmed gone via `kubectl get pod` returning NotFound); all
   six write calls landed in the audit log.
+- Full YAML editor — create and edit (Roadmap Phase 25). Every detail page's
+  YAML tab (Pod, Deployment, StatefulSet, DaemonSet, Job, Node, PVC, custom
+  resource instance) is now an editable Monaco editor (bundled with the app,
+  not loaded from a CDN); "Apply" first runs a server-side dry-run through
+  the Kubernetes API itself, shows a before/after diff, and only a second
+  click performs the real write. The "+ Create" buttons (Workloads,
+  ConfigMaps, Secrets, Network) open the same editor pre-filled with a
+  template. New endpoints `POST /api/v1/resources/dry-run`,
+  `POST`/`PUT /api/v1/resources` work for any resource kind the cluster
+  serves — the project owner's explicit choice over an allowlist, so
+  AGENTS.md's write section and example ClusterRole were extended; the
+  caller's own RBAC remains the real limit. Strict field validation rejects
+  typo'd fields, Secret values are redacted from diffs, the diff is pinned
+  to a `resourceVersion` so busy resources don't spuriously conflict, and
+  every real write is audited. The Helm chart's ClusterRole also gained the
+  Phase 33 scale/pod-delete grants it had missed.
 
 ### Changed
 

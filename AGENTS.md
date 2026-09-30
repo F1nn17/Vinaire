@@ -38,6 +38,21 @@ flow.
   apart (`PodDetailResponse.HasController`) and shows "Restart" vs.
   "Delete" accordingly — the backend's `Delete()` call is identical either
   way.
+- `POST /api/v1/resources`, `PUT /api/v1/resources`, and the non-mutating
+  `POST /api/v1/resources/dry-run` (Roadmap Phase 25) — generic YAML
+  create/update for **any kind the cluster serves** (dynamic client), used
+  by the Monaco editor on every detail page's YAML tab and by the "+ Create"
+  buttons. This is the deliberately broadest write in this list, approved by
+  the project owner as "everything Vinaire can see" rather than an allowlist;
+  what actually limits it is the caller's own Kubernetes RBAC (an
+  ungranted `create`/`update` comes back as a real 403). Guard rails, all in
+  `internal/api/apply.go` / `internal/k8s/apply.go`: exactly one YAML
+  document, 1 MiB body cap, strict field validation (a typo'd field is
+  rejected, not silently dropped), always a server-side dry-run before the
+  real write, a real update must carry the `resourceVersion` the reviewed
+  diff was computed against (409 if the object changed since), Secret values
+  are redacted from the diff response, and every real write is audited as
+  `apply-create`/`apply-update` with kind/apiVersion.
 - `POST /api/v1/clusters` / `DELETE /api/v1/clusters/{name}` — cluster
   management via the web UI (Settings page): create/get/update on exactly
   one Secret (`vinaire-clusters`, in this backend's own namespace, via a
@@ -237,6 +252,17 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["delete"]
+  # Phase 25's generic YAML create/update. Vinaire imposes no allowlist of
+  # its own here — grant only the kinds this identity should be able to
+  # write; anything not granted returns a real 403. Example: Deployments
+  # and ConfigMaps only. (Secrets `create`/`update` here also allows the
+  # "+ Create" Secret template — omit it if that's not wanted.)
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["create", "update"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "update"]
 ```
 
 Bind it cluster-wide or to a single namespace (`RoleBinding` instead of

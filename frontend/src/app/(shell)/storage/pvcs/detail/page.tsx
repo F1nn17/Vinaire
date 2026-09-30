@@ -7,7 +7,7 @@ import { usePVC } from "@/lib/hooks/useStorage";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { CodeBlock } from "@/components/ui/CodeBlock";
+import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
 
 type Tab = "overview" | "events" | "yaml";
@@ -36,7 +36,7 @@ function PVCDetailPage() {
   const searchParams = useSearchParams();
   const namespace = searchParams.get("namespace") ?? "";
   const name = searchParams.get("name") ?? "";
-  const { data: pvc, isLoading, error } = usePVC(namespace, name);
+  const { data: pvc, isLoading, error, mutate } = usePVC(namespace, name);
   const [tab, setTab] = useState<Tab>("overview");
 
   if (error) {
@@ -137,7 +137,9 @@ function PVCDetailPage() {
         </div>
       )}
 
-      {tab === "yaml" && <CodeBlock code={pvc.yaml} />}
+      {tab === "yaml" && (
+        <YamlPanel yaml={pvc.yaml} onApplied={() => mutate()} />
+      )}
     </div>
   );
 }

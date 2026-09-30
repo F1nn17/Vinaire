@@ -2091,7 +2091,30 @@ the UI and `GET /api/v1/clusters`.
 
 ---
 
-## Phase 25 — Full YAML editor (create + edit)
+## Phase 25 — Full YAML editor (create + edit) ✅ done
+
+> **Outcome note:** Implemented with two deliberate deviations from the
+> spec above. (1) Endpoints are generic rather than per-resource:
+> `POST /api/v1/resources/dry-run`, `POST /api/v1/resources` and
+> `PUT /api/v1/resources` take one YAML document and resolve its Kind via
+> discovery + the dynamic client, so they work for any kind the cluster
+> serves — the project owner chose that over an allowlist, and AGENTS.md's
+> write section was rewritten to say so (the caller's own RBAC is still the
+> real limit; an ungranted verb is a real 403, verified in-cluster as the
+> `vinaire` ServiceAccount). (2) Updates are pinned to a `resourceVersion`
+> returned by the dry-run (the diff is computed against exactly that live
+> version) instead of trusting the editor's own copy: status churn bumps
+> resourceVersion constantly, which made editing a busy Deployment fail with
+> a spurious 409 in the first version. Also: strict field validation
+> (`FieldValidation: Strict`) is what makes a typo'd field an error — the
+> dynamic client otherwise silently drops unknown fields; Secret values are
+> redacted from diff responses; dry-run is outside the write rate limiter;
+> Monaco is bundled (no CDN) and lazy-loaded; the diff collapses unchanged
+> regions. Verified in a real browser against k3d-vinaire-dev: a typo'd
+> field gave `unknown field "spec.replicaz"` with the cluster untouched;
+> editing a Deployment image through the diff modal changed
+> `kubectl get deployment`; "+ Create" created a ConfigMap; the Helm chart
+> ClusterRole also gained the Phase 33 scale/pod-delete grants it had missed.
 
 **Goal:** every resource's YAML tab goes from a read-only `<pre>` block to
 a real create/edit surface, validated by the cluster itself before

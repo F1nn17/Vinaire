@@ -7,7 +7,7 @@ import { usePod } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { CodeBlock } from "@/components/ui/CodeBlock";
+import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
 import { ActionBar, ActionButton } from "@/components/ui/ActionBar";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -47,7 +47,7 @@ function PodDetailPage() {
   const searchParams = useSearchParams();
   const podNamespace = searchParams.get("namespace") ?? "";
   const podName = searchParams.get("name") ?? "";
-  const { data: pod, isLoading, error } = usePod(podNamespace, podName);
+  const { data: pod, isLoading, error, mutate } = usePod(podNamespace, podName);
   const [tab, setTab] = useState<Tab>("overview");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -217,7 +217,9 @@ function PodDetailPage() {
         </div>
       )}
 
-      {tab === "yaml" && <CodeBlock code={pod.yaml} />}
+      {tab === "yaml" && (
+        <YamlPanel yaml={pod.yaml} onApplied={() => mutate()} />
+      )}
 
       <ConfirmModal
         open={confirmOpen}

@@ -8,6 +8,8 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PillTabs } from "@/components/ui/Tabs";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { TableSkeleton } from "@/components/ui/Skeleton";
+import { CreateResourceModal } from "@/components/editor/CreateResourceModal";
+import { networkTemplates } from "@/components/editor/templates";
 import { PlusIcon } from "@/components/icons";
 
 type Tab = "ingress" | "gateway";
@@ -93,7 +95,9 @@ export default function NetworkPage() {
     data: ingressRows,
     isLoading: ingressLoading,
     error: ingressError,
+    mutate: mutateIngresses,
   } = useIngresses(namespace);
+  const [createOpen, setCreateOpen] = useState(false);
   const {
     data: gatewayResult,
     isLoading: gatewayLoading,
@@ -106,6 +110,7 @@ export default function NetworkPage() {
         <div className="text-[15px] font-semibold">Services &amp; Ingress</div>
         <button
           type="button"
+          onClick={() => setCreateOpen(true)}
           className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
         >
           <PlusIcon />
@@ -164,6 +169,14 @@ export default function NetworkPage() {
             emptyLabel={`No Gateway API resources found${namespace ? ` in namespace "${namespace}"` : ""}.`}
           />
         ))}
+
+      {createOpen && (
+        <CreateResourceModal
+          templates={networkTemplates[tab] ?? []}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => void mutateIngresses()}
+        />
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { useDaemonSet } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { CodeBlock } from "@/components/ui/CodeBlock";
+import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
 
 type Tab = "overview" | "events" | "yaml";
@@ -37,7 +37,7 @@ function DaemonSetDetailPage() {
   const searchParams = useSearchParams();
   const namespace = searchParams.get("namespace") ?? "";
   const name = searchParams.get("name") ?? "";
-  const { data: ds, isLoading, error } = useDaemonSet(namespace, name);
+  const { data: ds, isLoading, error, mutate } = useDaemonSet(namespace, name);
   const [tab, setTab] = useState<Tab>("overview");
 
   if (error) {
@@ -116,7 +116,9 @@ function DaemonSetDetailPage() {
         </div>
       )}
 
-      {tab === "yaml" && <CodeBlock code={ds.yaml} />}
+      {tab === "yaml" && (
+        <YamlPanel yaml={ds.yaml} onApplied={() => mutate()} />
+      )}
     </div>
   );
 }

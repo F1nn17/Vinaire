@@ -9,6 +9,8 @@ import type { WorkloadKind, WorkloadRow } from "@/lib/types";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PillTabs } from "@/components/ui/Tabs";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { CreateResourceModal } from "@/components/editor/CreateResourceModal";
+import { workloadTemplates } from "@/components/editor/templates";
 import { PlusIcon } from "@/components/icons";
 
 const columns: DataTableColumn<WorkloadRow>[] = [
@@ -60,7 +62,8 @@ const columns: DataTableColumn<WorkloadRow>[] = [
 export default function WorkloadsPage() {
   const [tab, setTab] = useState<WorkloadKind>("deployments");
   const [namespace, setNamespace] = useState("");
-  const { data, isLoading, error } = useWorkloads(tab, namespace);
+  const { data, isLoading, error, mutate } = useWorkloads(tab, namespace);
+  const [createOpen, setCreateOpen] = useState(false);
   useWorkloadsStream(tab, namespace);
 
   return (
@@ -69,6 +72,7 @@ export default function WorkloadsPage() {
         <div className="text-[15px] font-semibold">Workloads</div>
         <button
           type="button"
+          onClick={() => setCreateOpen(true)}
           className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
         >
           <PlusIcon />
@@ -103,6 +107,14 @@ export default function WorkloadsPage() {
           rowHref={(r) => r.href}
           isLoading={isLoading || !data}
           emptyLabel={`No ${tab} found${namespace ? ` in namespace "${namespace}"` : ""}.`}
+        />
+      )}
+
+      {createOpen && (
+        <CreateResourceModal
+          templates={workloadTemplates[tab] ?? []}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => void mutate()}
         />
       )}
     </div>
