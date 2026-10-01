@@ -1,28 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useClusters } from "@/lib/hooks/useClusters";
 import { useCRDs } from "@/lib/hooks/useCRDs";
 import { friendlyErrorMessage } from "@/lib/api/errors";
-import { setCurrentCluster } from "@/lib/clusterStore";
-import { AddClusterWizard } from "@/components/clusters/AddClusterWizard";
-import { ClusterTypeBadge } from "@/components/clusters/ClusterTypeBadge";
 import { PuzzleIcon } from "@/components/icons";
 
-type SettingsTab = "clusters" | "crds" | "help";
+type SettingsTab = "crds" | "help";
 
 const tabs: { id: SettingsTab; label: string }[] = [
-  { id: "clusters", label: "Clusters" },
   { id: "crds", label: "Custom Resources" },
   { id: "help", label: "Справка" },
 ];
 
-type HelpSection = "cluster" | "crds" | "keycloak" | "observability";
+type HelpSection = "cluster" | "node" | "crds" | "keycloak" | "observability";
 
 const helpSections: { id: HelpSection; label: string }[] = [
   { id: "cluster", label: "Подключение кластера" },
+  { id: "node", label: "Добавление ноды" },
   { id: "crds", label: "Кастомные ресурсы" },
   { id: "keycloak", label: "Вход по логину и паролю" },
   { id: "observability", label: "Метрики, логи, алерты" },
@@ -75,13 +70,9 @@ rules:
 // the backend reports that explicitly via a 503 if not, surfaced below the
 // same way any other "unavailable" state is in this app.
 export default function SettingsPage() {
-  const [tab, setTab] = useState<SettingsTab>("clusters");
+  const [tab, setTab] = useState<SettingsTab>("help");
   const [helpSection, setHelpSection] = useState<HelpSection>("cluster");
-  const { data: clusters, error, isLoading, mutate } = useClusters();
   const { data: crds, error: crdsError, isLoading: crdsLoading } = useCRDs();
-
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const router = useRouter();
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
@@ -103,72 +94,6 @@ export default function SettingsPage() {
           </button>
         ))}
       </div>
-
-      {tab === "clusters" && (
-        <div className="max-w-2xl rounded-[10px] border border-border bg-surface p-5">
-          <div className="mb-1 text-[13px] font-semibold">Clusters</div>
-          <div className="mb-4 text-xs text-text-muted">
-            Clusters this Vinaire instance is connected to. Adding and removing
-            clusters, and each cluster&apos;s type, now live on the{" "}
-            <Link href="/clusters" className="text-accent-text">
-              Clusters page
-            </Link>{" "}
-            (sidebar → Clusters, or &ldquo;+ Add cluster&rdquo; in the cluster
-            picker at the top).
-          </div>
-
-          {error ? (
-            <div className="text-sm text-err">
-              Failed to load clusters: {friendlyErrorMessage(error)}
-            </div>
-          ) : isLoading || !clusters ? (
-            <div className="text-sm text-text-muted">Loading…</div>
-          ) : (
-            <div className="mb-5 flex flex-col gap-2">
-              {clusters.map((c) => (
-                <div
-                  key={c.name}
-                  className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-2"
-                >
-                  <span className="flex items-center gap-2 font-mono text-[12.5px]">
-                    {c.name}
-                    <ClusterTypeBadge type={c.type} />
-                    {c.default && (
-                      <span className="rounded-full border border-border px-1.5 py-[1px] text-[10px] text-text-muted">
-                        default
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-[11px] text-text-faint">
-                    {c.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => setWizardOpen(true)}
-              className="rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
-            >
-              + Add cluster
-            </button>
-            <Link
-              href="/clusters"
-              className="rounded-lg border border-border bg-surface-2 px-3.5 py-2 text-[12.5px]"
-            >
-              Open Clusters page
-            </Link>
-          </div>
-          <div className="mt-3 text-[11px] leading-relaxed text-text-faint">
-            Five ways to add one: found on this machine (when Vinaire runs
-            directly on it), import or create over SSH, a pasted kubeconfig, or
-            a server URL + ServiceAccount token.
-          </div>
-        </div>
-      )}
 
       {tab === "crds" && (
         <div className="max-w-2xl rounded-[10px] border border-border bg-surface p-5">
@@ -232,22 +157,12 @@ export default function SettingsPage() {
 
           <div className="min-w-0 flex-1 rounded-[10px] border border-border bg-surface p-5 text-sm">
             {helpSection === "cluster" && <ClusterHelp />}
+            {helpSection === "node" && <NodeHelp />}
             {helpSection === "crds" && <CustomResourcesHelp />}
             {helpSection === "keycloak" && <KeycloakHelp />}
             {helpSection === "observability" && <ObservabilityHelp />}
           </div>
         </div>
-      )}
-
-      {wizardOpen && (
-        <AddClusterWizard
-          onClose={() => setWizardOpen(false)}
-          onAdded={() => void mutate()}
-          onAddNodes={(name) => {
-            setCurrentCluster(name);
-            router.push("/nodes");
-          }}
-        />
       )}
     </div>
   );
@@ -269,11 +184,248 @@ function ClusterHelp() {
           Как подключить кластер
         </div>
         <div className="text-xs text-text-muted">
+          Все способы добавления кластера собраны в одном месте — на странице{" "}
+          <Link href="/clusters" className="text-accent-text">
+            Clusters
+          </Link>{" "}
+          (пункт «Clusters» в боковом меню). Нажмите «Add cluster» — или «+ Add
+          cluster» в выпадающем списке кластеров в верхней панели — и выберите
+          способ. Другого места, где можно добавить кластер, в Vinaire нет.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Какой способ выбрать
+        </div>
+        <ul className="mt-1 list-disc pl-5 text-text-muted">
+          <li>
+            <span className="font-semibold text-foreground">
+              Found on this machine
+            </span>{" "}
+            — второй кластер стоит на той же машине, где запущена Vinaire
+            (домашний сервер, ноутбук: k3s, k3d, kind, minikube). Vinaire сама
+            находит его по kubeconfig-файлам, вам остаётся подтвердить.
+          </li>
+          <li>
+            <span className="font-semibold text-foreground">
+              Import existing (SSH)
+            </span>{" "}
+            — кластер k3s уже работает на другом сервере: Vinaire заходит туда
+            по SSH, забирает kubeconfig и подключается.
+          </li>
+          <li>
+            <span className="font-semibold text-foreground">
+              Create new (SSH)
+            </span>{" "}
+            — есть чистый сервер, на нём нужен новый кластер: Vinaire сама
+            ставит k3s.
+          </li>
+          <li>
+            <span className="font-semibold text-foreground">
+              Server URL + token
+            </span>{" "}
+            — любой кластер, к которому у вас есть адрес API и токен
+            ServiceAccount (самое узкое и безопасное: токен можно ограничить
+            ровно нужными правами). Пошаговая инструкция ниже.
+          </li>
+          <li>
+            <span className="font-semibold text-foreground">
+              Import via kubeconfig
+            </span>{" "}
+            — любой дистрибутив, включая облачные: вставляете или загружаете
+            kubeconfig.
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Found on this machine — когда это работает
+        </div>
+        <div className="mt-1 text-text-muted">
+          Vinaire должна быть запущена прямо на машине (бинарник или Docker на
+          хосте) и ей нужно место, где хранить зашифрованный список кластеров —
+          переменная <span className="font-mono">VINAIRE_DATA_DIR</span>. Она
+          ищет в <span className="font-mono">$KUBECONFIG</span>,{" "}
+          <span className="font-mono">~/.kube/config</span>,{" "}
+          <span className="font-mono">/etc/rancher/k3s/k3s.yaml</span> и в путях
+          из <span className="font-mono">DISCOVERY_KUBECONFIG_PATHS</span>. k3d
+          и kind находятся через их записи в kubeconfig — доступ к Docker-сокету
+          Vinaire не нужен и не используется. Кластер, который Vinaire уже
+          использует, в списке помечен «already added».
+        </div>
+        <Code>
+          {`# запуск Vinaire прямо на машине
+cd backend
+VINAIRE_DATA_DIR=$HOME/.vinaire AUTH_MODE=disabled go run .`}
+        </Code>
+        <div className="mt-1 text-text-muted">
+          Файл <span className="font-mono">k3s.yaml</span> по умолчанию читает
+          только root, а Vinaire сама никогда не повышает права и не вызывает
+          sudo. Если он показан как «not readable» — скопируйте его туда, где
+          Vinaire может его прочитать, и нажмите Rescan:
+        </div>
+        <Code>
+          {`sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/k3s.yaml
+sudo chown $USER ~/.kube/k3s.yaml
+# и добавьте путь в DISCOVERY_KUBECONFIG_PATHS (или в KUBECONFIG)`}
+        </Code>
+        <div className="mt-1 text-text-muted">
+          <span className="font-semibold text-foreground">
+            Если Vinaire запущена внутри кластера (как под)
+          </span>{" "}
+          — этот способ недоступен: под не видит файлы вашего компьютера, и
+          мастер сам об этом скажет. Используйте «Import via kubeconfig»: на
+          вашей машине выполните
+        </div>
+        <Code>
+          {`kubectl config get-contexts
+kubectl config view --raw --minify --flatten --context <имя-контекста>`}
+        </Code>
+        <div className="mt-1 text-text-muted">
+          и вставьте вывод. Адрес сервера в нём должен быть доступен из пода:
+          внутри пода <span className="font-mono">127.0.0.1</span> — это сам
+          под, поэтому используйте адрес машины в сети или, для k3d на Docker
+          Desktop, <span className="font-mono">host.docker.internal</span>.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Import / Create по SSH — что нужно
+        </div>
+        <ul className="mt-1 list-disc pl-5 text-text-muted">
+          <li>
+            Доступ по SSH (лучше по ключу) к серверу. Перед входом Vinaire
+            покажет отпечаток SSH-ключа сервера — сверьте его командой{" "}
+            <span className="font-mono">
+              ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub
+            </span>{" "}
+            на самом сервере и подтвердите. Если ключ по пути изменится,
+            подключение прервётся до отправки пароля.
+          </li>
+          <li>
+            Пароль и ключ нужны только на время операции: Vinaire держит их в
+            памяти, нигде не сохраняет и не пишет в логи. Работает только по
+            HTTPS (для локальной отладки есть{" "}
+            <span className="font-mono">PROVISION_ALLOW_INSECURE=true</span>).
+          </li>
+          <li>
+            У вас должно быть право создавать узлы в текущем кластере (RBAC{" "}
+            <span className="font-mono">create</span> на{" "}
+            <span className="font-mono">nodes</span>).
+          </li>
+          <li>
+            <span className="font-semibold text-foreground">
+              Адрес кластера
+            </span>{" "}
+            — тот адрес, по которому Vinaire (и вы) будете к нему обращаться.
+            При создании k3s выпускает сертификат только на этот адрес (
+            <span className="font-mono">--tls-san</span>), поэтому подключение
+            по другому адресу даст ошибку TLS. Если нужен порт или имя, отличные
+            от <span className="font-mono">адрес:6443</span> — заполните «API
+            URL».
+          </li>
+          <li>
+            Create откажется работать (ничего не меняя), если на сервере уже
+            есть <span className="font-mono">/etc/rancher/k3s</span> или занят
+            порт 6443 — для готового кластера используйте Import. Установка
+            занимает 1–2 минуты; поддерживается один сервер (без HA). После
+            создания Vinaire предложит «Add worker nodes» — см. «Добавление
+            ноды».
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">Типы кластеров</div>
+        <div className="mt-1 text-text-muted">
+          Каждому кластеру присваивается тип: k3s, k3d, kind, minikube,
+          microk8s, kubeadm, managed (облачный) или unknown. Он определяется
+          автоматически, показан значком в переключателе кластеров и на странице
+          Clusters и может быть исправлен там же в выпадающем списке. Тип влияет
+          только на одно: кнопка «Add node» показывается для k3s и kubeadm, где
+          добавить сервер по SSH имеет смысл, и скрыта для k3d/kind (там «ноды»
+          — это контейнеры), minikube и облачных кластеров.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Что хранится и как защищено
+        </div>
+        <ul className="mt-1 list-disc pl-5 text-text-muted">
+          <li>
+            Список добавленных кластеров (с их учётными данными) шифруется
+            AES-256-GCM. Ключ берётся из{" "}
+            <span className="font-mono">CLUSTER_STORE_KEY</span> (base64, 32
+            байта: <span className="font-mono">openssl rand -base64 32</span>),
+            а если её нет — генерируется и лежит отдельно: в Secret{" "}
+            <span className="font-mono">vinaire-clusters-key</span> (в кластере)
+            или в файле с правами 0600 в{" "}
+            <span className="font-mono">VINAIRE_DATA_DIR</span>.
+          </li>
+          <li>
+            В мастере, если шифрование недоступно, это будет написано прямо
+            («stored UNENCRYPTED»).
+          </li>
+          <li>
+            Из kubeconfig берутся учётные данные только выбранного контекста,
+            только встроенные в файл (inline); exec-плагины, ссылки на файлы и
+            proxy-url не поддерживаются — они запускали бы команды или читали
+            файлы на машине Vinaire.
+          </li>
+          <li>
+            Один и тот же кластер нельзя добавить дважды под разными именами.
+            «Remove» убирает только запись в Vinaire — сам кластер не
+            затрагивается и продолжает работать.
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">Частые ошибки</div>
+        <ul className="mt-1 list-disc pl-5 text-text-muted">
+          <li>
+            <span className="font-mono">
+              x509: certificate is valid for …, not …
+            </span>{" "}
+            — сертификат кластера не включает адрес, по которому подключается
+            Vinaire. Используйте адрес из списка в ошибке, поле «API URL» или
+            создайте кластер с нужным{" "}
+            <span className="font-mono">--tls-san</span>.
+          </li>
+          <li>
+            «already registered as …» — такой кластер уже добавлен (определяется
+            по его реальному идентификатору, а не по адресу).
+          </li>
+          <li>
+            «cluster management is unavailable…» — некуда сохранять список:
+            запустите Vinaire в кластере или задайте{" "}
+            <span className="font-mono">VINAIRE_DATA_DIR</span>.
+          </li>
+          <li>
+            «exec plugin… not supported» — в kubeconfig учётные данные
+            получаются запуском программы (так делают EKS/GKE). Возьмите токен
+            ServiceAccount и используйте «Server URL + token».
+          </li>
+          <li>
+            Статус «unreachable» на странице Clusters — Vinaire не достучалась
+            до API: проверьте адрес, сеть и что кластер запущен.
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <div className="mb-1 text-[13px] font-semibold">
+          Способ «Server URL + token»: пошагово
+        </div>
+        <div className="text-xs text-text-muted">
           Vinaire не хранит своих собственных прав доступа — она заходит в
           подключаемый кластер под учётной записью (ServiceAccount), которую вы
           создаёте сами, и видит/может делать ровно то, что этой учётной записи
-          разрешает RBAC в самом кластере. Ниже — как её создать и подключить,
-          шаг за шагом.
+          разрешает RBAC в самом кластере. Ниже — как её создать и подключить.
         </div>
       </div>
 
@@ -394,13 +546,15 @@ kubectl create clusterrolebinding vinaire-viewer \\
 
       <div>
         <div className="font-semibold text-foreground">
-          6. Заполните форму во вкладке «Clusters»
+          6. Заполните форму «Server URL + token» в мастере
         </div>
         <ul className="mt-1 list-disc pl-5 text-text-muted">
           <li>
-            <span className="font-semibold text-foreground">Name</span> —
-            произвольное короткое имя, под которым кластер будет показан в
-            переключателе кластеров сверху (например,{" "}
+            <span className="font-semibold text-foreground">
+              Name in Vinaire
+            </span>{" "}
+            — произвольное короткое имя, под которым кластер будет показан в
+            переключателе кластеров (например,{" "}
             <span className="font-mono">prod-eu</span>).
           </li>
           <li>
@@ -431,23 +585,177 @@ kubectl create clusterrolebinding vinaire-viewer \\
         <div className="mt-1 text-text-muted">
           Vinaire проверяет подключение реальным вызовом к API-серверу перед
           сохранением — если данные неверны, вы увидите ошибку и ничего не
-          сохранится. Кластер сохраняется в Secret в собственном namespace
-          бэкенда и переживает перезапуск пода — повторно добавлять его после
-          редеплоя Vinaire не нужно. Дальше именно RBAC-роль, которую вы выдали
-          на шаге 3, определяет, что можно увидеть и сделать — Vinaire ничего не
-          добавляет и не убавляет сверху.
+          сохранится. Дальше именно RBAC-роль, которую вы выдали на шаге 3,
+          определяет, что можно увидеть и сделать — Vinaire ничего не добавляет
+          и не убавляет сверху. Подключённые кластеры видны и переключаются
+          через выпадающий список в верхней панели.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NodeHelp() {
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <div className="mb-1 text-[13px] font-semibold">
+          Как добавить ноду (рабочий сервер) в кластер
+        </div>
+        <div className="text-xs text-text-muted">
+          На странице{" "}
+          <Link href="/nodes" className="text-accent-text">
+            Nodes
+          </Link>{" "}
+          кнопка «Add node»: вы указываете чистый сервер, Vinaire сама заходит
+          на него по SSH, ставит k3s-агент и присоединяет сервер к выбранному
+          сейчас кластеру. На самом сервере вручную выполнять ничего не нужно.
         </div>
       </div>
 
       <div>
-        <div className="font-semibold text-foreground">8. Ещё один кластер</div>
-        <div className="mt-1 text-text-muted">
-          Повторите шаги «Если у вас несколько кластеров» → 1–7 для каждого
-          следующего кластера (не забудьте{" "}
-          <span className="font-mono">kubectl config use-context</span> на
-          нужный). Подключённые кластеры видны и переключаются через выпадающий
-          список в верхней панели Vinaire, рядом с поиском.
+        <div className="font-semibold text-foreground">
+          Когда кнопки «Add node» нет
         </div>
+        <div className="mt-1 text-text-muted">
+          Кнопка показывается только для кластеров, где добавить машину по SSH
+          имеет смысл — типы k3s и kubeadm. Для k3d и kind «ноды» — это Docker-
+          контейнеры, minikube — одна виртуальная машина, а облачные кластеры
+          масштабируются средствами провайдера, поэтому вместо кнопки вы увидите
+          пояснение. Если тип определён неверно — исправьте его на странице{" "}
+          <Link href="/clusters" className="text-accent-text">
+            Clusters
+          </Link>
+          .
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">Что нужно заранее</div>
+        <ul className="mt-1 list-disc pl-5 text-text-muted">
+          <li>
+            Чистый Linux-сервер с systemd (или OpenRC) и curl/wget, на котором
+            ещё нет k3s (иначе проверка остановится и ничего не изменит).
+          </li>
+          <li>
+            Доступ по SSH: root или пользователь с sudo. По ключу — лучше; с
+            паролем тоже работает (тот же пароль используется для sudo).
+          </li>
+          <li>
+            Сервер должен видеть API кластера (порт 6443) по адресу, который вы
+            укажете, — это проверяется первым же шагом. Адрес должен быть таким,
+            каким он виден <span className="italic">с нового сервера</span>, а
+            не <span className="font-mono">127.0.0.1</span>.
+          </li>
+          <li>
+            Токен присоединения k3s: либо вставьте его, либо дайте Vinaire SSH
+            на control-plane, и она прочитает его сама.
+          </li>
+          <li>
+            У вас должно быть право создавать узлы в кластере (RBAC{" "}
+            <span className="font-mono">create</span> на{" "}
+            <span className="font-mono">nodes</span>), а Vinaire открыта по
+            HTTPS.
+          </li>
+        </ul>
+        <div className="mt-1 text-text-muted">
+          Токен на control-plane (k3s) выглядит так:
+        </div>
+        <Code>{`sudo cat /var/lib/rancher/k3s/server/node-token`}</Code>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">Шаги в диалоге</div>
+        <ol className="mt-1 list-decimal pl-5 text-text-muted">
+          <li>
+            Введите адрес, порт и пользователя нового сервера и выберите способ
+            входа (SSH-ключ рекомендуется).
+          </li>
+          <li>
+            «Joining the cluster»: вставьте токен — или выберите чтение токена с
+            control-plane по SSH (тогда нужен и вход на control-plane). Укажите
+            адрес API кластера как он виден с нового сервера. Имя ноды и версию
+            k3s указывать необязательно: имя по умолчанию — hostname, версия
+            подбирается под ваш control-plane, чтобы воркер не оказался новее
+            сервера.
+          </li>
+          <li>
+            «Continue»: Vinaire покажет отпечаток SSH-ключа сервера. Сверьте его
+            с тем, что выдаёт на самом сервере{" "}
+            <span className="font-mono">
+              ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub
+            </span>
+            , и поставьте галочку. Пока не подтверждено — ничего секретного не
+            отправляется.
+          </li>
+          <li>
+            «Add node»: идёт установка, лог виден вживую. Обычно 1–2 минуты. В
+            конце нода появляется в списке Nodes со статусом Ready.
+          </li>
+        </ol>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">Безопасность</div>
+        <div className="mt-1 text-text-muted">
+          Пароль, ключ и токен живут в памяти только на время операции: они не
+          сохраняются на диск, не попадают в логи и в журнал действий (там
+          только адрес, пользователь и тип входа). Установка идёт от root через
+          официальный установщик k3s. Если Vinaire открыта не по HTTPS, форма
+          откажется отправлять учётные данные (для локальной отладки есть{" "}
+          <span className="font-mono">PROVISION_ALLOW_INSECURE=true</span>).
+          Адреса 127.0.0.1 и адрес метаданных облака (169.254.169.254) запрещены
+          как цель.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Если что-то пошло не так
+        </div>
+        <ul className="mt-1 list-disc pl-5 text-text-muted">
+          <li>
+            «k3s is already installed here» — на сервере уже есть k3s. Для
+            чистого старта выполните на нём{" "}
+            <span className="font-mono">k3s-agent-uninstall.sh</span> (или{" "}
+            <span className="font-mono">k3s-uninstall.sh</span> для сервера).
+          </li>
+          <li>
+            «can’t reach the cluster API» — новый сервер не видит адрес API:
+            проверьте адрес, файрвол и порт 6443.
+          </li>
+          <li>
+            «host key mismatch» — отпечаток сервера не совпал с подтверждённым:
+            не продолжайте, пока не выясните причину.
+          </li>
+          <li>
+            «Not allowed — adding nodes requires permission…» — у вашей учётной
+            записи нет права <span className="font-mono">create</span> на{" "}
+            <span className="font-mono">nodes</span> в кластере.
+          </li>
+          <li>
+            Ошибка sudo — для пользователя без root нужен вход с паролем (он же
+            пароль sudo) или sudo без пароля (NOPASSWD).
+          </li>
+          <li>
+            Нода появилась, но остаётся NotReady — обычно не открыты порты между
+            нодами (10250/tcp и 8472/udp для сети flannel).
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">Как убрать ноду</div>
+        <div className="mt-1 text-text-muted">
+          Удаление ноды из Vinaire пока не делается. Вручную: выведите ноду из
+          работы и удалите её из кластера, затем очистите сервер.
+        </div>
+        <Code>
+          {`kubectl drain <имя-ноды> --ignore-daemonsets --delete-emptydir-data
+kubectl delete node <имя-ноды>
+# на самом сервере:
+/usr/local/bin/k3s-agent-uninstall.sh`}
+        </Code>
       </div>
     </div>
   );

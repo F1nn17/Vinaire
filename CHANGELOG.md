@@ -603,7 +603,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `VINAIRE_DATA_DIR`. Pasted kubeconfigs are accepted only in a safe subset:
   one chosen context, inline credentials only, no exec/auth-provider plugins,
   no file references. Removing a cluster only removes Vinaire's connection.
-  Settings -> Clusters no longer carries the old inline form: it lists the clusters and opens the same wizard (which also keeps the original "server URL + token" way as a fifth option). Inside a pod, "Found on this machine" explains why it can't see the host and offers the kubeconfig import with the exact `kubectl` command.
+  Adding a cluster now lives in exactly one place — the Clusters page (also reachable from "+ Add cluster" in the cluster picker); the Clusters tab is gone from Settings, and the original "server URL + token" way is the wizard's fifth option. Inside a pod, "Found on this machine" explains why it can't see the host and offers the kubeconfig import with the exact `kubectl` command. Settings -> Справка got a rewritten "Подключение кластера" section (all five ways, discovery requirements, types, what is stored and how it is protected, common errors, and the original ServiceAccount walkthrough) and a new "Добавление ноды" section (prerequisites, dialog steps, host-key check, security, troubleshooting, removing a node by hand).
 
 ### Changed
 
