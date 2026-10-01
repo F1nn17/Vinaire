@@ -7,6 +7,8 @@
 package authn
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"sync"
 	"time"
 )
@@ -17,6 +19,17 @@ type Session struct {
 	K8sToken  string
 	Username  string // best-effort: OIDC's preferred_username, empty in token mode
 	ExpiresAt time.Time
+}
+
+// OwnerKey is a stable identifier for "who is this" that is safe to compare and
+// store (it never contains the token itself) — used to scope long-running jobs
+// (Roadmap Phase 30) to the identity that started them.
+func (s *Session) OwnerKey() string {
+	if s.Username != "" {
+		return "user:" + s.Username
+	}
+	sum := sha256.Sum256([]byte(s.K8sToken))
+	return "token:" + hex.EncodeToString(sum[:8])
 }
 
 // Store is a server-side session store. MemoryStore is the only

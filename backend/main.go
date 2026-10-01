@@ -26,6 +26,7 @@ import (
 	"github.com/shiraku/vinaire/backend/internal/clusters"
 	"github.com/shiraku/vinaire/backend/internal/config"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/shiraku/vinaire/backend/internal/provision"
 	"github.com/shiraku/vinaire/backend/internal/stream"
 )
 
@@ -105,6 +106,12 @@ func main() {
 	}
 	writeLimiter := api.NewWriteRateLimiter(writeRateLimit, writeRateBurst)
 
+	// Roadmap Phase 30: node provisioning (SSH). In-memory job registry; the
+	// WebSocket streams a run's progress to the Add-node dialog.
+	workloadsHandler.Provisions = provision.NewRegistry()
+	workloadsHandler.ProvisionAllowInsecure = os.Getenv("PROVISION_ALLOW_INSECURE") == "true"
+	provisionStream := stream.ServeProvision(workloadsHandler.Provisions, auth, cfg.CORSAllowedOrigins)
+
 	streamHandler := unavailableWSHandler
 	logsHandler := unavailableWSHandler
 	execHandler := unavailableWSHandler
@@ -156,6 +163,9 @@ func main() {
 		protected.Get("/forms/{resourceType}", workloadsHandler.FormSchemaByType)
 		protected.Get("/namespaces", workloadsHandler.Namespaces)
 		protected.Get("/namespaces/{name}", workloadsHandler.NamespaceDetail)
+		protected.Get("/nodes/provision/defaults", workloadsHandler.ProvisionDefaults)
+		protected.Get("/nodes/provision/{id}", workloadsHandler.ProvisionStatus)
+		protected.Get("/nodes/provision/{id}/stream", provisionStream)
 		protected.Get("/nodes", workloadsHandler.Nodes)
 		protected.Get("/nodes/{name}", workloadsHandler.NodeDetail)
 		protected.Get("/pods", workloadsHandler.Pods)
@@ -225,6 +235,9 @@ func main() {
 			// Roadmap Phase 27: irreversible, cascading — see AGENTS.md and
 			// internal/k8s/namespaces.go.
 			w.Delete("/namespaces/{name}", workloadsHandler.DeleteNamespace)
+			// Roadmap Phase 30: SSH provisioning — see internal/api/provision.go.
+			w.Post("/nodes/provision/hostkey", workloadsHandler.ProvisionHostKey)
+			w.Post("/nodes/provision", workloadsHandler.ProvisionStart)
 			// Roadmap Phase 25's generic YAML create/update (any kind the
 			// cluster serves; the caller's own RBAC decides) — see
 			// internal/k8s/apply.go and AGENTS.md.

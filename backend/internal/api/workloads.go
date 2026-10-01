@@ -21,6 +21,7 @@ import (
 	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/clusters"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/shiraku/vinaire/backend/internal/provision"
 )
 
 // WorkloadRow matches the frontend's WorkloadRow type exactly
@@ -66,6 +67,12 @@ type Handler struct {
 	// single additional piece of optional infrastructure, not part of the
 	// per-cluster/per-request resolution the constructor params above are.
 	Audit *audit.Logger
+
+	// Provisions tracks Roadmap Phase 30 node-provisioning runs; nil disables
+	// the feature. ProvisionAllowInsecure lets credentials travel over plain
+	// HTTP (local development only — see requireSecureTransport).
+	Provisions             *provision.Registry
+	ProvisionAllowInsecure bool
 }
 
 // ObservabilityConfig groups the optional observability-stack URLs

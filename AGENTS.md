@@ -128,6 +128,53 @@ so its guard rails live in `internal/api/portforward.go` and
 - Each distinct (user, pod, port) reach is audited as `portforward` (deduped
   per minute — a page load is many requests).
 
+## Node provisioning over SSH (Phase 30) — the most sensitive path
+
+The Nodes page's "Add node" takes SSH credentials from the browser, logs into
+a server outside the cluster and runs the k3s installer there **as root**.
+It is not a Kubernetes write, but it is the highest-risk thing Vinaire does —
+a compromised Vinaire could use it to run code on any machine whose
+credentials a user types in. Code: `internal/provision` (SSH, `ClusterProvisioner`,
+k3s provider, jobs), `internal/api/provision.go`, `internal/stream/provision.go`.
+Keep every one of these rules when touching it:
+
+- **Credentials never leave memory and never reach a log.** They arrive in a
+  POST body (never a URL/query string, so not in access logs), are wrapped in
+  `provision.Secret` (prints as `[REDACTED]` through `fmt`, `slog` and JSON),
+  are scrubbed from every line that is stored or streamed (`Redactor`, which
+  also learns the join token mid-run), are never written to disk and never go
+  into the audit trail. A unit test asserts the `Secret` formatting; re-run
+  the "grep the backend log for the password/token" check after any change.
+- **HTTPS only.** `requireSecureTransport` refuses the request unless it's TLS,
+  a proxy says `X-Forwarded-Proto: https`, or it's loopback-to-loopback (local
+  dev). `PROVISION_ALLOW_INSECURE=true` is the explicit opt-out for a dev
+  cluster — never set it on a real deployment.
+- **Host key pinning, no `InsecureIgnoreHostKey`.** `POST
+  /nodes/provision/hostkey` fetches the server's fingerprint (key exchange
+  only, no auth); the UI makes the user confirm it; the run's SSH callback
+  compares against that exact fingerprint and aborts the handshake — before
+  any credential is sent — on a mismatch (`TestDialRefusesWrongHostKey…`).
+- **Who may do this is the caller's own Kubernetes RBAC:** `requireNodeCreate`
+  runs a `SelfSubjectAccessReview` for `create` on `nodes`. There is no
+  Vinaire-level permission check, same as everywhere else.
+- **The target can't be Vinaire itself or the cloud's metadata service:**
+  `ValidateTarget` refuses loopback, link-local (169.254.169.254), unspecified
+  and multicast addresses (private ranges are allowed — that's where nodes
+  live) and dials the address it resolved, so DNS can't change underneath it.
+- **Nothing the user types reaches the remote shell unchecked:** every field
+  is validated against a strict pattern *and* single-quoted into the install
+  script, which travels over stdin (so the join token is never in a process
+  listing). The installer is downloaded to a file first so a failed download
+  can't masquerade as success.
+- Every run is audited as `provision-node` / `provision-node-succeeded|failed`
+  with host, user, auth *type* (never the secret), job id and result. Jobs are
+  scoped to the identity that started them (`Session.OwnerKey`), capped at two
+  concurrent, and forgotten 15 minutes after they end.
+
+`ClusterProvisioner` also declares `InstallControlPlane` and
+`FetchKubeconfig`; the k3s provider returns `ErrNotImplemented` for them until
+Phase 34 (creating a cluster), and Phase 35 adds a kubeadm provider.
+
 ## Authentication (Phase 10) and multi-cluster (Phase 11)
 
 Every `/api/v1/*` request (except `/api/v1/auth/*` itself) requires a
@@ -304,6 +351,13 @@ rules:
   - apiGroups: [""]
     resources: ["namespaces"]
     verbs: ["delete"]
+  # Phase 30's "Add node": the gate is a SelfSubjectAccessReview for `create`
+  # on `nodes` — omit it and the Add node dialog returns a 403. (Joining a
+  # node doesn't call this API itself — the node registers on its own — so
+  # this grant is purely "may this identity grow the cluster".)
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["create"]
   # Phase 25's generic YAML create/update. Vinaire imposes no allowlist of
   # its own here — grant only the kinds this identity should be able to
   # write; anything not granted returns a real 403. Example: Deployments

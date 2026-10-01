@@ -2371,7 +2371,38 @@ the resource appears with no manual `kubectl apply`.
 
 ---
 
-## Phase 30 — Adding worker nodes via SSH
+## Phase 30 — Adding worker nodes via SSH ✅ done
+
+> **Outcome note:** Built to the spec, with these decisions. **Token source:**
+> the spec says the token is read from the master node, which means SSH access
+> to the control plane too (the token isn't in the Kubernetes API) — the form
+> supports both pasting the token and a second, optional SSH login to the
+> control plane. **Flow:** `POST /nodes/provision/hostkey` (no credentials) →
+> the UI shows the fingerprint → `POST /nodes/provision` returns a job id →
+> `GET /nodes/provision/{id}/stream` (WebSocket) replays and streams the log.
+> The job keeps running if the tab closes (a half-installed node is worse), the
+> log is replayable, and the UI falls back to polling if the socket drops.
+> Credentials are only in the POST body, never a URL. **Authorization:** the
+> caller needs RBAC `create` on `nodes` (a SelfSubjectAccessReview) — SSH
+> targets aren't covered by Kubernetes RBAC, so this reuses the cluster's own
+> rule for "may this person grow the cluster". **Extra guard rails the spec
+> didn't list:** HTTPS-only transport (refused over plain HTTP unless
+> `PROVISION_ALLOW_INSECURE`), a target blocklist (loopback, link-local/cloud
+> metadata), strict validation + quoting of everything that reaches the remote
+> shell, the worker pinned to the control plane's k3s version, and a
+> download-to-file installer (a failed `curl | sh` would otherwise exit 0).
+> **Verified end to end** against disposable systemd+sshd containers joined to
+> k3d-vinaire-dev (real k3s agents, real joins, driven through the real UI):
+> a clean server became `Ready` in `kubectl get nodes` with zero commands run
+> on it, using (a) root + password with a pasted token and (b) a non-root user
+> with password-sudo plus the token read from a control plane over an SSH key;
+> a wrong fingerprint aborts with "host key mismatch" before any login. After
+> every run the backend log, the job log and the disk were grepped for the
+> password, key material and token — nothing. The security-critical parts have
+> unit tests (secret formatting never leaks; the validator refuses
+> 127.0.0.1/169.254.169.254/injection; a wrong host key sends **zero**
+> password attempts to an in-process SSH server). Not covered: a real
+> multi-machine network, kubeadm (Phase 35), and removing a node again.
 
 **Goal:** grow a cluster by pointing Vinaire at a bare server's IP and
 credentials, instead of running the k3s install script by hand.

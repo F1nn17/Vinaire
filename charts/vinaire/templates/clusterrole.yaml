@@ -80,6 +80,12 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["delete"]
+  # Phase 30's "Add node" gate (a SelfSubjectAccessReview for create on
+  # nodes) — not an API call the join makes, only the permission to ask.
+  # Drop it to disable the feature for this identity.
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["create"]
   # Phase 27's namespace delete — irreversible and cascading, so granted
   # explicitly rather than folded into anything broader.
   - apiGroups: [""]

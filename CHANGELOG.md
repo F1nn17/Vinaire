@@ -569,6 +569,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also returns the declared container ports. New optional `LOG_LEVEL` env.
   `pods/portforward` `create` was added to the Helm chart and AGENTS.md
   ClusterRole.
+- Adding worker nodes over SSH (Roadmap Phase 30). An "Add node" button on
+  the Nodes page: enter a bare server's IP, port and login (SSH key —
+  recommended — or password), confirm its host key fingerprint, and Vinaire
+  logs in over SSH, runs the k3s installer as root and joins it to the
+  cluster, streaming the install log live; the node appears in the list
+  within a minute or two. The join token is pasted, or read off the control
+  plane over a second SSH login. Built behind a `ClusterProvisioner`
+  interface (k3s now; control-plane install and a kubeadm provider are
+  Phases 34/35). Security rules, all enforced and tested: credentials only
+  over HTTPS, held in memory only and scrubbed from every log/stream, never
+  audited; the SSH handshake aborts on a host-key mismatch before sending any
+  credential; loopback/link-local/metadata targets are refused; every input
+  is validated and quoted, and the installer script travels over stdin; the
+  caller needs RBAC `create` on `nodes`; runs are audited as `provision-node`.
+  New `PROVISION_ALLOW_INSECURE` env (dev only) and `golang.org/x/crypto`.
 
 ### Changed
 

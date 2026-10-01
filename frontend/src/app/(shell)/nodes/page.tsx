@@ -8,6 +8,8 @@ import type { CapacityUsage, NodeCapacityRow, NodeRow } from "@/lib/types";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { PillTabs } from "@/components/ui/Tabs";
+import { AddNodeModal } from "@/components/nodes/AddNodeModal";
+import { PlusIcon } from "@/components/icons";
 
 type Tab = "nodes" | "capacity";
 
@@ -217,14 +219,25 @@ function CapacityTab() {
 
 export default function NodesPage() {
   const [tab, setTab] = useState<Tab>("nodes");
-  const { data, isLoading, error } = useNodes();
+  const { data, isLoading, error, mutate } = useNodes();
   useNodesStream();
+  const [addOpen, setAddOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
       <div className="flex items-center justify-between">
         <div className="text-[15px] font-semibold">Nodes</div>
-        <PillTabs items={tabs} active={tab} onChange={setTab} />
+        <div className="flex items-center gap-3">
+          <PillTabs items={tabs} active={tab} onChange={setTab} />
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
+          >
+            <PlusIcon />
+            Add node
+          </button>
+        </div>
       </div>
 
       {tab === "nodes" ? (
@@ -244,6 +257,13 @@ export default function NodesPage() {
         )
       ) : (
         <CapacityTab />
+      )}
+
+      {addOpen && (
+        <AddNodeModal
+          onClose={() => setAddOpen(false)}
+          onFinished={() => void mutate()}
+        />
       )}
     </div>
   );
