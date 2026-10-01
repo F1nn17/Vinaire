@@ -113,6 +113,13 @@ func main() {
 	// Roadmap Phase 30: node provisioning (SSH). In-memory job registry; the
 	// WebSocket streams a run's progress to the Add-node dialog.
 	workloadsHandler.Provisions = provision.NewRegistry()
+	if path := os.Getenv("KUBEADM_CONFIG"); path != "" {
+		if kc, err := provision.LoadKubeadmConfig(path); err != nil {
+			slog.Error("KUBEADM_CONFIG is invalid — using the built-in kubeadm configuration", "path", path, "error", err)
+		} else {
+			provision.Configure(kc)
+		}
+	}
 	workloadsHandler.ProvisionAllowInsecure = os.Getenv("PROVISION_ALLOW_INSECURE") == "true"
 	provisionStream := stream.ServeProvision(workloadsHandler.Provisions, auth, cfg.CORSAllowedOrigins)
 
@@ -168,6 +175,7 @@ func main() {
 		protected.Get("/namespaces", workloadsHandler.Namespaces)
 		protected.Get("/namespaces/{name}", workloadsHandler.NamespaceDetail)
 		protected.Get("/nodes/provision/defaults", workloadsHandler.ProvisionDefaults)
+		protected.Get("/provision/options", workloadsHandler.ProvisionOptionsHandler)
 		protected.Get("/nodes/provision/{id}", workloadsHandler.ProvisionStatus)
 		protected.Get("/nodes/provision/{id}/stream", provisionStream)
 		protected.Get("/nodes", workloadsHandler.Nodes)
@@ -250,6 +258,7 @@ func main() {
 			w.Post("/clusters/ssh/hostkey", workloadsHandler.ProvisionHostKey)
 			w.Post("/clusters/import-ssh", workloadsHandler.ClusterSSHStart(provision.ModeImport))
 			w.Post("/clusters/create-ssh", workloadsHandler.ClusterSSHStart(provision.ModeCreate))
+			w.Post("/nodes/reset", workloadsHandler.ProvisionReset)
 			w.Post("/nodes/provision/hostkey", workloadsHandler.ProvisionHostKey)
 			w.Post("/nodes/provision", workloadsHandler.ProvisionStart)
 			// Roadmap Phase 25's generic YAML create/update (any kind the

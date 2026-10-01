@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -34,11 +35,59 @@ type Request struct {
 // Hooks are the bits of Run that talk to the Kubernetes API, supplied by the
 // HTTP layer so this package stays free of cluster clients.
 type Hooks struct {
+	// ExistingNodes lists the cluster's current nodes, so a new machine can be
+	// checked against them: a duplicate hostname or product_uuid breaks a
+	// kubeadm join. Optional.
+	ExistingNodes func(ctx context.Context) []NodeIdentity
 	// WaitForNode blocks until the named node is Ready in the target cluster.
 	WaitForNode func(ctx context.Context, name string, log LogFunc) error
 	// OnDone is called once, after the run ends, with the node name (on
 	// success) or the redacted error. Used for the audit trail.
 	OnDone func(nodeName string, err error)
+}
+
+// NodeIdentity is what identifies a node in the target cluster.
+type NodeIdentity struct {
+	Name       string
+	SystemUUID string
+}
+
+// maxClockDrift is how far a new machine's clock may be from Vinaire's before
+// the run refuses: certificates and join tokens have validity windows, so a
+// badly skewed clock fails later in confusing ways.
+const maxClockDrift = 90 * time.Second
+
+// checkAgainstCluster refuses a machine that would collide with an existing
+// node, or whose clock is far off.
+func checkAgainstCluster(ctx context.Context, facts NodeFacts, existing []NodeIdentity, log LogFunc) error {
+	for _, n := range existing {
+		if facts.Hostname != "" && strings.EqualFold(n.Name, facts.Hostname) {
+			return fmt.Errorf("a node named %q already exists in the cluster — give this machine a unique hostname (or a node name)", facts.Hostname)
+		}
+		if facts.ProductUUID != "" && n.SystemUUID != "" && strings.EqualFold(n.SystemUUID, facts.ProductUUID) {
+			return fmt.Errorf("this machine's product_uuid %s matches existing node %q — cloned machines need unique ones", facts.ProductUUID, n.Name)
+		}
+	}
+	if facts.Epoch > 0 {
+		drift := time.Since(time.Unix(facts.Epoch, 0))
+		if drift < 0 {
+			drift = -drift
+		}
+		if drift > maxClockDrift {
+			return fmt.Errorf("this machine's clock is %s off — fix its time (NTP/chrony) first, or certificates and join tokens will fail", drift.Round(time.Second))
+		}
+	}
+	return nil
+}
+
+// minorOf turns "v1.36.5", "1.36.5+k3s1" or "1.36" into "1.36".
+func minorOf(version string) string {
+	v := strings.TrimPrefix(strings.TrimSpace(version), "v")
+	parts := strings.SplitN(v, ".", 3)
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[0] + "." + parts[1]
 }
 
 func address(t Target) (string, error) {
@@ -124,10 +173,11 @@ func run(ctx context.Context, job *Job, red *Redactor, req Request, hooks Hooks,
 			serverURL = "https://" + net.JoinHostPort(req.ControlPlane.Host, "6443")
 		}
 	}
-	if serverURL == "" {
-		return "", errors.New("the cluster server URL is required")
+	if err := provider.ValidateJoinToken(token); err != nil {
+		return "", err
 	}
-	if err := ValidateServerURL(serverURL); err != nil {
+	serverURL, err = provider.JoinEndpoint(serverURL, token)
+	if err != nil {
 		return "", err
 	}
 
@@ -146,9 +196,15 @@ func run(ctx context.Context, job *Job, red *Redactor, req Request, hooks Hooks,
 
 	// 3. Preflight, prepare, join.
 	job.Step("Checking the machine")
-	facts, err := provider.Preflight(ctx, node, serverURL, log)
+	joinInfo := JoinInfo{ServerURL: serverURL, Token: token, Version: req.Version, NodeName: req.NodeName}
+	facts, err := provider.Preflight(ctx, node, joinInfo, log)
 	if err != nil {
 		return "", fmt.Errorf("preflight failed: %w", err)
+	}
+	if hooks.ExistingNodes != nil {
+		if err := checkAgainstCluster(ctx, facts, hooks.ExistingNodes(ctx), log); err != nil {
+			return "", fmt.Errorf("preflight failed: %w", err)
+		}
 	}
 	nodeName = req.NodeName
 	if nodeName == "" {
@@ -156,7 +212,7 @@ func run(ctx context.Context, job *Job, red *Redactor, req Request, hooks Hooks,
 	}
 
 	job.Step("Preparing the machine")
-	if err := provider.PrepareNode(ctx, node, log); err != nil {
+	if err := provider.PrepareNode(ctx, node, PrepareOptions{K8sMinor: minorOf(req.Version)}, log); err != nil {
 		return "", fmt.Errorf("prepare failed: %w", err)
 	}
 

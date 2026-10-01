@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -33,8 +34,21 @@ fetch "$SERVER/ping" | grep -q pong || { echo "ERROR: this machine can't reach t
 echo "preflight ok: reached $SERVER"
 `
 
-func (K3s) Preflight(ctx context.Context, node Runner, serverURL string, log LogFunc) (NodeFacts, error) {
-	return runPreflight(ctx, node, fmt.Sprintf(preflightScript, shQuote(serverURL)), log)
+func (K3s) Preflight(ctx context.Context, node Runner, join JoinInfo, log LogFunc) (NodeFacts, error) {
+	return runPreflight(ctx, node, fmt.Sprintf(preflightScript, shQuote(join.ServerURL)), log)
+}
+
+func (K3s) ValidateJoinToken(token Secret) error { return ValidateToken(token) }
+
+// JoinEndpoint: k3s workers are told the API address explicitly.
+func (K3s) JoinEndpoint(serverURL string, _ Secret) (string, error) {
+	if serverURL == "" {
+		return "", errors.New("the cluster server URL is required")
+	}
+	if err := ValidateServerURL(serverURL); err != nil {
+		return "", err
+	}
+	return serverURL, nil
 }
 
 // runPreflight runs a preflight script and parses its FACT:/ERROR: lines.
@@ -51,6 +65,14 @@ func runPreflight(ctx context.Context, node Runner, script string, log LogFunc) 
 				facts.Arch = v
 			case "os":
 				facts.OS = v
+			case "cpus":
+				facts.CPUs, _ = strconv.Atoi(strings.TrimSpace(v))
+			case "memkb":
+				facts.MemKB, _ = strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+			case "product_uuid":
+				facts.ProductUUID = strings.ToLower(strings.TrimSpace(v))
+			case "epoch":
+				facts.Epoch, _ = strconv.ParseInt(strings.TrimSpace(v), 10, 64)
 			}
 			return
 		}
@@ -71,7 +93,7 @@ func runPreflight(ctx context.Context, node Runner, script string, log LogFunc) 
 
 // PrepareNode: the k3s installer sets up what it needs itself, so there is
 // nothing to change on the machine beforehand.
-func (K3s) PrepareNode(_ context.Context, _ Runner, log LogFunc) error {
+func (K3s) PrepareNode(_ context.Context, _ Runner, _ PrepareOptions, log LogFunc) error {
 	log("nothing to prepare — the k3s installer handles its own prerequisites")
 	return nil
 }
@@ -222,4 +244,23 @@ func (K3s) JoinWorker(ctx context.Context, node Runner, join JoinInfo, log LogFu
 		return err
 	}
 	return node.Run(ctx, joinScript(join), log)
+}
+
+const k3sReset = `set +e
+if [ -x /usr/local/bin/k3s-agent-uninstall.sh ]; then
+  echo "removing the k3s agent"
+  /usr/local/bin/k3s-agent-uninstall.sh
+elif [ -x /usr/local/bin/k3s-uninstall.sh ]; then
+  echo "removing k3s (server)"
+  /usr/local/bin/k3s-uninstall.sh
+else
+  echo "ERROR: no k3s installation was found on this machine"
+  exit 1
+fi
+echo "reset complete — this machine can be set up again from scratch"
+`
+
+// Reset runs k3s's own uninstall script — destructive.
+func (K3s) Reset(ctx context.Context, node Runner, log LogFunc) error {
+	return node.Run(ctx, k3sReset, log)
 }

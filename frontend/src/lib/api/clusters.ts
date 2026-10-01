@@ -1,6 +1,6 @@
 import type { Cluster, ClusterType } from "@/lib/types";
 import { apiFetch } from "./http";
-import type { HostKey, SshTarget } from "./provision";
+import type { HostKey, Provider, SshTarget } from "./provision";
 
 // Real endpoint (Roadmap Phase 11) — every kubeconfig context the backend
 // is configured to talk to, plus any cluster added dynamically through the
@@ -132,14 +132,22 @@ export function setClusterType(
 
 // SSH modes: same host-key / credential rules as Phase 30's Add node (HTTPS
 // only, credentials in the body only, confirm the fingerprint first).
+export type KubeadmOptionsRequest = {
+  minor?: string;
+  cni?: string;
+  singleNode?: boolean;
+  controlPlaneEndpoint?: string;
+};
+
 export type ClusterSshRequest = {
-  provider: "k3s";
+  provider: Provider;
   name: string;
   node: SshTarget;
   address?: string;
   serverUrl?: string;
   version?: string;
   type?: ClusterType;
+  kubeadm?: KubeadmOptionsRequest;
 };
 
 export function fetchClusterHostKey(

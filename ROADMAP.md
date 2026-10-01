@@ -2956,7 +2956,43 @@ touched.
 
 ---
 
-## Phase 35 — A kubeadm provider (full upstream Kubernetes)
+## Phase 35 — A kubeadm provider (full upstream Kubernetes) ✅ done
+
+> **Outcome note:** Shipped behind the same `ClusterProvisioner` interface as
+> k3s: preflight, prepare, `kubeadm init` + pinned CNI, worker join, Reset, the
+> wizard options, the "what to install next" checklist and Settings help.
+> Decisions and deviations: **(1) Pinned versions live in config** —
+> `kubeadm.json` (embedded default, or the file named by `KUBEADM_CONFIG`),
+> validated at startup: https manifests that carry their pinned tag, exactly one
+> default Kubernetes minor and one default CNI. **(2) Cilium is not offered**: it
+> installs via `cilium-cli`/Helm, not a plain manifest, so it doesn't fit "apply a
+> pinned manifest"; Flannel and Calico are. **(3) Join command hardening** — a
+> worker accepts only the exact `kubeadm join host:port --token … --discovery-
+> token-ca-cert-hash sha256:…` shape (no control-plane flags) and the command is
+> rebuilt from its parsed, single-quoted parts instead of being run as pasted.
+> **(4) kubeadm's own output is scrubbed** of the bootstrap token, CA hash and
+> certificate key before it reaches the job log — found by testing: kubeadm
+> prints them itself. **(5) New-node checks**: hostname and `product_uuid` must
+> not collide with an existing node, and the clock must be within 90 s (a skewed
+> clock breaks join tokens and certificates). MAC uniqueness is **not** checked —
+> the cluster API doesn't expose MACs. **(6) Reset** needs the SSH login again, a
+> fresh host-key confirmation and the server's address typed out (re-checked on
+> the server), and is audited. **(7)** The wait for a new node to be Ready now
+> survives a few transient API errors (permission errors still fail at once) —
+> found when one dropped request failed an install that had in fact succeeded.
+> Out of scope as planned: RHEL-family OSes, multi-control-plane HA.
+> **Verified** on a real Ubuntu 22.04 systemd server (disposable container): a
+> clean machine became a working Kubernetes v1.37 cluster with Flannel and CoreDNS,
+> registered as type `kubeadm` with its pods visible in Vinaire; the bootstrap
+> token and CA hash were masked in the log; a worker joined via the join command
+> read off the control plane and registered; Reset returned the machine to clean
+> (a wrong confirmation address was refused with a 400), and a fresh create after
+> it succeeded. **Test-environment caveats, not product bugs:** inside a nested
+> container kube-proxy can't write `nf_conntrack_max` (read-only `/proc/sys`) and
+> the control plane eventually became unstable on a 4 GB WSL VM, so the CoreDNS
+> wait needed `conntrack.maxPerCore: 0` applied by hand; on a real machine or VM
+> this doesn't arise. Not exercised end-to-end: the Ready-wait fix itself after
+> a successful join, and Calico.
 
 **Goal:** the same create/join experience as Phase 30/34, but for a real
 upstream Kubernetes install via kubeadm, not just k3s.

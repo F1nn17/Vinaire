@@ -11,6 +11,9 @@ import {
   type ProvisionEvent,
 } from "@/lib/api/provision";
 import { applyErrorMessage } from "@/components/editor/useYamlApply";
+import { useClusters } from "@/lib/hooks/useClusters";
+import { useCurrentCluster } from "@/lib/clusterStore";
+import { ResetServerModal } from "@/components/ssh/ResetServerModal";
 import {
   Fingerprint,
   TargetFields,
@@ -37,6 +40,17 @@ export function AddNodeModal({
   onFinished: () => void;
 }) {
   const { data: defaults } = useProvisionDefaults();
+  // Which provisioner to use follows the selected cluster's type (Roadmap
+  // Phase 35): a kubeadm cluster takes a kubeadm join command, anything else
+  // is treated as k3s.
+  const { data: clusters } = useClusters();
+  const selectedCluster = useCurrentCluster();
+  const activeCluster =
+    clusters?.find((c) => c.name === selectedCluster) ??
+    clusters?.find((c) => c.default);
+  const provider: "k3s" | "kubeadm" =
+    activeCluster?.type === "kubeadm" ? "kubeadm" : "k3s";
+  const [resetOpen, setResetOpen] = useState(false);
 
   const [phase, setPhase] = useState<Phase>("form");
   const [node, setNode] = useState<TargetForm>(emptyTarget("root"));
@@ -67,7 +81,7 @@ export function AddNodeModal({
   const formValid =
     targetComplete(node) &&
     (usingCp ? targetComplete(cp) : token.trim() !== "") &&
-    (usingCp || serverUrl.trim() !== "");
+    (usingCp || provider === "kubeadm" || serverUrl.trim() !== "");
 
   async function handleContinue() {
     setBusy(true);
@@ -140,7 +154,7 @@ export function AddNodeModal({
     setError(null);
     try {
       const { jobId } = await startProvision({
-        provider: "k3s",
+        provider,
         node: toSshTarget(node, nodeKey.fingerprint),
         controlPlane:
           usingCp && cpKey ? toSshTarget(cp, cpKey.fingerprint) : undefined,
@@ -171,6 +185,15 @@ export function AddNodeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      {resetOpen && (
+        <ResetServerModal
+          provider={provider}
+          host={node.host}
+          port={node.port}
+          username={node.username}
+          onClose={() => setResetOpen(false)}
+        />
+      )}
       <div className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-xl border border-border bg-surface p-5">
         <div className="text-sm font-semibold">Add node</div>
         <div className="mt-1 text-xs text-text-faint">
@@ -196,6 +219,7 @@ export function AddNodeModal({
               setNodeName={setNodeName}
               version={version}
               setVersion={setVersion}
+              provider={provider}
               suggestedUrl={defaults?.serverUrl}
               suggestedVersion={defaults?.k3sVersion}
             />
@@ -319,6 +343,15 @@ export function AddNodeModal({
               {busy ? "Starting…" : "Add node"}
             </button>
           )}
+          {phase === "done" && result?.status === "failed" && (
+            <button
+              type="button"
+              onClick={() => setResetOpen(true)}
+              className="rounded-lg border border-err/40 bg-surface-2 px-3.5 py-2 text-[12.5px] text-err"
+            >
+              Reset this server…
+            </button>
+          )}
           {phase === "done" && (
             <button
               type="button"
@@ -342,6 +375,7 @@ function FormStep(props: {
   setNode: (t: TargetForm) => void;
   cp: TargetForm;
   setCp: (t: TargetForm) => void;
+  provider: "k3s" | "kubeadm";
   tokenMode: "manual" | "controlplane";
   setTokenMode: (m: "manual" | "controlplane") => void;
   token: string;
@@ -389,43 +423,62 @@ function FormStep(props: {
         {!usingCp && (
           <>
             <label className="flex flex-col gap-1.5 text-xs text-text-muted">
-              Join token
+              {props.provider === "kubeadm" ? "Join command" : "Join token"}
               <input
-                aria-label="Join token"
+                aria-label={
+                  props.provider === "kubeadm" ? "Join command" : "Join token"
+                }
                 type="password"
                 autoComplete="off"
                 value={props.token}
                 onChange={(e) => props.setToken(e.target.value)}
-                placeholder="K10…::server:…"
+                placeholder={
+                  props.provider === "kubeadm"
+                    ? "kubeadm join 10.0.0.5:6443 --token … --discovery-token-ca-cert-hash sha256:…"
+                    : "K10…::server:…"
+                }
                 className={inputClass}
               />
               <span className="text-[11px] text-text-faint">
-                On a k3s server:{" "}
-                <span className="font-mono">
-                  sudo cat /var/lib/rancher/k3s/server/node-token
-                </span>
+                {props.provider === "kubeadm" ? (
+                  <>
+                    On the control plane:{" "}
+                    <span className="font-mono">
+                      sudo kubeadm token create --print-join-command
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    On a k3s server:{" "}
+                    <span className="font-mono">
+                      sudo cat /var/lib/rancher/k3s/server/node-token
+                    </span>
+                  </>
+                )}
               </span>
             </label>
-            <label className="flex flex-col gap-1.5 text-xs text-text-muted">
-              Cluster API address (as reachable from the new node)
-              <input
-                aria-label="Cluster API address"
-                value={props.serverUrl}
-                onChange={(e) => props.setServerUrl(e.target.value)}
-                placeholder="https://10.0.0.10:6443"
-                className={inputClass}
-              />
-              {props.suggestedUrl && (
-                <button
-                  type="button"
-                  onClick={() => props.setServerUrl(props.suggestedUrl ?? "")}
-                  className="w-fit text-left text-[11px] text-accent-text"
-                >
-                  Vinaire reaches this cluster at {props.suggestedUrl} — use it
-                  (it may not be reachable from the new node)
-                </button>
-              )}
-            </label>
+            {props.provider === "k3s" && (
+              <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+                Cluster API address (as reachable from the new node)
+                <input
+                  aria-label="Cluster API address"
+                  value={props.serverUrl}
+                  onChange={(e) => props.setServerUrl(e.target.value)}
+                  placeholder="https://10.0.0.10:6443"
+                  className={inputClass}
+                />
+                {props.suggestedUrl && (
+                  <button
+                    type="button"
+                    onClick={() => props.setServerUrl(props.suggestedUrl ?? "")}
+                    className="w-fit text-left text-[11px] text-accent-text"
+                  >
+                    Vinaire reaches this cluster at {props.suggestedUrl} — use
+                    it (it may not be reachable from the new node)
+                  </button>
+                )}
+              </label>
+            )}
           </>
         )}
 
@@ -437,17 +490,19 @@ function FormStep(props: {
               onChange={props.setCp}
               idPrefix="cp"
             />
-            <label className="flex flex-col gap-1.5 text-xs text-text-muted">
-              Cluster API address (optional — defaults to the control plane on
-              :6443)
-              <input
-                aria-label="Cluster API address"
-                value={props.serverUrl}
-                onChange={(e) => props.setServerUrl(e.target.value)}
-                placeholder="https://10.0.0.10:6443"
-                className={inputClass}
-              />
-            </label>
+            {props.provider === "k3s" && (
+              <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+                Cluster API address (optional — defaults to the control plane on
+                :6443)
+                <input
+                  aria-label="Cluster API address"
+                  value={props.serverUrl}
+                  onChange={(e) => props.setServerUrl(e.target.value)}
+                  placeholder="https://10.0.0.10:6443"
+                  className={inputClass}
+                />
+              </label>
+            )}
           </>
         )}
 
@@ -463,7 +518,9 @@ function FormStep(props: {
             />
           </label>
           <label className="flex flex-col gap-1.5 text-xs text-text-muted">
-            k3s version (optional)
+            {props.provider === "kubeadm"
+              ? "Kubernetes version (optional)"
+              : "k3s version (optional)"}
             <input
               aria-label="k3s version"
               value={props.version}

@@ -259,8 +259,18 @@ func waitForNode(clientset *kubernetes.Clientset) func(ctx context.Context, name
 		tick := time.NewTicker(3 * time.Second)
 		defer tick.Stop()
 		reported := false
+		// A join takes the node's kubelet through several restarts and the API is
+		// often reached over a flaky path (a port-forward, a load balancer), so a
+		// single dropped request must not fail an install that actually worked.
+		// Permission errors are real and fatal; anything else is retried a few
+		// times before giving up.
+		const maxTransient = 10
+		transient := 0
 		for {
 			node, err := clientset.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+			if err == nil || apierrors.IsNotFound(err) {
+				transient = 0
+			}
 			switch {
 			case err == nil:
 				for _, c := range node.Status.Conditions {
@@ -273,8 +283,13 @@ func waitForNode(clientset *kubernetes.Clientset) func(ctx context.Context, name
 					reported = true
 				}
 			case apierrors.IsNotFound(err):
-			default:
+			case apierrors.IsUnauthorized(err) || apierrors.IsForbidden(err) || ctx.Err() != nil:
 				return fmt.Errorf("couldn't check the node in the cluster: %w", err)
+			default:
+				transient++
+				if transient >= maxTransient {
+					return fmt.Errorf("couldn't check the node in the cluster: %w", err)
+				}
 			}
 			select {
 			case <-ctx.Done():
@@ -291,7 +306,7 @@ func (h *Handler) ProvisionStart(w http.ResponseWriter, r *http.Request) {
 	if !h.provisioningEnabled(w) || !h.requireSecureTransport(w, r) {
 		return
 	}
-	_, clientset, ok := h.resolveCluster(w, r)
+	entry, clientset, ok := h.resolveCluster(w, r)
 	if !ok || !requireNodeCreate(r.Context(), w, clientset) {
 		return
 	}
@@ -304,6 +319,9 @@ func (h *Handler) ProvisionStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Provider == "" {
+		req.Provider = providerForCluster(entry)
+	}
 	provider, err := provision.ProviderByName(req.Provider)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
@@ -328,7 +346,13 @@ func (h *Handler) ProvisionStart(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "provide the join token, or SSH access to the control plane to read it from")
 		return
 	case req.Token != "":
-		if err := provision.ValidateToken(req.Token); err != nil {
+		if err := provider.ValidateJoinToken(req.Token); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		// Where the worker will connect: from the join command (kubeadm) or the
+		// explicit server URL (k3s).
+		if _, err := provider.JoinEndpoint(req.ServerURL, req.Token); err != nil {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -338,13 +362,12 @@ func (h *Handler) ProvisionStart(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-	} else if cp == nil {
-		respondError(w, http.StatusBadRequest, "the cluster server URL is required")
-		return
 	}
-	if err := provision.ValidateVersion(req.Version); err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
-		return
+	if req.Version != "" && provider.Name() == "k3s" {
+		if err := provision.ValidateVersion(req.Version); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	if err := provision.ValidateNodeName(req.NodeName); err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
@@ -352,7 +375,7 @@ func (h *Handler) ProvisionStart(w http.ResponseWriter, r *http.Request) {
 	}
 	version := req.Version
 	if version == "" {
-		version = k3sServerVersion(r.Context(), clientset)
+		version = serverVersionFor(r.Context(), provider.Name(), clientset)
 	}
 
 	job, err := h.Provisions.New(ownerKey(r), provider.Name(), req.Node.Host)
@@ -386,7 +409,8 @@ func (h *Handler) ProvisionStart(w http.ResponseWriter, r *http.Request) {
 		Version:      version,
 		NodeName:     req.NodeName,
 	}, provision.Hooks{
-		WaitForNode: waitForNode(clientset),
+		ExistingNodes: existingNodes(clientset),
+		WaitForNode:   waitForNode(clientset),
 		OnDone: func(nodeName string, err error) {
 			result := "succeeded"
 			extra := append([]any{}, auditExtra...)

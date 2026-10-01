@@ -328,6 +328,35 @@ kubectl config view --raw --minify --flatten --context <имя-контекст�
             URL».
           </li>
           <li>
+            В «Distribution» можно выбрать{" "}
+            <span className="font-semibold text-foreground">
+              Kubernetes (kubeadm)
+            </span>{" "}
+            вместо k3s — обычный «настоящий» Kubernetes на Debian/Ubuntu. Для
+            Create потребуется сервер минимум с 2 CPU и 2 ГБ RAM, с доступом к{" "}
+            <span className="font-mono">pkgs.k8s.io</span> и{" "}
+            <span className="font-mono">registry.k8s.io</span>. Vinaire сама
+            отключит swap, включит нужные модули ядра и sysctl, поставит
+            containerd и закреплённые пакеты kubelet/kubeadm/kubectl, выполнит{" "}
+            <span className="font-mono">kubeadm init</span> и поставит сеть
+            подов (Flannel или Calico — версии закреплены в конфигурации
+            бэкенда, а не «latest»). Опции: версия Kubernetes, CNI, «single
+            node» (запускать нагрузку и на control-plane) и{" "}
+            <span className="font-semibold text-foreground">
+              control-plane endpoint
+            </span>{" "}
+            — задайте его сразу, если когда-нибудь может понадобиться HA:
+            добавить его потом практически невозможно. Список версий и CNI лежит
+            в <span className="font-mono">kubeadm.json</span> бэкенда (или в
+            файле из <span className="font-mono">KUBEADM_CONFIG</span>).
+          </li>
+          <li>
+            Кластер kubeadm создаётся пустым — в нём нет Ingress-контроллера,
+            StorageClass и metrics-server, поэтому графики CPU/памяти будут
+            «unavailable», а PersistentVolumeClaim будут висеть в Pending, пока
+            вы их не установите (мастер напомнит об этом после создания).
+          </li>
+          <li>
             Create откажется работать (ничего не меняя), если на сервере уже
             есть <span className="font-mono">/etc/rancher/k3s</span> или занят
             порт 6443 — для готового кластера используйте Import. Установка
@@ -693,6 +722,46 @@ function NodeHelp() {
             конце нода появляется в списке Nodes со статусом Ready.
           </li>
         </ol>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Если кластер — kubeadm (обычный Kubernetes)
+        </div>
+        <div className="mt-1 text-text-muted">
+          Vinaire сама выберет kubeadm по типу кластера. Вместо токена k3s нужна{" "}
+          <span className="font-semibold">join-команда</span> — её печатает
+          control-plane:
+        </div>
+        <Code>{`sudo kubeadm token create --print-join-command`}</Code>
+        <div className="mt-1 text-text-muted">
+          Вставьте её целиком (или дайте Vinaire SSH на control-plane — она
+          создаст команду сама). Адрес API берётся из самой команды. Новый
+          сервер должен быть Debian/Ubuntu, минимум 2 CPU и 2 ГБ RAM, с доступом
+          к pkgs.k8s.io и registry.k8s.io; Vinaire подготовит его (swap, модули
+          ядра, containerd, пакеты нужной версии — как у вашего control-plane) и
+          выполнит join. Перед этим проверяется, что имя хоста и product_uuid не
+          совпадают с уже существующими нодами и что часы сервера не расходятся
+          с вашими: расхождение ломает сертификаты и токены присоединения. Токен
+          и хэш CA в логе скрываются.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Reset: если установка оборвалась на полпути
+        </div>
+        <div className="mt-1 text-text-muted">
+          Прерванная установка оставляет сервер в неопределённом состоянии, и
+          повторить её поверх нельзя. Если установка (создание кластера или
+          добавление ноды) закончилась ошибкой, в окне появится «Reset this
+          server…»: Vinaire снова спросит SSH-доступ, покажет отпечаток ключа и
+          потребует ввести адрес сервера — это необратимо. Для kubeadm
+          выполняется <span className="font-mono">kubeadm reset -f</span>, затем
+          чистятся конфигурация CNI, правила iptables и остатки состояния
+          Kubernetes; для k3s запускается его собственный uninstall-скрипт.
+          После Reset сервер можно настраивать заново с нуля.
+        </div>
       </div>
 
       <div>

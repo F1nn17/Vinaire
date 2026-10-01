@@ -201,8 +201,26 @@ Keep every one of these rules when touching it:
 new single-server k3s cluster** (installed with `--tls-san <address>` and
 refused if `/etc/rancher/k3s` exists or port 6443 is taken) or to **import** an
 existing one by reading its admin kubeconfig over SSH. That kubeconfig is
-returned as a `Secret` and never logged. Phase 35 adds a kubeadm provider
-behind the same interface.
+returned as a `Secret` and never logged.
+
+**kubeadm provider (Phase 35, `internal/provision/kubeadm*.go`)** — upstream
+Kubernetes on Debian/Ubuntu behind the same interface: preflight (OS, CPU/RAM,
+ports, reachability of `pkgs.k8s.io`/`registry.k8s.io`, leftovers of a previous
+install), prepare (swap off, kernel modules/sysctls, containerd with
+`SystemdCgroup`, held kubelet/kubeadm/kubectl packages), `kubeadm init` with the
+CNI's own pod CIDR, join and reset. Rules to keep: what may be installed —
+Kubernetes minors and CNI manifests **with pinned versions** — comes only from
+`kubeadm.json` (or the file named by `KUBEADM_CONFIG`), validated at startup:
+manifests must be https URLs carrying their pinned tag, never "latest"; a worker
+accepts only the exact `kubeadm join <host>:<port> --token … --discovery-token-ca-cert-hash …`
+shape (no control-plane flags) and the command is **rebuilt from its parsed,
+single-quoted parts** rather than run as pasted; kubeadm's own output is scrubbed
+of the bootstrap token, CA hash and certificate key (`scrubKubeadm`) — they let
+anyone with a route to the API add a node for 24h; a new node is refused if its
+hostname/product_uuid collides with an existing node or its clock is more than
+90s off. **Reset** (`POST /api/v1/nodes/reset`) is destructive: it needs the SSH
+login again, a fresh host-key confirmation and the server address typed out
+(`confirmHost`, re-checked server-side), and is audited as `provision-reset*`.
 
 **Local discovery (Phase 34)** — `GET /api/v1/clusters/discover` — reads the
 kubeconfig files the Vinaire process can already open (`$KUBECONFIG`,

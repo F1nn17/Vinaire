@@ -30,6 +30,8 @@ type clusterSSHRequest struct {
 	ServerURL string `json:"serverUrl"`
 	Version   string `json:"version"`
 	Type      string `json:"type"`
+	// Kubeadm configures a kubeadm install (create mode); ignored for k3s.
+	Kubeadm kubeadmRequest `json:"kubeadm"`
 }
 
 // ClusterSSHStart returns the handler for POST /api/v1/clusters/{import,create}-ssh.
@@ -87,9 +89,18 @@ func (h *Handler) ClusterSSHStart(mode string) http.HandlerFunc {
 				return
 			}
 		}
-		if err := provision.ValidateVersion(req.Version); err != nil {
-			respondError(w, http.StatusBadRequest, err.Error())
-			return
+		var kubeadmOpts provision.KubeadmOptions
+		if provider.Name() == "k3s" {
+			if err := provision.ValidateVersion(req.Version); err != nil {
+				respondError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+		} else if mode == provision.ModeCreate {
+			var err error
+			if kubeadmOpts, err = req.Kubeadm.options(); err != nil {
+				respondError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 		}
 		if req.Type != "" && !clusters.ValidType(req.Type) {
 			respondError(w, http.StatusBadRequest, "unknown cluster type")
@@ -112,7 +123,10 @@ func (h *Handler) ClusterSSHStart(mode string) http.HandlerFunc {
 		}
 		clusterType := req.Type
 		if clusterType == "" {
-			clusterType = clusters.TypeK3s // the k3s provider only deals in k3s
+			clusterType = clusters.TypeK3s
+			if provider.Name() == "kubeadm" {
+				clusterType = clusters.TypeKubeadm
+			}
 		}
 		fingerprint := node.HostKeyFingerprint
 
@@ -127,6 +141,7 @@ func (h *Handler) ClusterSSHStart(mode string) http.HandlerFunc {
 		provision.StartCluster(job, provision.ClusterRequest{
 			Provider: provider.Name(), Mode: mode, Node: node,
 			Address: req.Address, ServerURL: req.ServerURL, Version: req.Version,
+			Kubeadm: kubeadmOpts,
 		}, provision.ClusterHooks{
 			Register: func(ctx context.Context, kubeconfig provision.Secret, serverURL string, log provision.LogFunc) (string, error) {
 				info, err := clusters.ParseKubeconfig([]byte(kubeconfig.Reveal()), clusters.ParseOptions{ServerOverride: serverURL})

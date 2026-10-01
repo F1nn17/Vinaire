@@ -1,0 +1,25 @@
+{
+  "versions": [
+    { "minor": "1.37", "default": true },
+    { "minor": "1.36" },
+    { "minor": "1.35" },
+    { "minor": "1.34" }
+  ],
+  "cnis": [
+    {
+      "name": "flannel",
+      "label": "Flannel",
+      "version": "v0.28.9",
+      "manifest": "https://github.com/flannel-io/flannel/releases/download/v0.28.9/kube-flannel.yml",
+      "podCIDR": "10.244.0.0/16",
+      "default": true
+    },
+    {
+      "name": "calico",
+      "label": "Calico",
+      "version": "v3.32.2",
+      "manifest": "https://raw.githubusercontent.com/projectcalico/calico/v3.32.2/manifests/calico.yaml",
+      "podCIDR": "192.168.0.0/16"
+    }
+  ]
+}

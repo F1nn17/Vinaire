@@ -35,6 +35,8 @@ type ClusterRequest struct {
 	// a hostname other than Address). Optional.
 	ServerURL string
 	Version   string
+	// Kubeadm configures a kubeadm cluster (ignored by k3s).
+	Kubeadm KubeadmOptions
 }
 
 // ClusterHooks are the parts of a run that belong to the HTTP layer.
@@ -105,14 +107,18 @@ func runCluster(ctx context.Context, job *Job, req ClusterRequest, hooks Cluster
 
 	if req.Mode == ModeCreate {
 		job.Step("Checking the machine is clean")
-		facts, err := provider.PreflightControlPlane(ctx, node, log)
+		_, err := provider.PreflightControlPlane(ctx, node, log)
 		if err != nil {
 			return "", fmt.Errorf("preflight failed: %w", err)
 		}
-		log(fmt.Sprintf("machine: %s (%s, %s)", facts.Hostname, facts.OS, facts.Arch))
+		job.Step("Preparing the machine")
+		if err := provider.PrepareNode(ctx, node, PrepareOptions{K8sMinor: req.Kubeadm.Minor}, log); err != nil {
+			return "", fmt.Errorf("prepare failed: %w", err)
+		}
 
-		job.Step("Installing " + provider.Name() + " (single server) — this takes a minute or two")
-		if err := provider.InstallControlPlane(ctx, node, ControlPlaneOptions{TLSSAN: clusterAddr, Version: req.Version}, log); err != nil {
+		job.Step("Installing " + provider.Name() + " (single server) — this takes a few minutes")
+		opts := ControlPlaneOptions{TLSSAN: clusterAddr, Version: req.Version, Kubeadm: req.Kubeadm}
+		if err := provider.InstallControlPlane(ctx, node, opts, log); err != nil {
 			return "", fmt.Errorf("install failed: %w", err)
 		}
 	}

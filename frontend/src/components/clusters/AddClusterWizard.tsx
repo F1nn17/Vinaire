@@ -14,7 +14,13 @@ import {
   type DiscoveredCluster,
   type KubeconfigPreview,
 } from "@/lib/api/clusters";
-import type { HostKey, ProvisionEvent } from "@/lib/api/provision";
+import {
+  useProvisionOptions,
+  type HostKey,
+  type ProvisionEvent,
+  type Provider,
+} from "@/lib/api/provision";
+import { ResetServerModal } from "@/components/ssh/ResetServerModal";
 import { watchProvisionJob } from "@/lib/provisionWatch";
 import type { ClusterType } from "@/lib/types";
 import { applyErrorMessage } from "@/components/editor/useYamlApply";
@@ -723,6 +729,14 @@ function SshPanel({
   const [address, setAddress] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [version, setVersion] = useState("");
+  // Roadmap Phase 35: which distribution to install/import, and kubeadm's options.
+  const [provider, setProvider] = useState<Provider>("k3s");
+  const { data: options } = useProvisionOptions();
+  const [minor, setMinor] = useState("");
+  const [cni, setCni] = useState("");
+  const [singleNode, setSingleNode] = useState(false);
+  const [cpEndpoint, setCpEndpoint] = useState("");
+  const [resetOpen, setResetOpen] = useState(false);
   const [hostKey, setHostKey] = useState<HostKey | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -765,12 +779,21 @@ function SshPanel({
     setError(null);
     try {
       const { jobId } = await startClusterSsh(mode, {
-        provider: "k3s",
+        provider,
         name: name.trim(),
         node: toSshTarget(node, hostKey.fingerprint),
         address: address.trim() || undefined,
         serverUrl: serverUrl.trim() || undefined,
-        version: version.trim() || undefined,
+        version: provider === "k3s" ? version.trim() || undefined : undefined,
+        kubeadm:
+          provider === "kubeadm" && mode === "create"
+            ? {
+                minor: minor || undefined,
+                cni: cni || undefined,
+                singleNode,
+                controlPlaneEndpoint: cpEndpoint.trim() || undefined,
+              }
+            : undefined,
       });
       // Request sent: don't keep the secrets around in the page.
       setNode((n) => ({ ...n, password: "", privateKey: "", passphrase: "" }));
@@ -804,8 +827,28 @@ function SshPanel({
       {phase === "form" && (
         <>
           <NameField value={name} onChange={setName} />
+          <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+            Distribution
+            <select
+              aria-label="Distribution"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as Provider)}
+              className={inputClass}
+            >
+              <option value="k3s">k3s (lightweight Kubernetes)</option>
+              <option value="kubeadm">
+                Kubernetes (kubeadm, Debian/Ubuntu)
+              </option>
+            </select>
+          </label>
           <TargetFields
-            title={mode === "create" ? "Clean server" : "Server with k3s"}
+            title={
+              mode === "create"
+                ? "Clean server"
+                : provider === "kubeadm"
+                  ? "Server with a kubeadm control plane"
+                  : "Server with k3s"
+            }
             value={node}
             onChange={setNode}
             idPrefix="cluster"
@@ -822,9 +865,9 @@ function SshPanel({
               className={inputClass}
             />
             <span className="text-[11px] text-text-faint">
-              k3s issues its certificate without the machine&apos;s public
-              address unless told to, so connecting by another address fails TLS
-              verification.
+              {provider === "kubeadm"
+                ? "The API certificate is issued for this address (--apiserver-cert-extra-sans), so connecting by another address fails TLS verification."
+                : "k3s issues its certificate without the machine's public address unless told to, so connecting by another address fails TLS verification."}
             </span>
           </label>
           <label className="flex flex-col gap-1.5 text-xs text-text-muted">
@@ -837,7 +880,79 @@ function SshPanel({
               className={inputClass}
             />
           </label>
-          {mode === "create" && (
+          {mode === "create" && provider === "kubeadm" && (
+            <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-2 p-3">
+              <div className="text-xs font-semibold">Kubernetes (kubeadm)</div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+                  Kubernetes version
+                  <select
+                    aria-label="Kubernetes version"
+                    value={minor}
+                    onChange={(e) => setMinor(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">
+                      Default
+                      {options
+                        ? ` (${options.kubeadm.versions.find((v) => v.default)?.minor})`
+                        : ""}
+                    </option>
+                    {options?.kubeadm.versions.map((v) => (
+                      <option key={v.minor} value={v.minor}>
+                        {v.minor}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+                  Pod network (CNI)
+                  <select
+                    aria-label="Pod network"
+                    value={cni}
+                    onChange={(e) => setCni(e.target.value)}
+                    className={inputClass}
+                  >
+                    {options?.kubeadm.cnis.map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {c.label} {c.version}
+                        {c.default ? " (default)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-text-muted">
+                <input
+                  type="checkbox"
+                  checked={singleNode}
+                  onChange={(e) => setSingleNode(e.target.checked)}
+                />
+                Single node — let workloads run on the control plane too
+              </label>
+              <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+                Control-plane endpoint (optional)
+                <input
+                  aria-label="Control-plane endpoint"
+                  value={cpEndpoint}
+                  onChange={(e) => setCpEndpoint(e.target.value)}
+                  placeholder="k8s.example.com:6443"
+                  className={inputClass}
+                />
+                <span className="text-[11px] text-warn">
+                  A VIP or DNS name for the API. Set this now if you might ever
+                  want high availability — adding it after the cluster exists is
+                  very hard.
+                </span>
+              </label>
+              <div className="text-[11px] text-text-faint">
+                Needs a Debian or Ubuntu server with at least 2 CPUs and 2 GB
+                RAM that can reach pkgs.k8s.io and registry.k8s.io. Versions and
+                pod networks are pinned in this Vinaire&apos;s configuration.
+              </div>
+            </div>
+          )}
+          {mode === "create" && provider === "k3s" && (
             <label className="flex flex-col gap-1.5 text-xs text-text-muted">
               k3s version (optional)
               <input
@@ -889,7 +1004,42 @@ function SshPanel({
               {result.text}
             </div>
           )}
+          {result?.ok && mode === "create" && provider === "kubeadm" && (
+            <div className="rounded-lg border border-border bg-surface-2 p-3 text-xs text-text-muted">
+              <div className="font-semibold text-text">
+                A kubeadm cluster starts empty — what to install next
+              </div>
+              <ul className="mt-1.5 list-disc pl-5">
+                <li>
+                  An <b>Ingress controller</b> to expose services outside the
+                  cluster.
+                </li>
+                <li>
+                  A <b>StorageClass</b> (e.g. local-path or your CSI driver), or
+                  PersistentVolumeClaims stay Pending.
+                </li>
+                <li>
+                  <b>metrics-server</b> — without it CPU/memory show as
+                  &ldquo;unavailable&rdquo; in Vinaire.
+                </li>
+              </ul>
+              <div className="mt-1.5 text-text-faint">
+                Vinaire&apos;s Marketplace will install these in one click (a
+                later phase); until then use Helm or kubectl.
+              </div>
+            </div>
+          )}
         </>
+      )}
+
+      {resetOpen && (
+        <ResetServerModal
+          provider={provider}
+          host={node.host}
+          port={node.port}
+          username={node.username}
+          onClose={() => setResetOpen(false)}
+        />
       )}
 
       <ErrorBox message={error} />
@@ -927,6 +1077,15 @@ function SshPanel({
               : mode === "create"
                 ? "Create cluster"
                 : "Import cluster"}
+          </button>
+        )}
+        {phase === "done" && result && !result.ok && (
+          <button
+            type="button"
+            onClick={() => setResetOpen(true)}
+            className="rounded-lg border border-err/40 bg-surface-2 px-3.5 py-2 text-[12.5px] text-err"
+          >
+            Reset this server…
           </button>
         )}
         {phase === "done" && result?.ok && mode === "create" && (

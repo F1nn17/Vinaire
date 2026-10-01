@@ -605,6 +605,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no file references. Removing a cluster only removes Vinaire's connection.
   Adding a cluster now lives in exactly one place — the Clusters page (also reachable from "+ Add cluster" in the cluster picker); the Clusters tab is gone from Settings, and the original "server URL + token" way is the wizard's fifth option. Inside a pod, "Found on this machine" explains why it can't see the host and offers the kubeconfig import with the exact `kubectl` command. Settings -> Справка got a rewritten "Подключение кластера" section (all five ways, discovery requirements, types, what is stored and how it is protected, common errors, and the original ServiceAccount walkthrough) and a new "Добавление ноды" section (prerequisites, dialog steps, host-key check, security, troubleshooting, removing a node by hand).
 
+- A kubeadm provider — full upstream Kubernetes (Roadmap Phase 35). In the Add
+  cluster wizard, "Distribution" can be Kubernetes (kubeadm) next to k3s: a clean
+  Debian/Ubuntu server becomes a working cluster with no manual commands — Vinaire
+  checks the machine (OS, 2 CPU / 2 GB, free ports, reachability of pkgs.k8s.io and
+  registry.k8s.io), prepares it (swap off, kernel modules and sysctls, containerd
+  with the systemd cgroup driver, held kubelet/kubeadm/kubectl), runs `kubeadm init`
+  with the pod CIDR its CNI expects, installs Flannel or Calico from manifests at
+  **pinned** versions, and waits for the node and CoreDNS. Options: Kubernetes
+  version, CNI, single-node (untaint the control plane) and a control-plane
+  endpoint (with a warning that it can't be added later). The versions and CNIs
+  live in a configuration file (`kubeadm.json`, or `KUBEADM_CONFIG`), not in code.
+  "Add node" now follows the cluster's type and takes a `kubeadm join` command (or
+  reads one off the control plane); a new node is checked against the existing
+  ones for a duplicate hostname/product_uuid and for clock drift. kubeadm's join
+  token and CA hash are masked in the log. A failed install can be undone with
+  **Reset** (`kubeadm reset -f`, CNI config and iptables cleared; k3s runs its own
+  uninstall script), gated behind re-entering the SSH login, a fresh host-key
+  confirmation and typing the server's address. Settings -> Справка documents it.
+
 ### Changed
 
 - Replaced the draft `ROADMAP.md` with a detailed, phase-by-phase technical

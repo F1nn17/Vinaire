@@ -26,8 +26,10 @@ export type SshTarget = {
   hostKeyFingerprint: string;
 };
 
+export type Provider = "k3s" | "kubeadm";
+
 export type ProvisionRequest = {
-  provider: "k3s";
+  provider: Provider;
   node: SshTarget;
   controlPlane?: SshTarget;
   serverUrl?: string;
@@ -94,4 +96,39 @@ export function provisionStreamUrl(id: string, afterSeq: number): string {
   return buildStreamURL(
     `/api/v1/nodes/provision/${encodeURIComponent(id)}/stream?after=${afterSeq}`,
   );
+}
+
+// Roadmap Phase 35 — what a kubeadm install may use, straight from the backend's
+// own configuration (pinned versions, never "latest").
+export type ProvisionOptions = {
+  kubeadm: {
+    versions: { minor: string; default: boolean }[];
+    cnis: {
+      name: string;
+      label: string;
+      version: string;
+      podCIDR: string;
+      default: boolean;
+    }[];
+  };
+};
+
+export function useProvisionOptions() {
+  return useSWR("provision-options", () =>
+    apiFetch<ProvisionOptions>("/api/v1/provision/options"),
+  );
+}
+
+// Reset a server (kubeadm reset / k3s uninstall) over SSH — destructive, so the
+// request repeats the server's address (`confirmHost`) and the backend re-checks.
+export function startReset(req: {
+  provider: Provider;
+  node: SshTarget;
+  confirmHost: string;
+}): Promise<{ jobId: string }> {
+  return apiFetch<{ jobId: string }>("/api/v1/nodes/reset", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
 }
