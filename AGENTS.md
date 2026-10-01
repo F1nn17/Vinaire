@@ -53,6 +53,16 @@ flow.
   diff was computed against (409 if the object changed since), Secret values
   are redacted from the diff response, and every real write is audited as
   `apply-create`/`apply-update` with kind/apiVersion.
+- `DELETE /api/v1/namespaces/{name}` (Roadmap Phase 27) — a plain
+  `Delete()` on a Namespace, which cascades to everything inside it and
+  can't be undone. Guard rails in `internal/api/namespaces.go`: the request
+  body must repeat the namespace's name (`{"confirmName": ...}` — the UI
+  makes the user type it), and `default`/`kube-system`/`kube-public`/
+  `kube-node-lease` are refused outright. Everything else on the Namespaces
+  page — creating a namespace, adding or editing its ResourceQuota/
+  LimitRange — deliberately goes through Phase 25's generic YAML apply
+  above rather than getting duplicate write endpoints. Audited as
+  `delete-namespace`.
 - `POST /api/v1/clusters` / `DELETE /api/v1/clusters/{name}` — cluster
   management via the web UI (Settings page): create/get/update on exactly
   one Secret (`vinaire-clusters`, in this backend's own namespace, via a
@@ -188,6 +198,10 @@ rules:
         "persistentvolumeclaims",
         "persistentvolumes",
         "nodes",
+        # Phase 27's Namespaces page.
+        "namespaces",
+        "resourcequotas",
+        "limitranges",
       ]
     verbs: ["get", "list", "watch"]
   # metrics-server's aggregated API (Phase 3's Pod CPU/Memory gauges, the
@@ -251,6 +265,11 @@ rules:
   # the controller recreates them; bare pods: gone for good).
   - apiGroups: [""]
     resources: ["pods"]
+    verbs: ["delete"]
+  # Phase 27's namespace delete — irreversible and cascading; omit unless
+  # this identity should be able to remove whole namespaces.
+  - apiGroups: [""]
+    resources: ["namespaces"]
     verbs: ["delete"]
   # Phase 25's generic YAML create/update. Vinaire imposes no allowlist of
   # its own here — grant only the kinds this identity should be able to

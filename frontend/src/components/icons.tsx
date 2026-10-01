@@ -406,3 +406,19 @@ export function TrashIcon({ size = 16, className }: IconProps) {
     </svg>
   );
 }
+
+export function NamespaceIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <rect x="3" y="3" width="18" height="18" rx="3" strokeDasharray="3 2.5" />
+      <rect x="8" y="8" width="8" height="8" rx="1.5" />
+    </svg>
+  );
+}

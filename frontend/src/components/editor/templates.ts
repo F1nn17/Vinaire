@@ -202,3 +202,49 @@ export const networkTemplates: Record<string, ResourceTemplate[]> = {
   ingress: [ingress, service],
   gateway: [service, ingress],
 };
+
+export const namespaceTemplates = [namespace];
+
+// Starter manifests for a namespace's quota / limit range (Roadmap Phase 27),
+// pre-filled with the namespace they're being added to. Both are
+// namespaced single objects, so they go through the same Phase 25
+// dry-run -> apply path as everything else.
+export function quotaTemplate(namespace: string): ResourceTemplate {
+  return {
+    label: "ResourceQuota",
+    yaml: `apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: ${namespace}
+spec:
+  hard:
+    pods: "10"
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+`,
+  };
+}
+
+export function limitRangeTemplate(namespace: string): ResourceTemplate {
+  return {
+    label: "LimitRange",
+    yaml: `apiVersion: v1
+kind: LimitRange
+metadata:
+  name: container-defaults
+  namespace: ${namespace}
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      default:
+        cpu: 500m
+        memory: 256Mi
+`,
+  };
+}

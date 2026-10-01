@@ -525,6 +525,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   form" and nothing is lost. Everything after that is Phase 25's unchanged
   dry-run -> diff -> apply. New read-only `GET /api/v1/forms/{resourceType}`
   serves the hand-written field schemas; no new write path.
+- Namespaces as a managed resource (Roadmap Phase 27). A new Namespaces page
+  (Cluster group) lists namespaces with status, pod count and ResourceQuota
+  usage bars; the detail page has an Overview (labels, quotas with live usage,
+  limit ranges — each editable through Phase 25's YAML editor, plus "+ Add
+  quota"/"+ Add limit range"), a Resources tab (what's inside — a kind the
+  caller can't list shows "—", never a false 0) and a YAML tab. Creating a
+  namespace uses the Phase 31 form. Deleting is the one new write
+  (`DELETE /api/v1/namespaces/{name}`): irreversible and cascading, so the UI
+  requires typing the namespace's name and the backend re-checks it and
+  refuses `default`/`kube-system`/`kube-public`/`kube-node-lease`; audited as
+  `delete-namespace`. New read endpoints `GET /api/v1/namespaces[/{name}]`;
+  the Helm chart and AGENTS.md ClusterRole gained `namespaces`/
+  `resourcequotas`/`limitranges` read and an explicit `namespaces` delete.
 
 ### Changed
 

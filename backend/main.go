@@ -141,6 +141,8 @@ func main() {
 		protected.Get("/search", workloadsHandler.Search)
 		protected.Get("/capacity", workloadsHandler.Capacity)
 		protected.Get("/forms/{resourceType}", workloadsHandler.FormSchemaByType)
+		protected.Get("/namespaces", workloadsHandler.Namespaces)
+		protected.Get("/namespaces/{name}", workloadsHandler.NamespaceDetail)
 		protected.Get("/nodes", workloadsHandler.Nodes)
 		protected.Get("/nodes/{name}", workloadsHandler.NodeDetail)
 		protected.Get("/pods", workloadsHandler.Pods)
@@ -203,6 +205,9 @@ func main() {
 			w.Post("/deployments/{namespace}/{name}/resume", workloadsHandler.ResumeDeploymentRollout)
 			w.Post("/statefulsets/{namespace}/{name}/scale", workloadsHandler.ScaleStatefulSet)
 			w.Delete("/pods/{namespace}/{name}", workloadsHandler.DeletePod)
+			// Roadmap Phase 27: irreversible, cascading — see AGENTS.md and
+			// internal/k8s/namespaces.go.
+			w.Delete("/namespaces/{name}", workloadsHandler.DeleteNamespace)
 			// Roadmap Phase 25's generic YAML create/update (any kind the
 			// cluster serves; the caller's own RBAC decides) — see
 			// internal/k8s/apply.go and AGENTS.md.

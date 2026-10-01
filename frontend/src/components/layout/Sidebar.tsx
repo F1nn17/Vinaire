@@ -8,6 +8,7 @@ import {
   GridIcon,
   GrapeLogo,
   LayersIcon,
+  NamespaceIcon,
   NetworkIcon,
   SecretIcon,
   ServerIcon,
@@ -44,6 +45,12 @@ const groups: NavGroup[] = [
         label: "Topology",
         icon: <TopologyIcon />,
         isActive: (p) => p.startsWith("/topology"),
+      },
+      {
+        href: "/namespaces",
+        label: "Namespaces",
+        icon: <NamespaceIcon />,
+        isActive: (p) => p.startsWith("/namespaces"),
       },
       {
         href: "/nodes",

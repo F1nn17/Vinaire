@@ -570,3 +570,58 @@ export type TopologyData = {
   nodes: TopologyNode[];
   edges: TopologyEdge[];
 };
+
+// Roadmap Phase 27 — match the backend's api.NamespaceRow / NamespaceDetailResponse.
+export type QuotaUsageRow = {
+  resource: string;
+  used: string;
+  hard: string;
+  pct: number;
+  color: StatusColor;
+};
+
+export type NamespaceRow = {
+  name: string;
+  status: string;
+  statusColor: StatusColor;
+  age: string;
+  // null = couldn't list pods (RBAC); must not read as zero.
+  pods: number | null;
+  quota: QuotaUsageRow[];
+  href: string;
+};
+
+export type QuotaDetail = {
+  name: string;
+  items: QuotaUsageRow[];
+  yaml: string;
+};
+
+export type LimitRow = {
+  type: string;
+  resource: string;
+  min: string;
+  max: string;
+  default: string;
+  defaultRequest: string;
+};
+
+export type LimitRangeDetail = {
+  name: string;
+  limits: LimitRow[];
+  yaml: string;
+};
+
+export type NamespaceDetail = {
+  name: string;
+  status: string;
+  statusColor: StatusColor;
+  age: string;
+  labels: Record<string, string>;
+  quotas: QuotaDetail[];
+  limitRanges: LimitRangeDetail[];
+  // kind -> count; null = couldn't list that kind (e.g. RBAC).
+  resources: Record<string, number | null>;
+  protected: boolean;
+  yaml: string;
+};

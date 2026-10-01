@@ -2197,7 +2197,25 @@ its web UI in a new tab without a single terminal command.
 
 ---
 
-## Phase 27 — Namespace as a managed resource
+## Phase 27 — Namespace as a managed resource ✅ done
+
+> **Outcome note:** Built with one deliberate narrowing of the backend spec:
+> instead of `POST /api/v1/namespaces` and `PUT` endpoints for
+> ResourceQuota/LimitRange, creating a namespace and adding/editing its
+> quota and limit range go through Phase 25's generic YAML apply (the Phase
+> 31 form for the namespace itself) — duplicate write endpoints would only
+> widen the audited write surface for no gain. `DELETE /api/v1/namespaces/
+> {name}` is the single new write, added to AGENTS.md's list with its
+> guard rails (typed-name confirmation re-checked server-side, system
+> namespaces refused). The namespace Resources tab reports `null` ("—") for
+> any kind the caller's RBAC can't list rather than 0. Verified in a real
+> browser against k3d-vinaire-dev: a namespace created through the UI shows
+> in `kubectl get ns`; a quota (pods: 2) and LimitRange added through the UI
+> really blocked a 3-replica Deployment at 2 pods (ReplicaSet event
+> "exceeded quota: compute-quota"); the delete button stays disabled until
+> the exact name is typed and for system namespaces. Testing also caught
+> `quota` coming back as `null` (not `[]`) for quota-less namespaces, which
+> would have crashed the list page.
 
 **Goal:** Namespaces (and the quotas inside them) become a real,
 browsable, editable resource in Vinaire, not something only visible as a

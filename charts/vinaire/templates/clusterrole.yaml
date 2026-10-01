@@ -27,6 +27,10 @@ rules:
       - persistentvolumeclaims
       - persistentvolumes
       - nodes
+      # Roadmap Phase 27's Namespaces page.
+      - namespaces
+      - resourcequotas
+      - limitranges
     verbs: ["get", "list", "watch"]
   # metrics-server's aggregated API — Pod/Node CPU/Memory gauges and the
   # Dashboard's cluster-wide usage all degrade to an honest "—" without
@@ -70,5 +74,10 @@ rules:
     verbs: ["get", "update"]
   - apiGroups: [""]
     resources: ["pods"]
+    verbs: ["delete"]
+  # Phase 27's namespace delete — irreversible and cascading, so granted
+  # explicitly rather than folded into anything broader.
+  - apiGroups: [""]
+    resources: ["namespaces"]
     verbs: ["delete"]
 {{- end }}
