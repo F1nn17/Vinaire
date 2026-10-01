@@ -32,6 +32,29 @@ type Entry struct {
 	// the UI shouldn't offer to remove (it would just reappear on the next
 	// restart anyway).
 	Removable bool
+
+	// clusterType (Roadmap Phase 34) is what kind of cluster this is — see
+	// the Type* constants. Detected after registration and editable by the
+	// user, so it is read and written through Type/SetType under typeMu.
+	typeMu      sync.RWMutex
+	clusterType string
+}
+
+// Type returns the cluster's type (TypeUnknown until detected).
+func (e *Entry) Type() string {
+	e.typeMu.RLock()
+	defer e.typeMu.RUnlock()
+	if e.clusterType == "" {
+		return TypeUnknown
+	}
+	return e.clusterType
+}
+
+// SetType records the cluster's type.
+func (e *Entry) SetType(t string) {
+	e.typeMu.Lock()
+	defer e.typeMu.Unlock()
+	e.clusterType = t
 }
 
 // RESTConfigForToken returns a copy of this Entry's RESTConfig that

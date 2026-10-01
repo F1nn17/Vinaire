@@ -438,3 +438,21 @@ export function PortForwardIcon({ size = 16, className }: IconProps) {
     </svg>
   );
 }
+
+export function ClustersIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <circle cx="12" cy="5" r="2.5" />
+      <circle cx="5" cy="18" r="2.5" />
+      <circle cx="19" cy="18" r="2.5" />
+      <path d="M11 7.3 6.2 15.8M13 7.3l4.8 8.5M7.5 18h9" />
+    </svg>
+  );
+}

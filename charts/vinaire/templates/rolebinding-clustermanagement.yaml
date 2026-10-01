@@ -18,8 +18,12 @@ rules:
     verbs: ["create"]
   - apiGroups: [""]
     resources: ["secrets"]
-    resourceNames: ["vinaire-clusters"]
+    resourceNames: ["vinaire-clusters", "vinaire-clusters-key"]
     verbs: ["get", "update"]
+  # Roadmap Phase 34: the registry is sealed (AES-GCM) and its key lives in the
+  # *separate* Secret vinaire-clusters-key, generated on first run (create is
+  # allowed above, get/update only for these two names). Skip this Secret by
+  # setting CLUSTER_STORE_KEY instead.
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

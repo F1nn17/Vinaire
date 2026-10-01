@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ClusterTypeBadge } from "@/components/clusters/ClusterTypeBadge";
 import { ChevronDownIcon } from "@/components/icons";
 import { useClusters } from "@/lib/hooks/useClusters";
 import { useCurrentCluster, setCurrentCluster } from "@/lib/clusterStore";
@@ -13,6 +15,7 @@ export function ClusterPicker() {
   const { data: clusters } = useClusters();
   const selected = useCurrentCluster();
   const [open, setOpen] = useState(false);
+  const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,6 +33,7 @@ export function ClusterPicker() {
     clusters?.find((c) => c.default)?.name ||
     clusters?.[0]?.name ||
     "—";
+  const activeCluster = clusters?.find((c) => c.name === activeName);
 
   return (
     <div ref={rootRef} className="relative">
@@ -41,6 +45,7 @@ export function ClusterPicker() {
         <span className="font-mono text-[13px] font-semibold">
           {activeName}
         </span>
+        {activeCluster && <ClusterTypeBadge type={activeCluster.type} />}
         <ChevronDownIcon />
       </button>
 
@@ -60,12 +65,25 @@ export function ClusterPicker() {
                   : "text-text"
               }`}
             >
-              {c.name}
+              <span className="flex items-center gap-2">
+                {c.name}
+                <ClusterTypeBadge type={c.type} />
+              </span>
               {c.default && (
                 <span className="text-[11px] text-text-faint">default</span>
               )}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              router.push("/clusters?add=1");
+            }}
+            className="mt-1 flex w-full items-center gap-1.5 rounded-md border-t border-border px-3 py-2 text-left text-[12.5px] text-accent-text"
+          >
+            + Add cluster
+          </button>
         </div>
       )}
     </div>

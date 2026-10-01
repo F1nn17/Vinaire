@@ -98,6 +98,22 @@ type Config struct {
 	// restart" (this phase's own Definition of done) in a real Kubernetes
 	// Deployment, mount a volume at whatever directory this path lives in.
 	AuditLogPath string
+
+	// DataDir (VINAIRE_DATA_DIR) is where an out-of-cluster Vinaire — typically
+	// on a home server — keeps its encrypted registry of added clusters
+	// (Roadmap Phase 34). Empty means "nowhere to persist": cluster
+	// management is then unavailable outside a cluster, as in Phase 24.
+	DataDir string
+
+	// ClusterStoreKey (CLUSTER_STORE_KEY) is the base64 32-byte AES-256 key
+	// the cluster registry is sealed with. If unset, a key is generated and
+	// kept in a Secret (in-cluster) or a 0600 file in DataDir.
+	ClusterStoreKey string
+
+	// DiscoveryKubeconfigPaths (DISCOVERY_KUBECONFIG_PATHS, comma-separated)
+	// are extra kubeconfig files local discovery should look at, besides
+	// $KUBECONFIG, ~/.kube/config and /etc/rancher/k3s/k3s.yaml.
+	DiscoveryKubeconfigPaths []string
 }
 
 const (
@@ -129,6 +145,9 @@ const (
 	envAlertmanagerURL     = "ALERTMANAGER_URL"
 	envAuditLogPath        = "AUDIT_LOG_PATH"
 	defaultAuditLogPath    = "audit.log"
+	envDataDir             = "VINAIRE_DATA_DIR"
+	envClusterStoreKey     = "CLUSTER_STORE_KEY"
+	envDiscoveryPaths      = "DISCOVERY_KUBECONFIG_PATHS"
 )
 
 // Load reads configuration from the environment, falling back to defaults
@@ -153,6 +172,10 @@ func Load() Config {
 		LokiURL:            os.Getenv(envLokiURL),
 		AlertmanagerURL:    os.Getenv(envAlertmanagerURL),
 		AuditLogPath:       getEnv(envAuditLogPath, defaultAuditLogPath),
+
+		DataDir:                  os.Getenv(envDataDir),
+		ClusterStoreKey:          os.Getenv(envClusterStoreKey),
+		DiscoveryKubeconfigPaths: splitCSV(os.Getenv(envDiscoveryPaths)),
 	}
 }
 

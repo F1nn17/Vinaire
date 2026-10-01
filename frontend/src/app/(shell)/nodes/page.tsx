@@ -9,6 +9,9 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { PillTabs } from "@/components/ui/Tabs";
 import { AddNodeModal } from "@/components/nodes/AddNodeModal";
+import { useClusters } from "@/lib/hooks/useClusters";
+import { useCurrentCluster } from "@/lib/clusterStore";
+import { clusterTypeLabels } from "@/components/clusters/ClusterTypeBadge";
 import { PlusIcon } from "@/components/icons";
 
 type Tab = "nodes" | "capacity";
@@ -222,6 +225,14 @@ export default function NodesPage() {
   const { data, isLoading, error, mutate } = useNodes();
   useNodesStream();
   const [addOpen, setAddOpen] = useState(false);
+  // Adding a machine over SSH only makes sense for some kinds of cluster
+  // (Roadmap Phase 34's detected type) — k3d/kind "nodes" are containers.
+  const { data: clusters } = useClusters();
+  const selected = useCurrentCluster();
+  const activeCluster =
+    clusters?.find((c) => c.name === selected) ??
+    clusters?.find((c) => c.default);
+  const canAddNode = activeCluster?.canAddNode ?? true;
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
@@ -229,14 +240,25 @@ export default function NodesPage() {
         <div className="text-[15px] font-semibold">Nodes</div>
         <div className="flex items-center gap-3">
           <PillTabs items={tabs} active={tab} onChange={setTab} />
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
-          >
-            <PlusIcon />
-            Add node
-          </button>
+          {canAddNode ? (
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
+            >
+              <PlusIcon />
+              Add node
+            </button>
+          ) : (
+            <span
+              className="max-w-[240px] text-[11px] leading-snug text-text-faint"
+              title="Change the cluster's type on the Clusters page if this is wrong"
+            >
+              Adding nodes over SSH isn&apos;t offered for a{" "}
+              {activeCluster ? clusterTypeLabels[activeCluster.type] : ""}{" "}
+              cluster.
+            </span>
+          )}
         </div>
       </div>
 

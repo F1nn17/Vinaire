@@ -2,12 +2,8 @@ package provision
 
 import (
 	"context"
-	"errors"
 	"fmt"
 )
-
-// ErrNotImplemented marks a ClusterProvisioner step a provider doesn't do (yet).
-var ErrNotImplemented = errors.New("not implemented by this provider")
 
 // LogFunc receives human-readable progress lines. Everything passed to it is
 // already redacted by the caller's Redactor before it is stored or streamed.
@@ -28,10 +24,20 @@ type JoinInfo struct {
 	NodeName  string // optional: defaults to the machine's hostname
 }
 
+// ControlPlaneOptions configures a new cluster's first server.
+type ControlPlaneOptions struct {
+	// TLSSAN is the address the API server's certificate must cover — the one
+	// Vinaire (and everyone else) will reach it by. Without it, connecting by
+	// the machine's public address fails TLS verification.
+	TLSSAN  string
+	Version string // optional pin
+}
+
 // ClusterProvisioner turns bare servers into cluster members. Roadmap Phase 30
 // implements Preflight, PrepareNode and JoinWorker for k3s (adding workers);
-// Phase 34 adds InstallControlPlane/FetchKubeconfig (creating a cluster) and
-// Phase 35 adds a kubeadm implementation behind the same interface.
+// Phase 34 implements PreflightControlPlane, InstallControlPlane and
+// FetchKubeconfig (creating a cluster, importing an existing one) and Phase 35
+// adds a kubeadm implementation behind the same interface.
 type ClusterProvisioner interface {
 	Name() string
 
@@ -40,12 +46,19 @@ type ClusterProvisioner interface {
 	Preflight(ctx context.Context, node Runner, serverURL string, log LogFunc) (NodeFacts, error)
 	// PrepareNode makes the machine ready for the install, if it needs anything.
 	PrepareNode(ctx context.Context, node Runner, log LogFunc) error
-	// InstallControlPlane creates a new cluster on node (Phase 34).
-	InstallControlPlane(ctx context.Context, node Runner, log LogFunc) error
+	// PreflightControlPlane checks a machine is fit to become a new cluster's
+	// first server, and refuses — without changing anything — if a cluster is
+	// already installed there or the API port is taken (Phase 34).
+	PreflightControlPlane(ctx context.Context, node Runner, log LogFunc) (NodeFacts, error)
+	// InstallControlPlane creates a new single-server cluster on node and
+	// waits for its API to be ready (Phase 34).
+	InstallControlPlane(ctx context.Context, node Runner, opts ControlPlaneOptions, log LogFunc) error
 	// JoinWorker installs the agent and joins the cluster.
 	JoinWorker(ctx context.Context, node Runner, join JoinInfo, log LogFunc) error
-	// FetchKubeconfig reads an admin kubeconfig off a control plane (Phase 34).
-	FetchKubeconfig(ctx context.Context, controlPlane Runner) ([]byte, error)
+	// FetchKubeconfig reads the admin kubeconfig off a control plane (Phase
+	// 34). It is returned as a Secret — it holds cluster-admin credentials —
+	// and never logged.
+	FetchKubeconfig(ctx context.Context, controlPlane Runner) (Secret, error)
 
 	// JoinTokenFromControlPlane reads the worker-join token off a control-plane
 	// machine. The token is returned as a Secret and never logged.

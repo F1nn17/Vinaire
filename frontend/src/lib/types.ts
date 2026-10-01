@@ -7,7 +7,22 @@ export type Cluster = {
   // false for the env-var-configured cluster(s) — cluster management (the
   // web UI's Settings page) can't remove those.
   removable: boolean;
+  // Roadmap Phase 34 — detected (and user-correctable) kind of cluster.
+  type: ClusterType;
+  // Whether Phase 30's "Add node" makes sense for this type (k3s/kubeadm).
+  canAddNode: boolean;
+  status: "connected" | "unreachable";
 };
+
+export type ClusterType =
+  | "k3s"
+  | "k3d"
+  | "kind"
+  | "minikube"
+  | "microk8s"
+  | "kubeadm"
+  | "managed"
+  | "unknown";
 
 // Matches the backend's api.SearchResult (Roadmap Phase 20).
 export type SearchResult = {

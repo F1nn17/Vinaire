@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import {
+  ClustersIcon,
   ConfigMapIcon,
   GridIcon,
   GrapeLogo,
@@ -39,6 +40,12 @@ const groups: NavGroup[] = [
         label: "Overview",
         icon: <GridIcon />,
         isActive: (p) => p === "/",
+      },
+      {
+        href: "/clusters",
+        label: "Clusters",
+        icon: <ClustersIcon />,
+        isActive: (p) => p.startsWith("/clusters"),
       },
       {
         href: "/topology",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 )
 
@@ -33,9 +34,14 @@ echo "preflight ok: reached $SERVER"
 `
 
 func (K3s) Preflight(ctx context.Context, node Runner, serverURL string, log LogFunc) (NodeFacts, error) {
+	return runPreflight(ctx, node, fmt.Sprintf(preflightScript, shQuote(serverURL)), log)
+}
+
+// runPreflight runs a preflight script and parses its FACT:/ERROR: lines.
+func runPreflight(ctx context.Context, node Runner, script string, log LogFunc) (NodeFacts, error) {
 	var facts NodeFacts
 	var failure string
-	err := node.Run(ctx, fmt.Sprintf(preflightScript, shQuote(serverURL)), func(line string) {
+	err := node.Run(ctx, script, func(line string) {
 		if kv, ok := strings.CutPrefix(line, "FACT:"); ok {
 			k, v, _ := strings.Cut(kv, "=")
 			switch k {
@@ -70,12 +76,89 @@ func (K3s) PrepareNode(_ context.Context, _ Runner, log LogFunc) error {
 	return nil
 }
 
-func (K3s) InstallControlPlane(context.Context, Runner, LogFunc) error {
-	return fmt.Errorf("k3s control-plane install: %w (Roadmap Phase 34)", ErrNotImplemented)
+const k3sKubeconfigPath = "/etc/rancher/k3s/k3s.yaml"
+
+// controlPlanePreflight only reads. A machine that already has k3s (or
+// anything bound to the API port) is refused untouched.
+const controlPlanePreflight = `set -e
+[ "$(uname -s)" = "Linux" ] || { echo "ERROR: this isn't a Linux machine"; exit 1; }
+echo "FACT:hostname=$(hostname)"
+echo "FACT:arch=$(uname -m)"
+echo "FACT:os=$( . /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" )"
+command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || { echo "ERROR: curl or wget is required"; exit 1; }
+command -v systemctl >/dev/null 2>&1 || command -v rc-service >/dev/null 2>&1 || { echo "ERROR: systemd or OpenRC is required"; exit 1; }
+if [ -e /etc/rancher/k3s ] || [ -e /usr/local/bin/k3s ]; then
+  echo "ERROR: k3s is already installed on this machine (/etc/rancher/k3s exists) — refusing to overwrite it. To add the cluster that's already here, use Import existing instead."
+  exit 1
+fi
+port_in_use() {
+  if command -v ss >/dev/null 2>&1; then ss -ltn 2>/dev/null | grep -Eq '[:.]6443[[:space:]]'; return $?; fi
+  if command -v netstat >/dev/null 2>&1; then netstat -ltn 2>/dev/null | grep -Eq '[:.]6443[[:space:]]'; return $?; fi
+  grep -qi ':192B [0-9A-F:]* 0A ' /proc/net/tcp /proc/net/tcp6 2>/dev/null
+}
+if port_in_use; then
+  echo "ERROR: port 6443 is already in use on this machine — something else is listening there, so a new cluster can't start"
+  exit 1
+fi
+echo "preflight ok: a clean machine"
+`
+
+func (K3s) PreflightControlPlane(ctx context.Context, node Runner, log LogFunc) (NodeFacts, error) {
+	return runPreflight(ctx, node, controlPlanePreflight, log)
 }
 
-func (K3s) FetchKubeconfig(context.Context, Runner) ([]byte, error) {
-	return nil, fmt.Errorf("k3s kubeconfig fetch: %w (Roadmap Phase 34)", ErrNotImplemented)
+// installControlPlaneScript installs a single-server k3s and waits for its API.
+// The version and SAN are validated and single-quoted.
+func installControlPlaneScript(o ControlPlaneOptions) string {
+	var b strings.Builder
+	b.WriteString("set -e\n")
+	if o.Version != "" {
+		fmt.Fprintf(&b, "export INSTALL_K3S_VERSION=%s\n", shQuote(o.Version))
+	}
+	fmt.Fprintf(&b, "TLS_SAN=%s\n", shQuote(o.TLSSAN))
+	b.WriteString(`tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+echo "downloading the k3s installer from get.k3s.io"
+if command -v curl >/dev/null 2>&1; then curl -sfL https://get.k3s.io -o "$tmp"; else wget -qO "$tmp" https://get.k3s.io; fi
+[ -s "$tmp" ] || { echo "ERROR: couldn't download the k3s installer"; exit 1; }
+sh "$tmp" server --tls-san "$TLS_SAN" --write-kubeconfig-mode 600
+echo "waiting for the API server to become ready"
+i=0
+until k3s kubectl get --raw /readyz >/dev/null 2>&1; do
+  i=$((i+1))
+  if [ "$i" -ge 90 ]; then
+    echo "ERROR: the API server didn't become ready in time; recent log:"
+    journalctl -u k3s -n 25 --no-pager 2>&1 || true
+    exit 1
+  fi
+  sleep 2
+done
+echo "k3s server is ready"
+`)
+	return b.String()
+}
+
+func (K3s) InstallControlPlane(ctx context.Context, node Runner, opts ControlPlaneOptions, log LogFunc) error {
+	if !hostRe.MatchString(opts.TLSSAN) && net.ParseIP(opts.TLSSAN) == nil {
+		return errors.New("the certificate address (--tls-san) must be an IP address or a hostname")
+	}
+	if err := ValidateVersion(opts.Version); err != nil {
+		return err
+	}
+	return node.Run(ctx, installControlPlaneScript(opts), log)
+}
+
+// FetchKubeconfig reads k3s's admin kubeconfig. Capture keeps it out of every
+// log; it comes back as a Secret.
+func (K3s) FetchKubeconfig(ctx context.Context, controlPlane Runner) (Secret, error) {
+	out, err := controlPlane.Capture(ctx, "cat "+k3sKubeconfigPath+"\n")
+	if err != nil {
+		return "", fmt.Errorf("reading %s (is this a k3s server, and can this user read it as root/sudo?): %w", k3sKubeconfigPath, err)
+	}
+	if !strings.Contains(out, "clusters:") {
+		return "", errors.New("the file at " + k3sKubeconfigPath + " doesn't look like a kubeconfig")
+	}
+	return Secret(out), nil
 }
 
 // JoinTokenFromControlPlane reads the node token off the server. It uses

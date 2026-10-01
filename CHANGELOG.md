@@ -584,6 +584,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is validated and quoted, and the installer script travels over stdin; the
   caller needs RBAC `create` on `nodes`; runs are audited as `provision-node`.
   New `PROVISION_ALLOW_INSECURE` env (dev only) and `golang.org/x/crypto`.
+- Adding clusters four ways, with cluster types (Roadmap Phase 34). A Clusters
+  page (Cluster group) and an "Add cluster" wizard, also reachable from the
+  cluster picker: **Found on this machine** (for Vinaire running on a home
+  machine or server — it scans the kubeconfig files it can read for other
+  clusters such as a second k3s or k3d/kind, marks the one already in use and
+  adds the chosen one after a confirmation; read-only, never uses sudo or the
+  Docker socket), **Import existing (SSH)** (reads a k3s server's kubeconfig),
+  **Create new (SSH)** (installs a single-server k3s on a clean server with the
+  right `--tls-san`, waits for its API, registers it; refuses a machine that
+  already has k3s or a busy port 6443) and **Import via kubeconfig** (paste or
+  upload; any distribution). Every cluster gets a detected, correctable type
+  (k3s, k3d, kind, minikube, microk8s, kubeadm, managed) shown in the picker
+  and the Clusters page, and "Add node" is offered only where it makes sense.
+  The registry of added clusters is now sealed with AES-256-GCM (key from
+  `CLUSTER_STORE_KEY`, a separate Secret, or a 0600 key file) and, for a Vinaire
+  outside a cluster, kept in an encrypted file under the new
+  `VINAIRE_DATA_DIR`. Pasted kubeconfigs are accepted only in a safe subset:
+  one chosen context, inline credentials only, no exec/auth-provider plugins,
+  no file references. Removing a cluster only removes Vinaire's connection.
 
 ### Changed
 

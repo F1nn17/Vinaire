@@ -63,8 +63,33 @@ flow.
   LimitRange — deliberately goes through Phase 25's generic YAML apply
   above rather than getting duplicate write endpoints. Audited as
   `delete-namespace`.
-- `POST /api/v1/clusters` / `DELETE /api/v1/clusters/{name}` — cluster
-  management via the web UI (Settings page): create/get/update on exactly
+- Cluster management (Roadmap Phases 24 and 34) — Vinaire managing **its
+  own** registry of clusters, not a write to any browsed cluster:
+  `POST /api/v1/clusters` (server + token), `POST
+  /api/v1/clusters/import-kubeconfig`, `POST /api/v1/clusters/add-discovered`,
+  `POST /api/v1/clusters/import-ssh`, `POST /api/v1/clusters/create-ssh`,
+  `PUT /api/v1/clusters/{name}/type` and `DELETE /api/v1/clusters/{name}`.
+  Removing a cluster only removes Vinaire's registration of it — never touches
+  the cluster. Rules: nothing is stored until Vinaire has actually connected
+  to the cluster; the registry is sealed with AES-256-GCM before it reaches a
+  Secret or a file (`internal/clusters/crypto.go`), the key coming from
+  `CLUSTER_STORE_KEY`, else a separate Secret `vinaire-clusters-key`
+  (in-cluster) or a 0600 `store.key` in `VINAIRE_DATA_DIR` (a home server) —
+  and an in-cluster install without access to that key Secret still works but
+  **warns loudly and stores unencrypted**, so check the logs after upgrading
+  the Role; a kubeconfig is parsed by `ParseKubeconfig`, which keeps **only the
+  chosen context**, accepts only inline certificate/token data, and **refuses
+  `exec`/`auth-provider` plugins (they'd run commands on the Vinaire host),
+  file references, proxy-url and non-https or link-local servers** — don't
+  loosen any of that; the same cluster under two names is refused by comparing
+  the `kube-system` namespace UID; adds are audited as `add_cluster` with
+  server/type/origin, never a credential. The SSH modes follow the Phase 30
+  rules below (HTTPS only, host-key pinning, in-memory credentials, caller
+  needs RBAC `create` on `nodes`, audited as `provision-cluster*`).
+  Where the registry lives: a Secret when Vinaire runs in-cluster, an encrypted
+  file when `VINAIRE_DATA_DIR` is set, otherwise cluster management is
+  unavailable (503) since there is nowhere to persist to.
+- (Phase 24, unchanged:) cluster management via the web UI (Settings page): create/get/update on exactly
   one Secret (`vinaire-clusters`, in this backend's own namespace, via a
   dedicated narrow `Role`/`RoleBinding` — never the broad, cluster-wide
   read-only `ClusterRole` every *browsed* cluster's resources go through).
@@ -171,9 +196,23 @@ Keep every one of these rules when touching it:
   scoped to the identity that started them (`Session.OwnerKey`), capped at two
   concurrent, and forgotten 15 minutes after they end.
 
-`ClusterProvisioner` also declares `InstallControlPlane` and
-`FetchKubeconfig`; the k3s provider returns `ErrNotImplemented` for them until
-Phase 34 (creating a cluster), and Phase 35 adds a kubeadm provider.
+`ClusterProvisioner` also declares `PreflightControlPlane`,
+`InstallControlPlane` and `FetchKubeconfig`, which Phase 34 uses to **create a
+new single-server k3s cluster** (installed with `--tls-san <address>` and
+refused if `/etc/rancher/k3s` exists or port 6443 is taken) or to **import** an
+existing one by reading its admin kubeconfig over SSH. That kubeconfig is
+returned as a `Secret` and never logged. Phase 35 adds a kubeadm provider
+behind the same interface.
+
+**Local discovery (Phase 34)** — `GET /api/v1/clusters/discover` — reads the
+kubeconfig files the Vinaire process can already open (`$KUBECONFIG`,
+`~/.kube/config`, `/etc/rancher/k3s/k3s.yaml`, `DISCOVERY_KUBECONFIG_PATHS`) and
+nothing else. It is read-only and **never escalates**: no `sudo`, no chmod, no
+Docker socket (k3d/kind are found through their kubeconfig contexts). A
+candidate is added by its *id* from a fresh scan, never by a client-supplied
+path, and only that one context's credentials are extracted. It returns names,
+URLs, types and "is cluster-admin" — never a credential — and reports itself
+unavailable when Vinaire runs as a pod.
 
 ## Authentication (Phase 10) and multi-cluster (Phase 11)
 

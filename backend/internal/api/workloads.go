@@ -51,7 +51,11 @@ type Handler struct {
 	// (internal/api/clusters.go's AddCluster/RemoveCluster) — nil when this
 	// backend isn't running in-cluster, in which case those two handlers
 	// report themselves unavailable rather than failing.
-	ClusterStore *clusters.Store
+	ClusterStore clusters.Store
+
+	// DiscoveryPaths are extra kubeconfig files local discovery (Roadmap Phase
+	// 34) should consider, from DISCOVERY_KUBECONFIG_PATHS.
+	DiscoveryPaths []string
 
 	// PrometheusURL/LokiURL/AlertmanagerURL back the Roadmap Phase 16
 	// observability proxies (internal/api/observability.go) — empty means

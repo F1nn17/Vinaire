@@ -2738,7 +2738,41 @@ confirmed via `kubectl get pods`.
 
 ---
 
-## Phase 34 — Adding a cluster via SSH (create new / connect existing)
+## Phase 34 — Adding a cluster via SSH (create new / connect existing) ✅ done
+
+> **Outcome note:** All four modes shipped: import (SSH), create (SSH), import
+> via kubeconfig, and local discovery, plus cluster types, an encrypted
+> registry and the Clusters page. Decisions beyond the spec: **(1) Persistence
+> outside a cluster.** Phase 24's registry only worked in-cluster (a Secret),
+> but local discovery is for a Vinaire running *outside* one, so the registry
+> now has two sealed backends — a Secret, or an encrypted file under a new
+> `VINAIRE_DATA_DIR` — behind one `Store` interface. **(2) Encryption key**
+> comes from `CLUSTER_STORE_KEY`, else a separate Secret / a 0600 key file; an
+> in-cluster install whose Role predates the key Secret keeps working but warns
+> and stores unencrypted rather than losing its clusters on upgrade (the chart's
+> Role now allows the key Secret). **(3) Kubeconfig safety** was the riskiest
+> part: a kubeconfig can name a program to run (`exec`) or files to read, so
+> only inline data is accepted, plugins/file references/proxy-url are refused,
+> and exactly one context is kept — covered by unit tests. **(4)** The same
+> cluster under another name is refused by comparing the `kube-system` UID.
+> **(5) Gate** for the SSH modes is the caller's RBAC `create` on `nodes`
+> (as Phase 30); the kubeconfig/discovery/token adds keep Phase 24's model (no
+> extra gate) — worth revisiting in Phase 36's audit. **Verified** against the
+> real thing: a clean systemd+sshd server became a working, TLS-verified k3s
+> cluster in about a minute with zero commands run on it and registered under a
+> certificate address; running create again refused cleanly ("k3s is already
+> installed… use Import existing"); import against an address the certificate
+> doesn't cover failed with the x509/`--tls-san` explanation and stored
+> nothing; removing a registration left the cluster running; local discovery
+> found the machine's second k3d cluster, skipped the one already in use and
+> added it with its type; an exec-plugin kubeconfig and a file-reference one were
+> refused; a duplicate was refused; the on-disk registry contains no plaintext;
+> the type override survives a restart; and none of the passwords, keys,
+> kubeconfig or token appeared in the backend log. Testing also caught
+> relative certificate paths in a local kubeconfig not resolving (fixed), and a
+> cluster whose type was detected during a brief outage staying `unknown`
+> forever (now retried). Not covered: multi-control-plane HA, kubeadm
+> (Phase 35), and a real multi-machine network.
 
 **Goal:** onboard a cluster the same way Phase 30 onboards a node — point
 Vinaire at a server's SSH credentials, either to import an existing k3s

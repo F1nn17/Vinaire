@@ -74,13 +74,15 @@ func main() {
 	}
 	slog.Info("auth provider initialized", "mode", auth.Mode)
 
-	// Cluster management via the web UI: a Secret in this backend's own
-	// namespace, written with its own in-cluster identity (not available at
-	// all outside a cluster — see internal/clusters.Store). Loaded now so
-	// clusters added in a previous run survive this restart.
-	clusterStore, clusterStoreOK := clusters.NewStore()
+	// Cluster management via the web UI. The registry of added clusters is
+	// sealed (AES-GCM) and persisted in a Secret in this backend's own
+	// namespace when running in-cluster, or in an encrypted file under
+	// VINAIRE_DATA_DIR when running on a home machine/server (Roadmap
+	// Phase 34). With neither, cluster management is unavailable. Loaded now
+	// so clusters added in a previous run survive this restart.
+	clusterStore, clusterStoreOK := buildClusterStore(ctx, cfg)
 	if !clusterStoreOK {
-		slog.Info("cluster management via the web UI is unavailable (not running in-cluster)")
+		slog.Info("cluster management via the web UI is unavailable (not running in-cluster and VINAIRE_DATA_DIR is not set)")
 	} else if stored, err := clusterStore.Load(ctx); err != nil {
 		slog.Warn("failed to load persisted clusters", "error", err)
 	} else {
@@ -104,6 +106,8 @@ func main() {
 	if clusterStoreOK {
 		workloadsHandler.ClusterStore = clusterStore
 	}
+	workloadsHandler.DiscoveryPaths = cfg.DiscoveryKubeconfigPaths
+	go detectClusterTypes(ctx, registry)
 	writeLimiter := api.NewWriteRateLimiter(writeRateLimit, writeRateBurst)
 
 	// Roadmap Phase 30: node provisioning (SSH). In-memory job registry; the
@@ -191,6 +195,10 @@ func main() {
 		protected.Get("/clusters", workloadsHandler.ListClusters)
 		protected.Post("/clusters", workloadsHandler.AddCluster)
 		protected.Delete("/clusters/{name}", workloadsHandler.RemoveCluster)
+		// Roadmap Phase 34: more ways to add a cluster, local discovery, types.
+		protected.Get("/clusters/management", workloadsHandler.ClusterManagementInfo)
+		protected.Get("/clusters/discover", workloadsHandler.DiscoverClusters)
+		protected.Post("/clusters/import-kubeconfig/preview", workloadsHandler.PreviewKubeconfig)
 		protected.Get("/pvcs", workloadsHandler.PersistentVolumeClaims)
 		protected.Get("/pvcs/{namespace}/{name}", workloadsHandler.PersistentVolumeClaimDetail)
 		protected.Get("/pvs", workloadsHandler.PersistentVolumes)
@@ -236,6 +244,12 @@ func main() {
 			// internal/k8s/namespaces.go.
 			w.Delete("/namespaces/{name}", workloadsHandler.DeleteNamespace)
 			// Roadmap Phase 30: SSH provisioning — see internal/api/provision.go.
+			w.Post("/clusters/import-kubeconfig", workloadsHandler.ImportKubeconfig)
+			w.Post("/clusters/add-discovered", workloadsHandler.AddDiscoveredCluster)
+			w.Put("/clusters/{name}/type", workloadsHandler.SetClusterType)
+			w.Post("/clusters/ssh/hostkey", workloadsHandler.ProvisionHostKey)
+			w.Post("/clusters/import-ssh", workloadsHandler.ClusterSSHStart(provision.ModeImport))
+			w.Post("/clusters/create-ssh", workloadsHandler.ClusterSSHStart(provision.ModeCreate))
 			w.Post("/nodes/provision/hostkey", workloadsHandler.ProvisionHostKey)
 			w.Post("/nodes/provision", workloadsHandler.ProvisionStart)
 			// Roadmap Phase 25's generic YAML create/update (any kind the
@@ -344,6 +358,39 @@ func buildClusterRegistry(ctx context.Context, cfg config.Config) (*clusters.Reg
 		slog.Info("kubernetes client initialized", "cluster", name)
 	}
 	return registry, hubRegistry
+}
+
+// buildClusterStore picks where added clusters persist: a Secret when running
+// in-cluster, otherwise an encrypted file in VINAIRE_DATA_DIR.
+func buildClusterStore(ctx context.Context, cfg config.Config) (clusters.Store, bool) {
+	if s, ok := clusters.NewSecretStore(ctx, cfg.ClusterStoreKey); ok {
+		return s, true
+	}
+	if cfg.DataDir == "" {
+		return nil, false
+	}
+	s, err := clusters.NewFileStore(cfg.DataDir, cfg.ClusterStoreKey)
+	if err != nil {
+		slog.Error("cluster store: couldn't open the data directory", "dir", cfg.DataDir, "error", err)
+		return nil, false
+	}
+	return s, true
+}
+
+// detectClusterTypes fills in the type of every registered cluster that
+// doesn't have one yet (Roadmap Phase 34) — env-configured clusters at
+// startup, and any restored from a store written before types existed. It runs
+// in the background: detection makes a few API calls per cluster and must not
+// delay startup or break one unreachable cluster's neighbours.
+func detectClusterTypes(ctx context.Context, registry *clusters.Registry) {
+	for _, name := range registry.Names() {
+		entry, ok := registry.Get(name)
+		if !ok || entry.Type() != clusters.TypeUnknown {
+			continue
+		}
+		entry.SetType(clusters.DetectType(ctx, entry.Clientset, name))
+		slog.Info("detected cluster type", "cluster", name, "type", entry.Type())
+	}
 }
 
 func newClusterEntry(name string, clientset *kubernetes.Clientset, restConfig *rest.Config) *clusters.Entry {
