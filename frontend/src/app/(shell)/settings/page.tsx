@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useClusters } from "@/lib/hooks/useClusters";
 import { useCRDs } from "@/lib/hooks/useCRDs";
-import { addCluster, removeCluster } from "@/lib/api/clusters";
 import { friendlyErrorMessage } from "@/lib/api/errors";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { Toast, type ToastState } from "@/components/ui/Toast";
+import { setCurrentCluster } from "@/lib/clusterStore";
+import { AddClusterWizard } from "@/components/clusters/AddClusterWizard";
+import { ClusterTypeBadge } from "@/components/clusters/ClusterTypeBadge";
 import { PuzzleIcon } from "@/components/icons";
-import type { Cluster } from "@/lib/types";
 
 type SettingsTab = "clusters" | "crds" | "help";
 
@@ -80,59 +80,8 @@ export default function SettingsPage() {
   const { data: clusters, error, isLoading, mutate } = useClusters();
   const { data: crds, error: crdsError, isLoading: crdsLoading } = useCRDs();
 
-  const [name, setName] = useState("");
-  const [server, setServer] = useState("");
-  const [token, setToken] = useState("");
-  const [caData, setCaData] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [toast, setToast] = useState<ToastState>(null);
-  const [pendingRemove, setPendingRemove] = useState<Cluster | null>(null);
-  const [removing, setRemoving] = useState(false);
-
-  async function handleAdd(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim() || !server.trim() || !token.trim()) return;
-
-    setBusy(true);
-    setFormError(null);
-    try {
-      await addCluster({
-        name: name.trim(),
-        server: server.trim(),
-        token: token.trim(),
-        caData: caData.trim() || undefined,
-      });
-      setToast({ type: "success", message: `Cluster "${name.trim()}" added.` });
-      setName("");
-      setServer("");
-      setToken("");
-      setCaData("");
-      await mutate();
-    } catch (err) {
-      setFormError(friendlyErrorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRemove() {
-    if (!pendingRemove) return;
-    setRemoving(true);
-    try {
-      await removeCluster(pendingRemove.name);
-      setToast({
-        type: "success",
-        message: `Cluster "${pendingRemove.name}" removed.`,
-      });
-      setPendingRemove(null);
-      await mutate();
-    } catch (err) {
-      setToast({ type: "error", message: friendlyErrorMessage(err) });
-    } finally {
-      setRemoving(false);
-    }
-  }
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const router = useRouter();
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
@@ -159,8 +108,13 @@ export default function SettingsPage() {
         <div className="max-w-2xl rounded-[10px] border border-border bg-surface p-5">
           <div className="mb-1 text-[13px] font-semibold">Clusters</div>
           <div className="mb-4 text-xs text-text-muted">
-            Clusters this Vinaire instance is connected to. Clusters you add
-            here persist across restarts.
+            Clusters this Vinaire instance is connected to. Adding and removing
+            clusters, and each cluster&apos;s type, now live on the{" "}
+            <Link href="/clusters" className="text-accent-text">
+              Clusters page
+            </Link>{" "}
+            (sidebar → Clusters, or &ldquo;+ Add cluster&rdquo; in the cluster
+            picker at the top).
           </div>
 
           {error ? (
@@ -178,97 +132,41 @@ export default function SettingsPage() {
                 >
                   <span className="flex items-center gap-2 font-mono text-[12.5px]">
                     {c.name}
+                    <ClusterTypeBadge type={c.type} />
                     {c.default && (
                       <span className="rounded-full border border-border px-1.5 py-[1px] text-[10px] text-text-muted">
                         default
                       </span>
                     )}
                   </span>
-                  {c.removable && (
-                    <button
-                      type="button"
-                      onClick={() => setPendingRemove(c)}
-                      className="rounded-md border border-err px-2.5 py-1 text-[11px] text-err"
-                    >
-                      Remove
-                    </button>
-                  )}
+                  <span className="text-[11px] text-text-faint">
+                    {c.status}
+                  </span>
                 </div>
               ))}
             </div>
           )}
 
-          <form
-            onSubmit={handleAdd}
-            className="flex flex-col gap-3 border-t border-border pt-4"
-          >
-            <div className="text-xs font-semibold text-text-muted">
-              Add a cluster
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-text-muted">Name</span>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. prod-eu"
-                  className="rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-text-muted">Server URL</span>
-                <input
-                  value={server}
-                  onChange={(e) => setServer(e.target.value)}
-                  placeholder="https://1.2.3.4:6443"
-                  className="rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint"
-                />
-              </label>
-            </div>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-text-muted">
-                ServiceAccount token
-              </span>
-              <textarea
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                rows={3}
-                placeholder="kubectl create token <serviceaccount> -n <namespace> --duration=..."
-                className="resize-none rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs outline-none placeholder:text-text-faint"
-              />
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-text-muted">
-                CA certificate (optional, PEM)
-              </span>
-              <textarea
-                value={caData}
-                onChange={(e) => setCaData(e.target.value)}
-                rows={3}
-                placeholder="-----BEGIN CERTIFICATE-----"
-                className="resize-none rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs outline-none placeholder:text-text-faint"
-              />
-              {!caData.trim() && (
-                <span className="text-[11px] text-warn">
-                  No CA certificate — TLS certificate verification will be
-                  skipped for this cluster.
-                </span>
-              )}
-            </label>
-
-            {formError && <div className="text-xs text-err">{formError}</div>}
-
+          <div className="flex items-center gap-2.5">
             <button
-              type="submit"
-              disabled={busy}
-              className="w-fit rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white disabled:opacity-60"
+              type="button"
+              onClick={() => setWizardOpen(true)}
+              className="rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
             >
-              {busy ? "Connecting…" : "Add cluster"}
+              + Add cluster
             </button>
-          </form>
+            <Link
+              href="/clusters"
+              className="rounded-lg border border-border bg-surface-2 px-3.5 py-2 text-[12.5px]"
+            >
+              Open Clusters page
+            </Link>
+          </div>
+          <div className="mt-3 text-[11px] leading-relaxed text-text-faint">
+            Five ways to add one: found on this machine (when Vinaire runs
+            directly on it), import or create over SSH, a pasted kubeconfig, or
+            a server URL + ServiceAccount token.
+          </div>
         </div>
       )}
 
@@ -341,17 +239,16 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <ConfirmModal
-        open={pendingRemove !== null}
-        title="Remove cluster?"
-        message={`This only removes "${pendingRemove?.name}" from Vinaire — it doesn't touch the cluster itself.`}
-        confirmLabel="Remove"
-        danger
-        busy={removing}
-        onConfirm={handleRemove}
-        onCancel={() => setPendingRemove(null)}
-      />
-      <Toast toast={toast} onDismiss={() => setToast(null)} />
+      {wizardOpen && (
+        <AddClusterWizard
+          onClose={() => setWizardOpen(false)}
+          onAdded={() => void mutate()}
+          onAddNodes={(name) => {
+            setCurrentCluster(name);
+            router.push("/nodes");
+          }}
+        />
+      )}
     </div>
   );
 }

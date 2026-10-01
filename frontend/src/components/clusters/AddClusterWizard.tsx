@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import {
+  addCluster,
   addDiscoveredCluster,
   discoverClusters,
   fetchClusterHostKey,
@@ -33,7 +34,7 @@ import {
   clusterTypes,
 } from "./ClusterTypeBadge";
 
-type Mode = "discovered" | "kubeconfig" | "ssh-import" | "ssh-create";
+type Mode = "discovered" | "kubeconfig" | "ssh-import" | "ssh-create" | "token";
 
 const modeInfo: Record<Mode, { title: string; blurb: string }> = {
   discovered: {
@@ -50,6 +51,11 @@ const modeInfo: Record<Mode, { title: string; blurb: string }> = {
     title: "Create new (SSH)",
     blurb:
       "A clean server becomes a new single-server k3s cluster, installed by Vinaire over SSH.",
+  },
+  token: {
+    title: "Server URL + token",
+    blurb:
+      "The cluster's API address and a ServiceAccount token — the narrowest credential, and the safest to hand over.",
   },
   kubeconfig: {
     title: "Import via kubeconfig",
@@ -195,9 +201,15 @@ export function AddClusterWizard({
               ))}
             </div>
           ) : mode === "discovered" ? (
-            <DiscoveredPanel onAdded={onAdded} onClose={onClose} />
+            <DiscoveredPanel
+              onAdded={onAdded}
+              onClose={onClose}
+              onSwitch={setMode}
+            />
           ) : mode === "kubeconfig" ? (
             <KubeconfigPanel onAdded={onAdded} onClose={onClose} />
+          ) : mode === "token" ? (
+            <TokenPanel onAdded={onAdded} onClose={onClose} />
           ) : (
             <SshPanel
               mode={mode === "ssh-create" ? "create" : "import"}
@@ -229,9 +241,11 @@ export function AddClusterWizard({
 function DiscoveredPanel({
   onAdded,
   onClose,
+  onSwitch,
 }: {
   onAdded: () => void;
   onClose: () => void;
+  onSwitch: (m: Mode) => void;
 }) {
   const { data, isLoading, mutate, isValidating } = useSWR(
     "cluster-discover",
@@ -268,8 +282,37 @@ function DiscoveredPanel({
   }
   if (!data.available) {
     return (
-      <div className="rounded-lg border border-border bg-surface-2 p-4 text-sm text-text-muted">
-        {data.reason}
+      <div className="flex flex-col gap-3">
+        <div className="rounded-lg border border-border bg-surface-2 p-4 text-sm text-text-muted">
+          {data.reason}
+        </div>
+        <div className="rounded-lg border border-border bg-surface-2 p-4 text-xs text-text-muted">
+          <div className="font-semibold text-text">
+            To add a cluster that runs on your own machine anyway
+          </div>
+          <div className="mt-1.5">
+            Print its kubeconfig in a terminal on that machine and paste it into{" "}
+            <button
+              type="button"
+              onClick={() => onSwitch("kubeconfig")}
+              className="text-accent-text"
+            >
+              Import via kubeconfig
+            </button>
+            :
+          </div>
+          <pre className="mt-1.5 overflow-auto rounded-md bg-code-bg p-2.5 font-mono text-[11px]">
+            kubectl config get-contexts{"\n"}kubectl config view --raw --minify
+            --flatten --context &lt;context-name&gt;
+          </pre>
+          <div className="mt-1.5">
+            The cluster&apos;s address must be reachable from where Vinaire runs
+            (inside a cluster, <span className="font-mono">127.0.0.1</span>{" "}
+            means the pod itself — use the machine&apos;s LAN address or{" "}
+            <span className="font-mono">host.docker.internal</span> for k3d on
+            Docker Desktop).
+          </div>
+        </div>
       </div>
     );
   }
@@ -397,6 +440,101 @@ function DiscoveredPanel({
           <span className="font-mono">{l.address}</span> — {l.note}
         </div>
       ))}
+    </div>
+  );
+}
+
+// --- Server URL + token ---
+
+function TokenPanel({
+  onAdded,
+  onClose,
+}: {
+  onAdded: () => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [server, setServer] = useState("");
+  const [token, setToken] = useState("");
+  const [caData, setCaData] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function add() {
+    setBusy(true);
+    setError(null);
+    try {
+      await addCluster({
+        name: name.trim(),
+        server: server.trim(),
+        token: token.trim(),
+        caData: caData.trim() || undefined,
+      });
+      setToken("");
+      onAdded();
+      onClose();
+    } catch (err) {
+      setError(applyErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <NameField value={name} onChange={setName} />
+      <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+        Server URL
+        <input
+          aria-label="Server URL"
+          value={server}
+          onChange={(e) => setServer(e.target.value)}
+          placeholder="https://10.0.0.20:6443"
+          className={inputClass}
+        />
+      </label>
+      <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+        ServiceAccount token
+        <textarea
+          aria-label="ServiceAccount token"
+          rows={3}
+          autoComplete="off"
+          spellCheck={false}
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          placeholder="kubectl create token <serviceaccount> -n <namespace> --duration=..."
+          className={inputClass}
+        />
+      </label>
+      <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+        CA certificate (optional, PEM)
+        <textarea
+          aria-label="CA certificate"
+          rows={3}
+          spellCheck={false}
+          value={caData}
+          onChange={(e) => setCaData(e.target.value)}
+          placeholder="-----BEGIN CERTIFICATE-----"
+          className={inputClass}
+        />
+        {!caData.trim() && (
+          <span className="text-[11px] text-warn">
+            No CA certificate — TLS certificate verification will be skipped for
+            this cluster.
+          </span>
+        )}
+      </label>
+      <ErrorBox message={error} />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => void add()}
+          disabled={!name.trim() || !server.trim() || !token.trim() || busy}
+          className="rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white disabled:opacity-60"
+        >
+          {busy ? "Connecting…" : "Add cluster"}
+        </button>
+      </div>
     </div>
   );
 }

@@ -603,6 +603,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `VINAIRE_DATA_DIR`. Pasted kubeconfigs are accepted only in a safe subset:
   one chosen context, inline credentials only, no exec/auth-provider plugins,
   no file references. Removing a cluster only removes Vinaire's connection.
+  Settings -> Clusters no longer carries the old inline form: it lists the clusters and opens the same wizard (which also keeps the original "server URL + token" way as a fifth option). Inside a pod, "Found on this machine" explains why it can't see the host and offers the kubeconfig import with the exact `kubectl` command.
 
 ### Changed
 
