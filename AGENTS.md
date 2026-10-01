@@ -101,6 +101,33 @@ If a request conflicts with this — asks for a write action on a resource
 kind or verb not already covered above — stop and flag it rather than
 silently extending write access.
 
+## Port-forward proxy (Phase 26) — not a write, but a new access path
+
+`/proxy/{cluster}/{namespace}/{pod}/{port}/…` (or `{https:port}`) is an
+authenticated reverse **HTTP** proxy into a pod, opened from Pod detail's
+"Forward port" button in a new tab. It is outside the write list above
+because it mutates nothing in the cluster, but it does reach inside a pod,
+so its guard rails live in `internal/api/portforward.go` and
+`internal/k8s/portforward.go` — keep them when touching it:
+
+- Reaches the pod through the Kubernetes `pods/portforward` subresource with
+  the **caller's own** identity (real RBAC decides; an ungranted caller gets a
+  403). No OS port is opened on the server — the SPDY stream is dialed
+  directly and used as the HTTP transport's `net.Conn`.
+- Keep-alives are off, so each connection is tied to the request that needed
+  it: closing the tab cancels the request and tears the connection down.
+  Concurrency is capped, and `k8s.ActivePortForwardConns` is the gauge the
+  tests read to prove nothing leaks.
+- The proxied page is served from Vinaire's own origin, so it is sandboxed:
+  `Content-Security-Policy: sandbox` (opaque origin — it can't use the user's
+  Vinaire session or API), the session `Cookie`/`Authorization` are **never**
+  forwarded to the pod, and the pod's `Set-Cookie` is dropped (it could
+  overwrite Vinaire's own cookie). Don't relax these to make a pod UI "just
+  work" — apps that need cookies/localStorage or root-relative asset paths
+  are a known, documented limitation.
+- Each distinct (user, pod, port) reach is audited as `portforward` (deduped
+  per minute — a page load is many requests).
+
 ## Authentication (Phase 10) and multi-cluster (Phase 11)
 
 Every `/api/v1/*` request (except `/api/v1/auth/*` itself) requires a
@@ -224,6 +251,12 @@ rules:
   - apiGroups: [""]
     resources: ["pods/exec"]
     verbs: ["create"]
+  # Phase 26's Forward port: also a separate subresource, and a read-style
+  # access path (nothing is mutated) — but it reaches inside a pod, so it's
+  # granted explicitly. Omit it to disable the feature for this identity.
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]
@@ -313,7 +346,8 @@ half): the Go backend serves that `out/` directory as-is
 `STATIC_DIR` is set) from the same port as the API. All dynamic
 content loads client-side, via `fetch`/WebSocket calls to the Go backend —
 Go never does HTML templating or rendering; it only ever serves static
-files or answers JSON/WebSocket on `/api/*`. `next dev` is the one
+files, answers JSON/WebSocket on `/api/*`, or (Phase 26) reverse-proxies
+an authenticated pod port under `/proxy/*`. `next dev` is the one
 exception: local development still runs a normal Next.js dev server with
 hot reload, exactly as before — `output: "export"`'s constraints (no
 Route Handlers with server logic, no Middleware, no Server Actions, no

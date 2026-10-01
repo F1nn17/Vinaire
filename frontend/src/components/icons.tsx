@@ -422,3 +422,19 @@ export function NamespaceIcon({ size = 16, className }: IconProps) {
     </svg>
   );
 }
+
+export function PortForwardIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <path d="M4 12h12M12 7l5 5-5 5" />
+      <path d="M20 5v14" />
+    </svg>
+  );
+}

@@ -553,6 +553,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reason and a Prometheus that simply has no samples returns `noData: true` —
   the UI shows an explicit message for each, never an empty chart. Settings'
   Prometheus help was rewritten (it still said no chart used Prometheus).
+- Browser-based port-forward (Roadmap Phase 26). A "Forward port" button on
+  Pod detail lists the pod's declared ports (plus an "Other port" field and an
+  HTTPS checkbox) and opens the pod's web UI in a new tab, with no terminal
+  command. It goes through a new authenticated reverse HTTP proxy at
+  `/proxy/{cluster}/{namespace}/{pod}/{port}/` (`https:port` for TLS) that
+  reaches the pod via the Kubernetes `pods/portforward` subresource with the
+  caller's own RBAC, without opening any port on the server. Every connection
+  is tied to its request, so closing the tab closes the connection (verified:
+  opened == closed, active back to 0). Because the page is served from
+  Vinaire's origin it is sandboxed (`Content-Security-Policy: sandbox`), the
+  session cookie/Authorization are never forwarded to the pod and the pod's
+  Set-Cookie is dropped; concurrency is capped and the first reach per
+  (user, pod, port) per minute is audited as `portforward`. Pod detail now
+  also returns the declared container ports. New optional `LOG_LEVEL` env.
+  `pods/portforward` `create` was added to the Helm chart and AGENTS.md
+  ClusterRole.
 
 ### Changed
 

@@ -2161,7 +2161,35 @@ breaking anything in the cluster.
 
 ---
 
-## Phase 26 — Browser-based port-forward
+## Phase 26 — Browser-based port-forward ✅ done
+
+> **Outcome note:** Four deliberate deviations from the spec above. (1) Not a
+> WebSocket endpoint: the frontend opens `/proxy/…` as a plain browser
+> navigation in a new tab, which can't speak WebSocket, so the byte pipe is
+> the SPDY port-forward stream used directly as the HTTP transport's
+> `net.Conn` (an `httputil.ReverseProxy`; WebSocket upgrades *inside* the
+> proxied app go through it too, though that wasn't exercised). No OS port is
+> opened — and `k8s.io/client-go/tools/portforward` is used only for its
+> protocol constant, since its `PortForwarder` always binds a local listener.
+> (2) The URL carries the cluster — `/proxy/{cluster}/{ns}/{pod}/{port}/` —
+> because a navigation can't send the `X-Cluster` header and every
+> sub-request must stay on the same cluster. (3) `https:8443` in the port
+> segment selects TLS (kubectl-proxy's convention). (4) "Forward port" ships
+> on Pod detail only: there is no Service detail page to put it on yet.
+> **Security:** the proxied page is served from Vinaire's own origin, so a
+> hostile pod UI could otherwise act with the user's Vinaire session. It is
+> therefore sandboxed (`CSP: sandbox` — verified in a real browser: origin
+> `null`, `document.cookie` throws, `fetch('/api/…')` is blocked), the
+> session cookie/Authorization are not forwarded, and Set-Cookie is dropped.
+> The cost: pod UIs that need cookies/localStorage or use root-relative asset
+> paths won't fully work. **Verified against k3d-vinaire-dev:** an nginx pod's
+> welcome page opened in a new tab from the button; an HTTPS pod
+> (`https:8443`, self-signed) answered; a custom port worked; "nothing
+> listening" returns a clear 502 (the kubelet's reason arrives on the error
+> stream a millisecond after the data stream's EOF, so reads wait briefly for
+> it); and the spec's own risk — forgotten connections — is closed: a
+> streaming response aborted by the client or by closing the tab closes its
+> pod connection (opened 8 / closed 8, gauge back to 0).
 
 **Goal:** open a port-forward to a pod straight from the browser, the same
 convenience `kubectl port-forward` gives on the command line.

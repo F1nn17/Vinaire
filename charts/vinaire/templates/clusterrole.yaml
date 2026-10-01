@@ -46,6 +46,11 @@ rules:
   - apiGroups: [""]
     resources: ["pods/exec"]
     verbs: ["create"]
+  # Phase 26's Forward port (the /proxy reverse proxy) — another separate
+  # subresource; drop it to disable the feature.
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]

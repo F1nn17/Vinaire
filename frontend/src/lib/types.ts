@@ -163,6 +163,15 @@ export type PodDetail = {
   // action bar shows "Restart" (effectively a delete+recreate) only when
   // true, otherwise just "Delete" with an explicit warning.
   hasController: boolean;
+  // Roadmap Phase 26: ports the pod's containers declare (a pod may serve more).
+  ports: PodPort[];
+};
+
+export type PodPort = {
+  container: string;
+  name: string;
+  port: number;
+  protocol: string;
 };
 
 export type Revision = {

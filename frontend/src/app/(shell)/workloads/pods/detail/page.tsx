@@ -13,7 +13,8 @@ import { EventRow } from "@/components/ui/EventRow";
 import { ActionBar, ActionButton } from "@/components/ui/ActionBar";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Toast, type ToastState } from "@/components/ui/Toast";
-import { RestartIcon, TrashIcon } from "@/components/icons";
+import { PortForwardIcon, RestartIcon, TrashIcon } from "@/components/icons";
+import { ForwardPortModal } from "@/components/ui/ForwardPortModal";
 import { deletePod } from "@/lib/api/podActions";
 import { LogsTab } from "./LogsTab";
 import { TerminalTab } from "./TerminalTab";
@@ -52,6 +53,7 @@ function PodDetailPage() {
   const { data: pod, isLoading, error, mutate } = usePod(podNamespace, podName);
   const [tab, setTab] = useState<Tab>("overview");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
 
@@ -109,6 +111,11 @@ function PodDetailPage() {
           </div>
         </div>
         <ActionBar>
+          <ActionButton
+            icon={<PortForwardIcon />}
+            label="Forward port"
+            onClick={() => setForwardOpen(true)}
+          />
           <ActionButton
             icon={pod.hasController ? <RestartIcon /> : <TrashIcon />}
             label={pod.hasController ? "Restart" : "Delete"}
@@ -229,6 +236,15 @@ function PodDetailPage() {
 
       {tab === "yaml" && (
         <YamlPanel yaml={pod.yaml} onApplied={() => mutate()} />
+      )}
+
+      {forwardOpen && (
+        <ForwardPortModal
+          namespace={pod.namespace}
+          pod={pod.name}
+          ports={pod.ports}
+          onClose={() => setForwardOpen(false)}
+        />
       )}
 
       <ConfirmModal

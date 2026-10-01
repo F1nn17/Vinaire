@@ -67,6 +67,18 @@ type PodDetailResponse struct {
 	// this to decide whether "Delete" in the UI is effectively a restart
 	// (the controller recreates it) or a real, non-recoverable delete.
 	HasController bool `json:"hasController"`
+	// Ports are the ports the pod's containers declare — what Roadmap Phase
+	// 26's "Forward port" offers. A pod may serve more than it declares, so
+	// the UI also accepts a manually entered port.
+	Ports []PodPortSummary `json:"ports"`
+}
+
+// PodPortSummary is one declared containerPort.
+type PodPortSummary struct {
+	Container string `json:"container"`
+	Name      string `json:"name"`
+	Port      int32  `json:"port"`
+	Protocol  string `json:"protocol"`
 }
 
 // PodDetail handles GET /api/v1/pods/{namespace}/{name}.
@@ -137,7 +149,22 @@ func (h *Handler) buildPodDetail(ctx context.Context, metricsClientset *metricsc
 		Events:        eventRows,
 		YAML:          yaml,
 		HasController: len(pod.OwnerReferences) > 0,
+		Ports:         podPorts(pod),
 	}
+}
+
+func podPorts(pod corev1.Pod) []PodPortSummary {
+	ports := []PodPortSummary{}
+	for _, c := range pod.Spec.Containers {
+		for _, p := range c.Ports {
+			proto := string(p.Protocol)
+			if proto == "" {
+				proto = string(corev1.ProtocolTCP)
+			}
+			ports = append(ports, PodPortSummary{Container: c.Name, Name: p.Name, Port: p.ContainerPort, Protocol: proto})
+		}
+	}
+	return ports
 }
 
 func containerSummaries(pod corev1.Pod) []PodContainerSummary {

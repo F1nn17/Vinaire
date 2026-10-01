@@ -41,7 +41,11 @@ const (
 const shutdownTimeout = 5 * time.Second
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
+	var logLevel slog.LevelVar
+	if err := logLevel.UnmarshalText([]byte(os.Getenv("LOG_LEVEL"))); err != nil {
+		logLevel.Set(slog.LevelInfo)
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: &logLevel})))
 
 	cfg := config.Load()
 
@@ -135,6 +139,15 @@ func main() {
 	// internal/authn.Manager.Middleware. Authorization itself is whatever
 	// the caller's own Kubernetes RBAC decides on each call (their own
 	// pasted token or OIDC identity), not a separate check in this backend.
+	// Roadmap Phase 26: browser-based port-forward — an authenticated reverse
+	// HTTP proxy into a pod, outside /api/v1 because the browser navigates to
+	// it directly. See internal/api/portforward.go.
+	r.Group(func(p chi.Router) {
+		p.Use(auth.Middleware)
+		p.Get("/proxy/{cluster}/{namespace}/{pod}/{target}", workloadsHandler.PortForwardRedirect)
+		p.HandleFunc("/proxy/{cluster}/{namespace}/{pod}/{target}/*", workloadsHandler.PortForwardProxy)
+	})
+
 	r.Route("/api/v1", func(protected chi.Router) {
 		protected.Use(auth.Middleware)
 
