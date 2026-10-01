@@ -2744,6 +2744,13 @@ confirmed via `kubectl get pods`.
 Vinaire at a server's SSH credentials, either to import an existing k3s
 install or to turn a clean server into a brand-new one.
 
+The modes below split by *where the cluster lives*. A cluster on **another
+server** is reached over SSH or by kubeconfig (the three modes below). A
+cluster on **the same machine Vinaire runs on** — the typical home server or
+home lab, running k3s (or k3d/kind) rather than a full Kubernetes — is
+*discovered locally*, with no SSH at all (the "Local discovery" mode below).
+Every registered cluster also gets a detected **type** (k3s, k3d, kind, ...).
+
 **Backend**
 - Provisioning is done through the `ClusterProvisioner` interface from
   Phase 30; this phase implements the k3s provider — the kubeadm provider
@@ -2781,6 +2788,51 @@ install or to turn a clean server into a brand-new one.
   modes above. The UI shows a recommendation next to it: use a dedicated
   ServiceAccount with only the needed permissions instead of an
   admin-level kubeconfig.
+- **Local discovery mode:** for when Vinaire runs directly on a home
+  machine or home server (as a binary or a container), *outside* the
+  cluster, next to a lightweight distribution such as k3s — and a second
+  cluster may exist beside the one it was configured with.
+  `GET /api/v1/clusters/discover` is a read-only scan of what the backend
+  process can **already see**, nothing more:
+  - kubeconfig files: `$KUBECONFIG`, `~/.kube/config`,
+    `/etc/rancher/k3s/k3s.yaml`, plus any extra paths from a
+    `DISCOVERY_KUBECONFIG_PATHS` env var. Every context that isn't
+    registered yet is a candidate. k3d and kind write their own contexts
+    (`k3d-<name>`, `kind-<name>`) into the user's kubeconfig, so they are
+    found this way — **without ever touching the Docker socket** (mounting
+    it into Vinaire is root on the host; deliberately not done).
+  - a short, fixed list of well-known local API ports on loopback
+    (`6443`, MicroK8s's `16443`, ...) probed for a kube-apiserver — only to
+    report "a cluster is listening here but no credentials were found,
+    add it via kubeconfig". The probe list is fixed, never user-supplied.
+  - each candidate with credentials is probed with a short timeout
+    (`GET /version`) for reachability and a type hint.
+  - the cluster Vinaire is already using is recognized and left out, by
+    comparing the `kube-system` namespace UID (a stable cluster identity),
+    not the URL — the same cluster is often reachable as `127.0.0.1`, a LAN
+    IP and a hostname at once.
+  - read-only and strictly non-escalating: if `/etc/rancher/k3s/k3s.yaml` is
+    root-only and Vinaire doesn't run as root, it is reported as "found but
+    not readable, here's how to grant access" — Vinaire never invokes
+    `sudo` or changes file permissions on its own.
+  - unavailable (with an explanatory message, not an empty list) when
+    Vinaire runs inside a cluster as a pod — it can't see the host's files.
+  Adding a discovered cluster goes through the same path as
+  import-kubeconfig: the user confirms *which* candidate (name, server,
+  detected type, and whether it carries an admin credential), only **that
+  one context's** credentials are extracted and stored encrypted — never the
+  whole kubeconfig — and nothing is ever added automatically.
+- **Cluster type:** every registry entry carries a `type`:
+  `k3s | k3d | kind | minikube | microk8s | kubeadm | managed | unknown`.
+  It is detected at registration (all modes, including SSH create, which
+  knows it by construction) from cheap, read-only signals: the `+k3s`
+  suffix in the server's `gitVersion`, node `providerID` prefixes
+  (`k3s://`, `kind://`), node/cluster labels, the `kubeadm-config`
+  ConfigMap in `kube-system`, and cloud-provider markers for `managed`.
+  Detection is a heuristic, so the user can override it from a dropdown,
+  and `unknown` never blocks adding a cluster. The type is persisted with
+  the registration (extending Phase 24's `Store`) and exposed on
+  `GET /api/v1/clusters`.
 
 **Frontend**
 - The cluster picker in the Topbar (Phase 11) gets an "Add cluster" entry
@@ -2794,9 +2846,24 @@ install or to turn a clean server into a brand-new one.
   clusters, their connectivity status, and a Remove button explicitly
   labeled "only removes the connection in Vinaire — the cluster itself is
   untouched."
+- A fourth wizard entry, **"Found on this machine"**, shown first when
+  discovery is available: a list of discovered candidates with a type
+  badge, reachability, and whether it's already added (greyed out), a
+  "Rescan" button, and a one-confirmation add. When nothing is readable the
+  panel explains exactly what to do (e.g. how to make `k3s.yaml` readable
+  to Vinaire's user, or how to mount a kubeconfig read-only into the
+  container) instead of showing an empty list.
+- The detected **type** appears as a badge in the Topbar cluster picker and
+  as a column on the Clusters page, with an edit control to override it.
+  The type also tailors the UI: Phase 30's "Add node" is offered only for
+  types where adding a machine over SSH makes sense (k3s, and kubeadm once
+  Phase 35 lands) and is hidden, with a one-line reason, for k3d/kind
+  (their "nodes" are containers), minikube, and managed clusters.
 
 **Complexity:** M — the foundation (SSH, log streaming) already exists
 from Phase 30 and Phase 11.
+Local discovery plus cluster-type detection add roughly an S on top: no
+new dependencies, mostly kubeconfig parsing and read-only probes.
 
 **New dependencies**
 - `go.mod`: `golang.org/x/crypto/ssh` (already added in Phase 30);
@@ -2817,6 +2884,24 @@ from Phase 30 and Phase 11.
   Consider issuing a dedicated, narrowly-scoped ServiceAccount right after
   import and storing its token instead of the admin certificate (tradeoff:
   a long-lived token).
+- Local discovery reads credential files, so it must stay read-only and
+  non-escalating, must never log or return a credential (the discover
+  response carries names, server URLs, types and "has admin credential:
+  yes/no" — never the credential itself), and must only ever extract the
+  single context the user chose.
+- k3s's `k3s.yaml` is a cluster-admin certificate. Importing it is
+  convenient and exactly as powerful as it sounds — show the same
+  "use a scoped ServiceAccount instead" recommendation as the kubeconfig
+  mode, and offer the narrowly-scoped ServiceAccount flow right after
+  adding.
+- When Vinaire runs in a container on the home server it can't see the
+  host's kubeconfig or loopback ports unless they're deliberately mounted
+  or the container uses host networking — discovery will honestly report
+  nothing, and the docs must say how to opt in rather than reaching for the
+  Docker socket.
+- Type detection is a heuristic and will sometimes be wrong (a custom
+  distribution, a renamed context). That is why it's editable and why
+  nothing hard-depends on it except hiding Phase 30's "Add node".
 
 **Definition of done**
 Import: enter a working k3s server's credentials — the cluster appears in
@@ -2825,6 +2910,15 @@ server becomes a working cluster in a couple of minutes with zero manual
 commands run on it. Running create again against a server that already has
 k3s installed refuses cleanly, without breaking anything. Swapping the
 host key mid-connection aborts the session.
+Local discovery: on a home server running Vinaire next to a k3s cluster
+(Vinaire outside the cluster) and a second cluster (a k3d/kind/second k3s
+context), "Found on this machine" lists the second one with its detected
+type; one confirmation adds it and switching to it shows its real pods; the
+cluster Vinaire already uses doesn't show up as a duplicate even if
+reachable under several addresses; a `k3s.yaml` Vinaire can't read produces
+an actionable message, not an empty list or a silent `sudo`; the type badge
+shows in the picker and can be corrected; and the Docker socket is never
+touched.
 
 ---
 
