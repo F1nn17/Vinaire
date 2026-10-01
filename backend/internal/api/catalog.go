@@ -59,10 +59,22 @@ func (h *Handler) CatalogRepos(w http.ResponseWriter, _ *http.Request) {
 	if !h.catalogAvailable(w) {
 		return
 	}
-	respondJSON(w, map[string]any{"repos": h.Catalog.Repos()})
+	// Only what the UI shows — not the configuration's per-chart search tags.
+	type repoView struct {
+		Name        string `json:"name"`
+		URL         string `json:"url"`
+		Description string `json:"description,omitempty"`
+		Category    string `json:"category,omitempty"`
+		OCI         bool   `json:"oci,omitempty"`
+	}
+	var repos []repoView
+	for _, r := range h.Catalog.Repos() {
+		repos = append(repos, repoView{r.Name, r.URL, r.Description, r.Category, r.IsOCI()})
+	}
+	respondJSON(w, map[string]any{"repos": repos})
 }
 
-// CatalogSearch handles GET /api/v1/catalog/charts?search=&repo=.
+// CatalogSearch handles GET /api/v1/catalog/charts?search=&repo=&category=.
 func (h *Handler) CatalogSearch(w http.ResponseWriter, r *http.Request) {
 	if !h.catalogAvailable(w) {
 		return
@@ -72,7 +84,7 @@ func (h *Handler) CatalogSearch(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "search is too long")
 		return
 	}
-	respondJSON(w, h.Catalog.Search(r.Context(), q, r.URL.Query().Get("repo")))
+	respondJSON(w, h.Catalog.Search(r.Context(), q, r.URL.Query().Get("repo"), r.URL.Query().Get("category")))
 }
 
 // CatalogChart handles GET /api/v1/catalog/charts/{repo}/{chart}?version=.

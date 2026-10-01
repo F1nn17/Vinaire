@@ -171,15 +171,15 @@ func TestSearchAndDetails(t *testing.T) {
 	f := newFakeRepo(t, map[string]any{"replicas": 1, "nodeSelector": map[string]any{}}, nil)
 	c := f.catalog()
 
-	res := c.Search(context.Background(), "", "")
+	res := c.Search(context.Background(), "", "", "")
 	if len(res.Charts) != 2 || res.Errors != nil {
 		t.Fatalf("search all = %+v", res)
 	}
-	res = c.Search(context.Background(), "DATABASE", "")
+	res = c.Search(context.Background(), "DATABASE", "", "")
 	if len(res.Charts) != 1 || res.Charts[0].Name != "demo" || res.Charts[0].Version != "1.2.3" || res.Charts[0].Repo != "fake" {
 		t.Fatalf("search by keyword = %+v", res)
 	}
-	if got := c.Search(context.Background(), "demo", "nope"); len(got.Charts) != 0 {
+	if got := c.Search(context.Background(), "demo", "nope", ""); len(got.Charts) != 0 {
 		t.Errorf("an unknown repository filter returned results: %+v", got)
 	}
 
@@ -257,7 +257,7 @@ func TestBrokenRepositoryIsReportedNotFatal(t *testing.T) {
 	defer dead.Close()
 	c := newCatalog(Config{Repos: []Repo{{Name: "fake", URL: f.srv.URL}, {Name: "dead", URL: dead.URL}}}, f.srv.Client())
 	// both test servers use different CAs; trust both
-	res := c.Search(context.Background(), "demo", "")
+	res := c.Search(context.Background(), "demo", "", "")
 	if len(res.Charts) == 0 && res.Errors["dead"] == "" {
 		t.Fatalf("neither results nor an error reported: %+v", res)
 	}
@@ -277,13 +277,13 @@ func TestIndexIsCachedAndExpires(t *testing.T) {
 	now := time.Now()
 	c.now = func() time.Time { return now }
 	for range 3 {
-		c.Search(context.Background(), "", "")
+		c.Search(context.Background(), "", "", "")
 	}
 	if hits != 1 {
 		t.Fatalf("index fetched %d times, want 1", hits)
 	}
 	now = now.Add(indexTTL + time.Second)
-	c.Search(context.Background(), "", "")
+	c.Search(context.Background(), "", "", "")
 	if hits != 2 {
 		t.Fatalf("index fetched %d times after expiry, want 2", hits)
 	}

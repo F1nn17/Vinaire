@@ -134,6 +134,8 @@ func main() {
 		}
 	}
 	workloadsHandler.Catalog = helm.NewCatalog(catalogCfg)
+	// Load every repository's index in the background so the first search is quick.
+	workloadsHandler.Catalog.Warm()
 	workloadsHandler.Releases = &helm.Releases{Catalog: workloadsHandler.Catalog}
 	provisionStream := stream.ServeProvision(workloadsHandler.Provisions, auth, cfg.CORSAllowedOrigins)
 

@@ -639,6 +639,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   can't reach loopback or cloud-metadata addresses; a request can never name a
   repository. Every action is audited without the values. A chart that needs CRDs
   that aren't installed yet fails with an explicit hint rather than a generic error.
+  The default catalog is wide — about fifty sources grouped by category (Databases,
+  Messaging, Networking, Security, Observability, Storage, CI/CD, Platform, Apps):
+  CloudNativePG, Zalando and Percona for PostgreSQL/MySQL/MongoDB, Strimzi and
+  Redpanda for Kafka, Redis operators, ClickHouse, OpenSearch, MinIO, Argo, GitLab,
+  Keycloak, cert-manager, Prometheus/Grafana/VictoriaMetrics and more. OCI registries
+  are supported (anonymous, TLS-only, digest-verified), which brings Bitnami's
+  PostgreSQL, MySQL, Redis, Kafka, RabbitMQ and others — note Bitnami's free images are
+  :latest-only. Search is ranked by relevance (name, keywords, configured per-chart
+  tags — so "postgres" finds CloudNativePG's `cluster`), has category filters, and a
+  slow repository no longer holds the page up: it is reported as still loading and the
+  list fills in by itself. Indexes load in the background at startup.
 
 ### Changed
 

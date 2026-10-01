@@ -890,6 +890,35 @@ function MarketplaceHelp() {
 
       <div>
         <div className="font-semibold text-foreground">
+          Откуда берутся чарты и как найти нужный
+        </div>
+        <div className="mt-1 text-text-muted">
+          В каталоге около пятидесяти источников, сгруппированных по категориям
+          (Databases, Messaging, Networking, Security, Observability, Storage,
+          CI/CD, Platform, Apps) — переключайте их кнопками над списком. Поиск
+          ранжирует по релевантности: сначала имя чарта, затем ключевые слова и
+          описание. PostgreSQL ищите по{" "}
+          <span className="font-mono">postgres</span> (это найдёт CloudNativePG,
+          Zalando, Percona и Bitnami), Kafka — по{" "}
+          <span className="font-mono">kafka</span> (Strimzi, Redpanda, Bitnami).
+          Источники бывают двух видов: обычные Helm-репозитории и OCI-реестры
+          (помечены «OCI»). OCI читается анонимно и только по TLS, без учётных
+          данных этой машины; скачанный чарт проверяется по контрольной сумме.
+        </div>
+        <div className="mt-2 text-text-muted">
+          <span className="font-semibold">Bitnami:</span> его бесплатные образы
+          публикуются только с тегом <span className="font-mono">latest</span>.
+          Для разработки это нормально, для продакшена с закреплёнными версиями
+          — нет; для такого случая берите операторы (CloudNativePG, Strimzi,
+          Percona). Список источников меняется только в конфигурации бэкенда (
+          <span className="font-mono">catalog.json</span> /{" "}
+          <span className="font-mono">CATALOG_CONFIG</span>) — там же можно
+          добавить свой репозиторий или OCI-реестр с перечнем чартов.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
           Права и безопасность
         </div>
         <div className="mt-1 text-text-muted">

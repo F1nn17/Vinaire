@@ -24,19 +24,45 @@ import (
 //go:embed catalog.json
 var defaultCatalogJSON []byte
 
-// Repo is one configured Helm repository (an index.yaml over https).
+// Repo is one configured source of charts: either a classic Helm repository
+// (an index.yaml served over https) or an OCI registry (URL "oci://host/path").
+// A registry has no index, so for an OCI source the charts to offer are listed
+// explicitly in Charts — the catalog never enumerates a registry itself.
 type Repo struct {
 	Name        string `json:"name"`
 	URL         string `json:"url"`
 	Description string `json:"description,omitempty"`
+	// Category groups repositories in the UI ("Databases", "Messaging"...).
+	// ChartTags are extra words a search matches for one chart, by chart name —
+	// so that a search for "postgres" finds CloudNativePG's chart called
+	// "cluster". They're per chart, not per repository, so they never make an
+	// unrelated chart match.
+	Category  string              `json:"category,omitempty"`
+	ChartTags map[string][]string `json:"chartTags,omitempty"`
+	Charts    []string            `json:"charts,omitempty"` // OCI sources only
 }
+
+// IsOCI reports whether the source is an OCI registry.
+func (r Repo) IsOCI() bool { return strings.HasPrefix(r.URL, ociScheme) }
+
+const ociScheme = "oci://"
 
 // Config is the whole catalog configuration.
 type Config struct {
 	Repos []Repo `json:"repos"`
 }
 
-var repoNameRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,38}[a-z0-9])?$`)
+var (
+	repoNameRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,38}[a-z0-9])?$`)
+	categoryRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 &/-]{0,30}$`)
+	tagRe      = regexp.MustCompile(`^[a-z0-9][a-z0-9.+-]{0,30}$`)
+	// OCI references: lowercase path components, as the distribution spec has them.
+	ociPathRe = regexp.MustCompile(`^[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$`)
+	ociHostRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?(:[0-9]{1,5})?$`)
+	chartName = regexp.MustCompile(`^[a-z0-9]+([._-][a-z0-9]+)*$`)
+)
+
+const maxOCIChartsPerRepo = 40
 
 // Validate checks the configuration is usable and safe: unique, well-formed
 // names (they end up in URLs and audit records) and https repository URLs with
@@ -51,15 +77,63 @@ func (c Config) Validate() error {
 			return fmt.Errorf("catalog config: bad or duplicate repository name %q", r.Name)
 		}
 		seen[r.Name] = true
+		if r.Category != "" && !categoryRe.MatchString(r.Category) {
+			return fmt.Errorf("catalog config: repository %s has an invalid category", r.Name)
+		}
+		if len(r.ChartTags) > 100 {
+			return fmt.Errorf("catalog config: repository %s has too many chartTags entries", r.Name)
+		}
+		for chartKey, tags := range r.ChartTags {
+			if !chartName.MatchString(chartKey) || len(tags) > 10 {
+				return fmt.Errorf("catalog config: repository %s has a bad chartTags entry %q", r.Name, chartKey)
+			}
+			for _, t := range tags {
+				if !tagRe.MatchString(t) {
+					return fmt.Errorf("catalog config: repository %s has an invalid tag %q", r.Name, t)
+				}
+			}
+		}
+		if r.IsOCI() {
+			if err := validateOCI(r); err != nil {
+				return err
+			}
+			continue
+		}
+		if len(r.Charts) != 0 {
+			return fmt.Errorf("catalog config: repository %s lists charts, which only an oci:// source takes", r.Name)
+		}
 		u, err := url.Parse(r.URL)
 		switch {
 		case err != nil || u.Host == "":
 			return fmt.Errorf("catalog config: repository %s has an invalid URL", r.Name)
 		case u.Scheme != "https":
-			return fmt.Errorf("catalog config: repository %s must use https", r.Name)
+			return fmt.Errorf("catalog config: repository %s must use https (or be an oci:// source)", r.Name)
 		case u.User != nil || u.RawQuery != "" || u.Fragment != "":
 			return fmt.Errorf("catalog config: repository %s URL may not carry credentials, a query or a fragment", r.Name)
 		}
+	}
+	return nil
+}
+
+// validateOCI checks an oci:// source: a host and path made only of what a
+// registry reference allows (so it can't smuggle a scheme, credentials or a
+// query), and an explicit, bounded list of chart names. There is deliberately
+// no plain-HTTP option: an OCI source is always reached over TLS.
+func validateOCI(r Repo) error {
+	rest := strings.TrimPrefix(r.URL, ociScheme)
+	host, path, _ := strings.Cut(rest, "/")
+	if !ociHostRe.MatchString(host) || !ociPathRe.MatchString(path) {
+		return fmt.Errorf("catalog config: repository %s has an invalid oci:// URL (want oci://host/path, lowercase, no credentials)", r.Name)
+	}
+	if len(r.Charts) == 0 || len(r.Charts) > maxOCIChartsPerRepo {
+		return fmt.Errorf("catalog config: oci repository %s must list between 1 and %d charts", r.Name, maxOCIChartsPerRepo)
+	}
+	seen := map[string]bool{}
+	for _, c := range r.Charts {
+		if !chartName.MatchString(c) || len(c) > 60 || seen[c] {
+			return fmt.Errorf("catalog config: oci repository %s has a bad or duplicate chart name %q", r.Name, c)
+		}
+		seen[c] = true
 	}
 	return nil
 }

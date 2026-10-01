@@ -1,34 +1,851 @@
 {
   "repos": [
     {
-      "name": "ingress-nginx",
-      "url": "https://kubernetes.github.io/ingress-nginx",
-      "description": "NGINX Ingress Controller"
+      "name": "cnpg",
+      "url": "https://cloudnative-pg.github.io/charts",
+      "description": "CloudNativePG — PostgreSQL operator and the `cluster` chart that creates a Postgres cluster",
+      "category": "Databases",
+      "chartTags": {
+        "cluster": [
+          "postgres",
+          "postgresql",
+          "database"
+        ],
+        "cloudnative-pg": [
+          "postgres",
+          "postgresql",
+          "operator"
+        ],
+        "plugin-barman-cloud": [
+          "postgres",
+          "backup"
+        ],
+        "pgbench": [
+          "postgres",
+          "benchmark"
+        ]
+      }
     },
     {
-      "name": "metrics-server",
-      "url": "https://kubernetes-sigs.github.io/metrics-server",
-      "description": "Resource metrics for kubectl top and Vinaire's CPU/memory gauges"
+      "name": "zalando-postgres",
+      "url": "https://opensource.zalando.com/postgres-operator/charts/postgres-operator",
+      "description": "Zalando Postgres operator (Patroni-based HA PostgreSQL)",
+      "category": "Databases",
+      "chartTags": {
+        "postgres-operator": [
+          "postgresql",
+          "patroni",
+          "database"
+        ]
+      }
+    },
+    {
+      "name": "percona",
+      "url": "https://percona.github.io/percona-helm-charts",
+      "description": "Percona operators — PostgreSQL, MySQL (XtraDB), MongoDB",
+      "category": "Databases",
+      "chartTags": {
+        "pg-operator": [
+          "postgres",
+          "postgresql",
+          "database"
+        ],
+        "pg-db": [
+          "postgres",
+          "postgresql",
+          "database"
+        ],
+        "pxc-operator": [
+          "mysql",
+          "database"
+        ],
+        "pxc-db": [
+          "mysql",
+          "database"
+        ],
+        "ps-operator": [
+          "mysql",
+          "database"
+        ],
+        "ps-db": [
+          "mysql",
+          "database"
+        ],
+        "psmdb-operator": [
+          "mongodb",
+          "mongo",
+          "database"
+        ],
+        "psmdb-db": [
+          "mongodb",
+          "mongo",
+          "database"
+        ],
+        "everest": [
+          "database",
+          "postgres",
+          "mysql",
+          "mongodb"
+        ]
+      }
+    },
+    {
+      "name": "mysql-operator",
+      "url": "https://mysql.github.io/mysql-operator",
+      "description": "Oracle MySQL operator and InnoDB Cluster",
+      "category": "Databases"
+    },
+    {
+      "name": "mongodb",
+      "url": "https://mongodb.github.io/helm-charts",
+      "description": "MongoDB community operator",
+      "category": "Databases",
+      "chartTags": {
+        "community-operator": [
+          "mongodb",
+          "mongo",
+          "database"
+        ],
+        "enterprise-operator": [
+          "mongodb",
+          "mongo"
+        ],
+        "enterprise-database": [
+          "mongodb",
+          "mongo"
+        ]
+      }
+    },
+    {
+      "name": "ot-container-kit",
+      "url": "https://ot-container-kit.github.io/helm-charts",
+      "description": "Redis operators and Redis/Valkey-compatible clusters",
+      "category": "Databases",
+      "chartTags": {
+        "redis": [
+          "valkey",
+          "cache"
+        ],
+        "redis-cluster": [
+          "valkey",
+          "cache"
+        ],
+        "redis-sentinel": [
+          "valkey",
+          "cache"
+        ],
+        "redis-replication": [
+          "valkey",
+          "cache"
+        ]
+      }
+    },
+    {
+      "name": "clickhouse-operator",
+      "url": "https://docs.altinity.com/clickhouse-operator",
+      "description": "Altinity ClickHouse operator",
+      "category": "Databases",
+      "chartTags": {
+        "altinity-clickhouse-operator": [
+          "clickhouse",
+          "analytics",
+          "olap"
+        ]
+      }
+    },
+    {
+      "name": "opensearch",
+      "url": "https://opensearch-project.github.io/helm-charts",
+      "description": "OpenSearch and OpenSearch Dashboards",
+      "category": "Databases",
+      "chartTags": {
+        "opensearch": [
+          "search",
+          "elasticsearch"
+        ],
+        "opensearch-dashboards": [
+          "kibana",
+          "dashboards"
+        ]
+      }
+    },
+    {
+      "name": "elastic",
+      "url": "https://helm.elastic.co",
+      "description": "Elastic — Elasticsearch, Kibana, Logstash, Beats, ECK operator",
+      "category": "Databases",
+      "chartTags": {
+        "elasticsearch": [
+          "search"
+        ],
+        "eck-operator": [
+          "elasticsearch",
+          "operator"
+        ]
+      }
+    },
+    {
+      "name": "bitnami-databases",
+      "url": "oci://registry-1.docker.io/bitnamicharts",
+      "description": "Bitnami databases — PostgreSQL, MySQL, MariaDB, MongoDB, Redis, Valkey, Cassandra, ClickHouse and more. Bitnami's free community images are published as :latest only — fine for development, not for pinned production use.",
+      "category": "Databases",
+      "charts": [
+        "postgresql",
+        "postgresql-ha",
+        "mysql",
+        "mariadb",
+        "mongodb",
+        "mongodb-sharded",
+        "redis",
+        "redis-cluster",
+        "valkey",
+        "cassandra",
+        "clickhouse",
+        "influxdb",
+        "neo4j",
+        "memcached",
+        "etcd",
+        "elasticsearch",
+        "opensearch"
+      ],
+      "chartTags": {
+        "valkey": [
+          "redis",
+          "cache"
+        ],
+        "redis": [
+          "cache"
+        ],
+        "redis-cluster": [
+          "cache"
+        ],
+        "mariadb": [
+          "mysql"
+        ],
+        "postgresql-ha": [
+          "postgres"
+        ],
+        "memcached": [
+          "cache"
+        ],
+        "mongodb": [
+          "nosql"
+        ],
+        "opensearch": [
+          "search"
+        ],
+        "elasticsearch": [
+          "search"
+        ]
+      }
+    },
+    {
+      "name": "strimzi",
+      "url": "https://strimzi.io/charts",
+      "description": "Strimzi — Apache Kafka on Kubernetes",
+      "category": "Messaging"
+    },
+    {
+      "name": "redpanda",
+      "url": "https://charts.redpanda.com",
+      "description": "Redpanda — Kafka-compatible streaming platform",
+      "category": "Messaging",
+      "chartTags": {
+        "redpanda": [
+          "kafka",
+          "streaming"
+        ],
+        "operator": [
+          "kafka",
+          "redpanda"
+        ],
+        "console": [
+          "kafka",
+          "redpanda"
+        ],
+        "connectors": [
+          "kafka"
+        ]
+      }
+    },
+    {
+      "name": "nats",
+      "url": "https://nats-io.github.io/k8s/helm/charts",
+      "description": "NATS messaging",
+      "category": "Messaging",
+      "chartTags": {
+        "nats": [
+          "messaging",
+          "queue",
+          "streaming"
+        ]
+      }
+    },
+    {
+      "name": "kafka-ui",
+      "url": "https://provectus.github.io/kafka-ui-charts",
+      "description": "Kafka UI — web UI for Kafka clusters",
+      "category": "Messaging"
+    },
+    {
+      "name": "emqx",
+      "url": "https://repos.emqx.io/charts",
+      "description": "EMQX — MQTT broker for IoT",
+      "category": "Messaging",
+      "chartTags": {
+        "emqx": [
+          "mqtt",
+          "iot"
+        ],
+        "emqx-operator": [
+          "mqtt",
+          "iot"
+        ]
+      }
+    },
+    {
+      "name": "bitnami-messaging",
+      "url": "oci://registry-1.docker.io/bitnamicharts",
+      "description": "Bitnami messaging — Kafka, RabbitMQ, NATS, Schema Registry, ZooKeeper. Bitnami's free community images are published as :latest only — fine for development, not for pinned production use.",
+      "category": "Messaging",
+      "charts": [
+        "kafka",
+        "rabbitmq",
+        "nats",
+        "schema-registry",
+        "zookeeper"
+      ],
+      "chartTags": {
+        "kafka": [
+          "streaming"
+        ],
+        "rabbitmq": [
+          "amqp",
+          "queue",
+          "messaging"
+        ],
+        "nats": [
+          "queue"
+        ],
+        "schema-registry": [
+          "kafka"
+        ],
+        "zookeeper": [
+          "kafka"
+        ]
+      }
+    },
+    {
+      "name": "ingress-nginx",
+      "url": "https://kubernetes.github.io/ingress-nginx",
+      "description": "NGINX Ingress Controller",
+      "category": "Networking",
+      "chartTags": {
+        "ingress-nginx": [
+          "ingress",
+          "controller"
+        ]
+      }
+    },
+    {
+      "name": "traefik",
+      "url": "https://traefik.github.io/charts",
+      "description": "Traefik proxy and ingress controller",
+      "category": "Networking",
+      "chartTags": {
+        "traefik": [
+          "ingress",
+          "proxy",
+          "gateway"
+        ]
+      }
+    },
+    {
+      "name": "metallb",
+      "url": "https://metallb.github.io/metallb",
+      "description": "MetalLB — load balancer for bare-metal clusters",
+      "category": "Networking",
+      "chartTags": {
+        "metallb": [
+          "loadbalancer"
+        ]
+      }
+    },
+    {
+      "name": "cilium",
+      "url": "https://helm.cilium.io",
+      "description": "Cilium — eBPF networking, security and observability",
+      "category": "Networking",
+      "chartTags": {
+        "cilium": [
+          "cni",
+          "ebpf",
+          "network"
+        ]
+      }
+    },
+    {
+      "name": "istio",
+      "url": "https://istio-release.storage.googleapis.com/charts",
+      "description": "Istio service mesh",
+      "category": "Networking",
+      "chartTags": {
+        "istiod": [
+          "mesh",
+          "servicemesh"
+        ],
+        "gateway": [
+          "ingress"
+        ],
+        "base": [
+          "mesh"
+        ]
+      }
+    },
+    {
+      "name": "envoy-gateway",
+      "url": "oci://registry-1.docker.io/envoyproxy",
+      "description": "Envoy Gateway — Gateway API implementation",
+      "category": "Networking",
+      "charts": [
+        "gateway-helm"
+      ],
+      "chartTags": {
+        "gateway-helm": [
+          "envoy",
+          "ingress",
+          "gateway-api"
+        ]
+      }
     },
     {
       "name": "jetstack",
       "url": "https://charts.jetstack.io",
-      "description": "cert-manager — automatic TLS certificates"
+      "description": "cert-manager — automatic TLS certificates",
+      "category": "Security",
+      "chartTags": {
+        "cert-manager": [
+          "tls",
+          "certificates",
+          "letsencrypt",
+          "acme"
+        ]
+      }
+    },
+    {
+      "name": "external-secrets",
+      "url": "https://charts.external-secrets.io",
+      "description": "External Secrets Operator — secrets from Vault, AWS, GCP...",
+      "category": "Security",
+      "chartTags": {
+        "external-secrets": [
+          "vault",
+          "secrets"
+        ]
+      }
+    },
+    {
+      "name": "kyverno",
+      "url": "https://kyverno.github.io/kyverno",
+      "description": "Kyverno — policy engine",
+      "category": "Security",
+      "chartTags": {
+        "kyverno": [
+          "policy",
+          "admission"
+        ]
+      }
+    },
+    {
+      "name": "oauth2-proxy",
+      "url": "https://oauth2-proxy.github.io/manifests",
+      "description": "OAuth2 Proxy — authentication in front of apps",
+      "category": "Security",
+      "chartTags": {
+        "oauth2-proxy": [
+          "oidc",
+          "auth"
+        ]
+      }
+    },
+    {
+      "name": "keycloak",
+      "url": "https://codecentric.github.io/helm-charts",
+      "description": "Keycloak (codecentric) — identity and access management",
+      "category": "Security",
+      "chartTags": {
+        "keycloakx": [
+          "sso",
+          "oidc",
+          "identity"
+        ],
+        "keycloak": [
+          "sso",
+          "oidc",
+          "identity"
+        ]
+      }
+    },
+    {
+      "name": "authentik",
+      "url": "https://charts.goauthentik.io",
+      "description": "authentik — identity provider",
+      "category": "Security",
+      "chartTags": {
+        "authentik": [
+          "sso",
+          "oidc",
+          "identity"
+        ]
+      }
     },
     {
       "name": "prometheus-community",
       "url": "https://prometheus-community.github.io/helm-charts",
-      "description": "Prometheus, Alertmanager, exporters"
+      "description": "Prometheus, Alertmanager, exporters, kube-prometheus-stack",
+      "category": "Observability",
+      "chartTags": {
+        "kube-prometheus-stack": [
+          "monitoring",
+          "grafana",
+          "alertmanager"
+        ],
+        "prometheus": [
+          "monitoring",
+          "metrics"
+        ]
+      }
     },
     {
       "name": "grafana",
       "url": "https://grafana.github.io/helm-charts",
-      "description": "Grafana, Loki, Tempo"
+      "description": "Grafana, Loki, Tempo, Mimir",
+      "category": "Observability",
+      "chartTags": {
+        "grafana": [
+          "dashboards"
+        ],
+        "loki": [
+          "logs"
+        ],
+        "loki-stack": [
+          "logs"
+        ],
+        "tempo": [
+          "tracing"
+        ],
+        "mimir-distributed": [
+          "metrics"
+        ]
+      }
     },
     {
-      "name": "cloudnative-pg",
-      "url": "https://cloudnative-pg.github.io/charts",
-      "description": "CloudNativePG — a PostgreSQL operator"
+      "name": "victoriametrics",
+      "url": "https://victoriametrics.github.io/helm-charts",
+      "description": "VictoriaMetrics — metrics and logs",
+      "category": "Observability",
+      "chartTags": {
+        "victoria-metrics-single": [
+          "metrics",
+          "monitoring"
+        ],
+        "victoria-metrics-cluster": [
+          "metrics",
+          "monitoring"
+        ],
+        "victoria-metrics-k8s-stack": [
+          "monitoring"
+        ]
+      }
+    },
+    {
+      "name": "metrics-server",
+      "url": "https://kubernetes-sigs.github.io/metrics-server",
+      "description": "Resource metrics for kubectl top and Vinaire's CPU/memory gauges",
+      "category": "Observability",
+      "chartTags": {
+        "metrics-server": [
+          "hpa",
+          "top"
+        ]
+      }
+    },
+    {
+      "name": "minio",
+      "url": "https://charts.min.io",
+      "description": "MinIO — S3-compatible object storage",
+      "category": "Storage",
+      "chartTags": {
+        "minio": [
+          "s3",
+          "object-storage"
+        ],
+        "operator": [
+          "s3",
+          "object-storage"
+        ]
+      }
+    },
+    {
+      "name": "longhorn",
+      "url": "https://charts.longhorn.io",
+      "description": "Longhorn — distributed block storage",
+      "category": "Storage",
+      "chartTags": {
+        "longhorn": [
+          "storage",
+          "pvc",
+          "volumes"
+        ]
+      }
+    },
+    {
+      "name": "velero",
+      "url": "https://vmware-tanzu.github.io/helm-charts",
+      "description": "Velero — cluster backup and restore",
+      "category": "Storage",
+      "chartTags": {
+        "velero": [
+          "backup",
+          "restore"
+        ]
+      }
+    },
+    {
+      "name": "argo",
+      "url": "https://argoproj.github.io/argo-helm",
+      "description": "Argo CD, Workflows, Rollouts, Events",
+      "category": "CI/CD",
+      "chartTags": {
+        "argo-cd": [
+          "gitops",
+          "cd"
+        ],
+        "argo-workflows": [
+          "workflows"
+        ],
+        "argo-rollouts": [
+          "canary",
+          "deployment"
+        ],
+        "argo-events": [
+          "events"
+        ]
+      }
+    },
+    {
+      "name": "flux-operator",
+      "url": "oci://ghcr.io/controlplaneio-fluxcd/charts",
+      "description": "Flux Operator — GitOps with Flux",
+      "category": "CI/CD",
+      "charts": [
+        "flux-operator"
+      ],
+      "chartTags": {
+        "flux-operator": [
+          "gitops",
+          "flux"
+        ]
+      }
+    },
+    {
+      "name": "jenkins",
+      "url": "https://charts.jenkins.io",
+      "description": "Jenkins",
+      "category": "CI/CD",
+      "chartTags": {
+        "jenkins": [
+          "ci",
+          "pipelines"
+        ]
+      }
+    },
+    {
+      "name": "gitea",
+      "url": "https://dl.gitea.com/charts",
+      "description": "Gitea — self-hosted Git",
+      "category": "CI/CD",
+      "chartTags": {
+        "gitea": [
+          "git",
+          "scm"
+        ]
+      }
+    },
+    {
+      "name": "gitlab",
+      "url": "https://charts.gitlab.io",
+      "description": "GitLab and GitLab Runner",
+      "category": "CI/CD",
+      "chartTags": {
+        "gitlab": [
+          "git",
+          "ci"
+        ],
+        "gitlab-runner": [
+          "ci"
+        ]
+      }
+    },
+    {
+      "name": "harbor",
+      "url": "https://helm.goharbor.io",
+      "description": "Harbor — container registry",
+      "category": "CI/CD",
+      "chartTags": {
+        "harbor": [
+          "registry",
+          "images"
+        ]
+      }
+    },
+    {
+      "name": "keda",
+      "url": "https://kedacore.github.io/charts",
+      "description": "KEDA — event-driven autoscaling",
+      "category": "Platform",
+      "chartTags": {
+        "keda": [
+          "autoscaling",
+          "hpa"
+        ]
+      }
+    },
+    {
+      "name": "descheduler",
+      "url": "https://kubernetes-sigs.github.io/descheduler",
+      "description": "Descheduler — rebalances pods across nodes",
+      "category": "Platform"
+    },
+    {
+      "name": "crossplane",
+      "url": "https://charts.crossplane.io/stable",
+      "description": "Crossplane — cloud infrastructure from Kubernetes",
+      "category": "Platform",
+      "chartTags": {
+        "crossplane": [
+          "infrastructure",
+          "cloud"
+        ]
+      }
+    },
+    {
+      "name": "nextcloud",
+      "url": "https://nextcloud.github.io/helm",
+      "description": "Nextcloud — files and collaboration",
+      "category": "Apps",
+      "chartTags": {
+        "nextcloud": [
+          "files",
+          "storage"
+        ]
+      }
+    },
+    {
+      "name": "metabase",
+      "url": "https://pmint93.github.io/helm-charts",
+      "description": "Metabase — business intelligence",
+      "category": "Apps",
+      "chartTags": {
+        "metabase": [
+          "bi",
+          "analytics"
+        ]
+      }
+    },
+    {
+      "name": "superset",
+      "url": "https://apache.github.io/superset",
+      "description": "Apache Superset — data exploration",
+      "category": "Apps",
+      "chartTags": {
+        "superset": [
+          "bi",
+          "analytics",
+          "dashboards"
+        ]
+      }
+    },
+    {
+      "name": "airflow",
+      "url": "https://airflow.apache.org",
+      "description": "Apache Airflow — workflow orchestration",
+      "category": "Apps",
+      "chartTags": {
+        "airflow": [
+          "etl",
+          "workflows"
+        ]
+      }
+    },
+    {
+      "name": "bitnami-apps",
+      "url": "oci://registry-1.docker.io/bitnamicharts",
+      "description": "Bitnami apps — NGINX, WordPress, Keycloak, Airflow, Spark, Flink, Solr. Bitnami's free community images are published as :latest only — fine for development, not for pinned production use.",
+      "category": "Apps",
+      "charts": [
+        "nginx",
+        "apache",
+        "wordpress",
+        "keycloak",
+        "airflow",
+        "spark",
+        "flink",
+        "solr",
+        "tomcat"
+      ],
+      "chartTags": {
+        "wordpress": [
+          "cms",
+          "blog"
+        ],
+        "nginx": [
+          "web",
+          "server"
+        ],
+        "apache": [
+          "web",
+          "server"
+        ],
+        "airflow": [
+          "etl",
+          "workflows"
+        ],
+        "spark": [
+          "data",
+          "etl"
+        ],
+        "flink": [
+          "streaming",
+          "data"
+        ],
+        "keycloak": [
+          "sso",
+          "oidc"
+        ],
+        "solr": [
+          "search"
+        ],
+        "tomcat": [
+          "java",
+          "web"
+        ]
+      }
+    },
+    {
+      "name": "opentelemetry",
+      "url": "https://open-telemetry.github.io/opentelemetry-helm-charts",
+      "description": "OpenTelemetry collector and operator",
+      "category": "Observability",
+      "chartTags": {
+        "opentelemetry-collector": [
+          "otel",
+          "tracing"
+        ],
+        "opentelemetry-operator": [
+          "otel"
+        ]
+      }
     }
   ]
 }

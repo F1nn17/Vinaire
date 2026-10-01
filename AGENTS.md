@@ -106,6 +106,13 @@ flow.
   follows a redirect out of https, and caps index (48 MiB) and chart (32 MiB)
   sizes; a chart is used only if its download matches the **sha256 in the
   repository index** (no digest, no install); library charts are refused;
+  an `oci://` source (a container registry) is bound by the same rules — TLS
+  only, **anonymous only**, the chart layer's size is checked from the manifest
+  before a byte of it is downloaded and `oras-go` verifies the bytes against
+  the manifest's sha256 — and it is read with `oras-go` directly, **not with
+  Helm's registry client**, because that one falls back to the Docker
+  credentials of the machine Vinaire runs on; an OCI source must list its
+  charts explicitly (the catalog never enumerates a registry);
   uninstall needs `{"confirmName": ...}` repeating the release name; upgrade
   refuses to swap in a different chart; every action is audited as
   `helm-install`/`helm-upgrade`/`helm-rollback`/`helm-uninstall` (and `-failed`,

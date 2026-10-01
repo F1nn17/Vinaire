@@ -4,7 +4,14 @@ import { apiFetch } from "./http";
 // read-only; install/upgrade/rollback/uninstall run as the signed-in user's own
 // Kubernetes identity on the backend, so the cluster's RBAC decides.
 
-export type CatalogRepo = { name: string; url: string; description?: string };
+export type CatalogRepo = {
+  name: string;
+  url: string;
+  description?: string;
+  category?: string;
+  // an OCI registry rather than a classic Helm repository
+  oci?: boolean;
+};
 
 export type ChartSummary = {
   repo: string;
@@ -14,10 +21,15 @@ export type ChartSummary = {
   description?: string;
   keywords?: string[];
   deprecated?: boolean;
+  category?: string;
 };
 
 export type CatalogSearch = {
   charts: ChartSummary[];
+  // matches before the list was cut
+  total: number;
+  // repositories still loading their index; a later search will include them
+  pending?: string[];
   // repositories that couldn't be reached — one broken repo doesn't blank the page
   errors?: Record<string, string>;
 };
@@ -62,10 +74,12 @@ export function getCatalogRepos(): Promise<{ repos: CatalogRepo[] }> {
 export function searchCatalog(
   search: string,
   repo: string,
+  category = "",
 ): Promise<CatalogSearch> {
   const p = new URLSearchParams();
   if (search) p.set("search", search);
   if (repo) p.set("repo", repo);
+  if (category) p.set("category", category);
   return apiFetch(`/api/v1/catalog/charts?${p.toString()}`);
 }
 

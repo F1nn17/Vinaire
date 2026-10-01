@@ -57,8 +57,14 @@ function CatalogTab() {
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [repo, setRepo] = useState("");
+  const [category, setCategory] = useState("");
   const { data: repos } = useCatalogRepos();
-  const { data, error, isLoading } = useCatalogSearch(search, repo);
+  const { data, error, isLoading } = useCatalogSearch(search, repo, category);
+  const categories = Array.from(
+    new Set(
+      repos?.repos.map((r) => r.category).filter((c): c is string => !!c),
+    ),
+  );
 
   // Debounce typing so each keystroke isn't a request.
   useEffect(() => {
@@ -88,13 +94,47 @@ function CatalogTab() {
           className={inputClass}
         >
           <option value="">All repositories</option>
-          {repos?.repos.map((r) => (
-            <option key={r.name} value={r.name}>
-              {r.name}
-            </option>
-          ))}
+          {repos?.repos
+            .filter((r) => !category || r.category === category)
+            .map((r) => (
+              <option key={r.name} value={r.name}>
+                {r.name}
+                {r.oci ? " (OCI)" : ""}
+              </option>
+            ))}
         </select>
       </div>
+
+      {categories.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {["", ...categories].map((c) => (
+            <button
+              key={c || "all"}
+              type="button"
+              onClick={() => {
+                setCategory(c);
+                setRepo("");
+              }}
+              className={`rounded-full border px-3 py-1 text-[12px] ${
+                category === c
+                  ? "border-accent bg-surface-2 text-accent-text"
+                  : "border-border text-text-muted hover:border-accent"
+              }`}
+            >
+              {c || "All"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {data?.pending && data.pending.length > 0 && (
+        <div className="rounded-lg border border-border bg-surface-2 p-3 text-xs text-text-muted">
+          Still loading {data.pending.length} repositor
+          {data.pending.length === 1 ? "y" : "ies"} (
+          <span className="font-mono">{data.pending.join(", ")}</span>) — the
+          list updates by itself.
+        </div>
+      )}
 
       {data?.errors && Object.keys(data.errors).length > 0 && (
         <div className="rounded-lg border border-warn/30 bg-surface-2 p-3 text-xs text-warn">
@@ -122,34 +162,44 @@ function CatalogTab() {
             `Repositories: ${repos.repos.map((r) => r.name).join(", ")}.`}
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3.5">
-          {data?.charts.map((c) => (
-            <Link
-              key={`${c.repo}/${c.name}`}
-              href={`/marketplace/install?repo=${encodeURIComponent(c.repo)}&chart=${encodeURIComponent(c.name)}`}
-              className="flex flex-col gap-2 rounded-[10px] border border-border bg-surface p-4 hover:border-accent"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="truncate font-mono text-[13px] font-semibold">
-                  {c.name}
-                </span>
-                <span className="shrink-0 font-mono text-[11px] text-text-muted">
-                  {c.version}
-                </span>
-              </div>
-              <div className="line-clamp-3 min-h-[3.2em] text-xs text-text-muted">
-                {c.description || "No description."}
-              </div>
-              <div className="mt-auto flex items-center justify-between text-[11px] text-text-faint">
-                <span>{c.repo}</span>
-                {c.deprecated && <span className="text-warn">deprecated</span>}
-                {!c.deprecated && c.appVersion && (
-                  <span>app {c.appVersion}</span>
-                )}
-              </div>
-            </Link>
-          ))}
-        </div>
+        <>
+          {data && data.total > data.charts.length && (
+            <div className="text-xs text-text-faint">
+              Showing the {data.charts.length} best of {data.total} — narrow it
+              down with a search, a category or a repository.
+            </div>
+          )}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3.5">
+            {data?.charts.map((c) => (
+              <Link
+                key={`${c.repo}/${c.name}`}
+                href={`/marketplace/install?repo=${encodeURIComponent(c.repo)}&chart=${encodeURIComponent(c.name)}`}
+                className="flex flex-col gap-2 rounded-[10px] border border-border bg-surface p-4 hover:border-accent"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="truncate font-mono text-[13px] font-semibold">
+                    {c.name}
+                  </span>
+                  <span className="shrink-0 font-mono text-[11px] text-text-muted">
+                    {c.version}
+                  </span>
+                </div>
+                <div className="line-clamp-3 min-h-[3.2em] text-xs text-text-muted">
+                  {c.description || "No description."}
+                </div>
+                <div className="mt-auto flex items-center justify-between text-[11px] text-text-faint">
+                  <span>{c.repo}</span>
+                  {c.deprecated && (
+                    <span className="text-warn">deprecated</span>
+                  )}
+                  {!c.deprecated && c.appVersion && (
+                    <span>app {c.appVersion}</span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </>
       )}
     </>
   );

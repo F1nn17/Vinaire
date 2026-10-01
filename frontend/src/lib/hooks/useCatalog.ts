@@ -16,11 +16,21 @@ export function useCatalogRepos() {
   });
 }
 
-export function useCatalogSearch(search: string, repo: string) {
+export function useCatalogSearch(
+  search: string,
+  repo: string,
+  category: string,
+) {
   return useSWR(
-    ["catalog-search", search, repo],
-    () => searchCatalog(search, repo),
-    { revalidateOnFocus: false, keepPreviousData: true },
+    ["catalog-search", search, repo, category],
+    () => searchCatalog(search, repo, category),
+    {
+      revalidateOnFocus: false,
+      keepPreviousData: true,
+      // a repository still loading its index finishes in the background: look
+      // again shortly instead of leaving the user with a partial list
+      refreshInterval: (data) => (data?.pending?.length ? 4000 : 0),
+    },
   );
 }
 

@@ -2301,9 +2301,19 @@ ResourceQuota set through the UI actually blocks exceeding the limit.
 > releases installed elsewhere the Upgrade dialog asks. **(6) Deviations:** no
 > schema-driven form (`react-jsonschema-form` was optional) — the YAML editor sits
 > beside the read-only defaults and Helm validates against `values.schema.json` on
-> install; the default repository list leaves out Bitnami (its images moved off
-> Docker Hub in 2025, so its charts mostly don't start); OCI repositories aren't
-> supported yet. **Verified** against the real dev cluster and real repositories:
+> install; the first default list was only six repositories — **widened afterwards
+> to about fifty sources by category** (see CHANGELOG), because a catalog without
+> PostgreSQL or Kafka is not much of a catalog; **OCI registries are supported**
+> (anonymous, TLS-only, size checked from the manifest, content verified by digest,
+> read through `oras-go` rather than Helm's registry client, which would use the
+> host's Docker credentials) and bring Bitnami's PostgreSQL/MySQL/Redis/Kafka/
+> RabbitMQ — Bitnami's old HTTP repository is closed (403 via Broadcom), but its OCI
+> charts are alive and point at `bitnami/*:latest` images that exist; `:latest` is
+> the only tag Bitnami's free images have, which the catalog says openly. An OCI
+> install was verified end to end (Bitnami memcached: pod running, then uninstalled).
+> Hashicorp's repository answered 403 from this network (a CloudFront region block)
+> and was left out; Artifact Hub as a search source was **deliberately not** added (it
+> would let a third party's listing choose what Vinaire installs). **Verified** against the real dev cluster and real repositories:
 > pushgateway installed on a chosen node (`helm list` shows it, the pod runs on that
 > node, the nodeSelector is on the Deployment); a duplicate name returned 409; a
 > chart without a top-level nodeSelector plus a node returned 400; an unknown
