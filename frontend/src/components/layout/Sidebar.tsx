@@ -16,6 +16,7 @@ import {
   SettingsIcon,
   ShieldIcon,
   StorageIcon,
+  StoreIcon,
   TopologyIcon,
 } from "@/components/icons";
 
@@ -75,6 +76,17 @@ const groups: NavGroup[] = [
         label: "Deployments & pods",
         icon: <LayersIcon />,
         isActive: (p) => p.startsWith("/workloads"),
+      },
+    ],
+  },
+  {
+    label: "Apps",
+    items: [
+      {
+        href: "/marketplace",
+        label: "Marketplace",
+        icon: <StoreIcon />,
+        isActive: (p) => p.startsWith("/marketplace"),
       },
     ],
   },

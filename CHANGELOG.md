@@ -624,6 +624,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   uninstall script), gated behind re-entering the SSH login, a fresh host-key
   confirmation and typing the server's address. Settings -> Справка documents it.
 
+- A Helm application catalog — the Marketplace (Roadmap Phase 28). Browse charts
+  from a fixed list of repositories (ingress-nginx, metrics-server, cert-manager,
+  Prometheus, Grafana, CloudNativePG by default; `catalog.json`, or `CATALOG_CONFIG`
+  to replace it), read a chart's README and default values, and install it from the
+  UI: release name, namespace (created if it doesn't exist), chart version, your
+  own values in the YAML editor next to the read-only defaults, and — for charts
+  with a top-level `nodeSelector` value — a node to run on. An Installed tab lists
+  Helm releases with Upgrade (values pre-filled from the release), Rollback to an
+  earlier revision, and Uninstall (type the release name to confirm). It all runs
+  through the Helm SDK as the signed-in user's own Kubernetes identity, so the
+  cluster's RBAC decides what a chart may create. A chart is only used if its
+  download matches the digest in the repository index; the catalog's HTTP client
+  can't reach loopback or cloud-metadata addresses; a request can never name a
+  repository. Every action is audited without the values. A chart that needs CRDs
+  that aren't installed yet fails with an explicit hint rather than a generic error.
+
 ### Changed
 
 - Replaced the draft `ROADMAP.md` with a detailed, phase-by-phase technical

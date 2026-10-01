@@ -13,11 +13,13 @@ const tabs: { id: SettingsTab; label: string }[] = [
   { id: "help", label: "Справка" },
 ];
 
-type HelpSection = "cluster" | "node" | "crds" | "keycloak" | "observability";
+type HelpSection =
+  "cluster" | "node" | "marketplace" | "crds" | "keycloak" | "observability";
 
 const helpSections: { id: HelpSection; label: string }[] = [
   { id: "cluster", label: "Подключение кластера" },
   { id: "node", label: "Добавление ноды" },
+  { id: "marketplace", label: "Marketplace (Helm)" },
   { id: "crds", label: "Кастомные ресурсы" },
   { id: "keycloak", label: "Вход по логину и паролю" },
   { id: "observability", label: "Метрики, логи, алерты" },
@@ -158,6 +160,7 @@ export default function SettingsPage() {
           <div className="min-w-0 flex-1 rounded-[10px] border border-border bg-surface p-5 text-sm">
             {helpSection === "cluster" && <ClusterHelp />}
             {helpSection === "node" && <NodeHelp />}
+            {helpSection === "marketplace" && <MarketplaceHelp />}
             {helpSection === "crds" && <CustomResourcesHelp />}
             {helpSection === "keycloak" && <KeycloakHelp />}
             {helpSection === "observability" && <ObservabilityHelp />}
@@ -825,6 +828,102 @@ kubectl delete node <имя-ноды>
 # на самом сервере:
 /usr/local/bin/k3s-agent-uninstall.sh`}
         </Code>
+      </div>
+    </div>
+  );
+}
+
+function MarketplaceHelp() {
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <div className="mb-1 text-[13px] font-semibold">
+          Что такое Marketplace
+        </div>
+        <div className="text-xs text-text-muted">
+          Каталог готовых приложений для кластера — Helm-чартов. Вместо ручного{" "}
+          <span className="font-mono">helm install</span> вы выбираете чарт, имя
+          релиза, namespace и значения, а Vinaire ставит его сама. Для свежего
+          kubeadm-кластера здесь удобно ставить то, чего в нём нет:
+          Ingress-контроллер (ingress-nginx), metrics-server для графиков
+          CPU/памяти, cert-manager для TLS.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">Как установить</div>
+        <ol className="mt-1 list-decimal pl-5 text-xs text-text-muted">
+          <li>
+            Вкладка «Catalog»: найдите чарт и откройте его. Видны README и все
+            значения по умолчанию (вкладка «Chart defaults»).
+          </li>
+          <li>
+            Укажите имя релиза и namespace (если такого namespace нет, он будет
+            создан). В «Your values» пишите только то, что хотите изменить, —
+            остальное останется по умолчанию.
+          </li>
+          <li>
+            Если у чарта есть верхнеуровневое значение{" "}
+            <span className="font-mono">nodeSelector</span>, появится выбор
+            ноды, на которой запустить приложение. У чартов с другой раскладкой
+            значений (например,{" "}
+            <span className="font-mono">controller.nodeSelector</span>) Vinaire
+            не гадает: впишите нужное значение сами.
+          </li>
+        </ol>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Установленные релизы: Upgrade, Rollback, Uninstall
+        </div>
+        <div className="mt-1 text-text-muted">
+          Вкладка «Installed» показывает Helm-релизы, которые вы можете видеть.
+          Upgrade открывает редактор с текущими значениями релиза (они{" "}
+          <span className="font-semibold">заменяют</span> прежние, ничего не
+          сливается незаметно) и выбор версии чарта. Rollback возвращает релиз к
+          более ранней ревизии — как новую ревизию, история не стирается.
+          Uninstall удаляет релиз и всё, что создал чарт, и просит ввести имя
+          релиза: данные в созданных чартом томах могут пропасть.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Права и безопасность
+        </div>
+        <div className="mt-1 text-text-muted">
+          Установка идёт от вашего имени, не от имени Vinaire: что чарт может
+          создать, решает RBAC вашего токена. Helm хранит каждый релиз как
+          Secret (<span className="font-mono">helm.sh/release.v1</span>) в
+          namespace релиза, поэтому нужны права на Secrets, плюс права на всё,
+          что создаёт сам чарт (Deployment, Service, ClusterRole, CRD…). Пример
+          блока для ClusterRole — в справке «Подключение кластера».
+        </div>
+        <div className="mt-2 text-text-muted">
+          Список репозиториев задаётся только конфигурацией бэкенда (
+          <span className="font-mono">catalog.json</span> или файл из{" "}
+          <span className="font-mono">CATALOG_CONFIG</span>) — из интерфейса
+          добавить произвольный адрес нельзя. Чарт используется, только если его
+          скачанный архив совпал с контрольной суммой из индекса репозитория.
+          Каждое действие пишется в аудит (без значений — в них бывают пароли).
+          Поду Vinaire нужен исходящий доступ к адресам репозиториев.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Если установка не прошла
+        </div>
+        <div className="mt-1 text-text-muted">
+          «No matches for kind …» / «ensure CRDs are installed first» — чарту
+          нужны CRD, которых в кластере ещё нет. Сначала поставьте их (у многих
+          чартов есть отдельный CRD-чарт или значение вроде{" "}
+          <span className="font-mono">installCRDs=true</span>) и повторите.
+          «Forbidden» — у вашего токена не хватает прав; сообщение называет,
+          каких именно. Релиз со статусом «failed» остаётся в списке — его можно
+          откатить или удалить.
+        </div>
       </div>
     </div>
   );

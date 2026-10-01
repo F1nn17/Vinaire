@@ -2276,7 +2276,45 @@ ResourceQuota set through the UI actually blocks exceeding the limit.
 
 ---
 
-## Phase 28 — Helm application catalog (App Marketplace)
+## Phase 28 — Helm application catalog (App Marketplace) ✅ done
+
+> **Outcome note:** Shipped: catalog search and chart pages (README, default
+> values), install, upgrade, rollback and uninstall through the Helm SDK
+> (`helm.sh/helm/v3` 3.22, which needs the same client-go 0.37 line the project
+> already used), a Marketplace section with Catalog and Installed tabs, and a
+> Settings help page. Decisions: **(1) Identity** — Helm gets the *caller's own*
+> `rest.Config`, never Vinaire's ServiceAccount, so a chart can't do more than the
+> user could; the ROADMAP's risk note about "Vinaire's own ServiceAccount needs
+> Secret rights" therefore became "the *caller* needs Secret rights in the target
+> namespace". **(2) Repositories only from configuration** (`catalog.json` /
+> `CATALOG_CONFIG`, https, no credentials): a request can't name a repository or
+> URL. The HTTP client refuses loopback/link-local/multicast on the connected
+> address, doesn't follow a redirect out of https, caps index/chart sizes, and a
+> chart is used only if its download matches the **sha256 in the index** (no
+> digest, no install). **(3) Audit** — `helm-install|upgrade|rollback|uninstall`
+> plus `-failed` (a failed install can leave objects), never the values;
+> reading a release's values (needed to pre-fill an upgrade) is audited as
+> `helm-reveal-values`. **(4) Node pinning** works only for charts with a
+> top-level `nodeSelector` value; any other layout gets an explicit error rather
+> than a guessed path. **(5) The release's source repository** is stored as a
+> release label (`vinaire.io/catalog-repo`), since Helm doesn't remember it; for
+> releases installed elsewhere the Upgrade dialog asks. **(6) Deviations:** no
+> schema-driven form (`react-jsonschema-form` was optional) — the YAML editor sits
+> beside the read-only defaults and Helm validates against `values.schema.json` on
+> install; the default repository list leaves out Bitnami (its images moved off
+> Docker Hub in 2025, so its charts mostly don't start); OCI repositories aren't
+> supported yet. **Verified** against the real dev cluster and real repositories:
+> pushgateway installed on a chosen node (`helm list` shows it, the pod runs on that
+> node, the nodeSelector is on the Deployment); a duplicate name returned 409; a
+> chart without a top-level nodeSelector plus a node returned 400; an unknown
+> repository 404; upgrade to an older version with new values changed replicas;
+> upgrading to a different chart was refused; rollback restored the old state;
+> uninstall without the typed name was refused and with it removed everything.
+> With a read-only ServiceAccount the cluster answered real 403s for list,
+> install and uninstalling Traefik, and Traefik was untouched. The audit lines
+> were all present and neither the token nor any values appeared in the log. Not
+> exercised live: a chart whose CRDs are missing (the hint is unit-tested), and
+> the browser UI itself (type-checked, linted and built, but not clicked through).
 
 **Goal:** install real Helm charts onto the cluster from a browsable
 catalog inside Vinaire, without touching a terminal.

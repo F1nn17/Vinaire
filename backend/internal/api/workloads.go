@@ -20,6 +20,7 @@ import (
 	"github.com/shiraku/vinaire/backend/internal/audit"
 	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/clusters"
+	"github.com/shiraku/vinaire/backend/internal/helm"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 	"github.com/shiraku/vinaire/backend/internal/provision"
 )
@@ -77,6 +78,11 @@ type Handler struct {
 	// HTTP (local development only — see requireSecureTransport).
 	Provisions             *provision.Registry
 	ProvisionAllowInsecure bool
+
+	// Roadmap Phase 28: the Helm application catalog and release operations.
+	// nil means "not configured" and the endpoints answer 503.
+	Catalog  *helm.Catalog
+	Releases *helm.Releases
 }
 
 // ObservabilityConfig groups the optional observability-stack URLs

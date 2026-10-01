@@ -89,6 +89,32 @@ flow.
   Where the registry lives: a Secret when Vinaire runs in-cluster, an encrypted
   file when `VINAIRE_DATA_DIR` is set, otherwise cluster management is
   unavailable (503) since there is nowhere to persist to.
+- Helm releases (Roadmap Phase 28) — `POST /api/v1/catalog/install`,
+  `POST /api/v1/catalog/releases/{namespace}/{name}/upgrade`,
+  `POST .../rollback` and `DELETE /api/v1/catalog/releases/{namespace}/{name}`,
+  all through the Helm SDK (`internal/helm`, `internal/api/catalog.go`), never
+  by shelling out to `helm`. A chart can create **any** kind of object, so this
+  is as broad as Phase 25's generic apply, and it is bounded the same way: Helm
+  is handed the **caller's own** `*rest.Config` (`resolveRESTConfig`), so the
+  cluster's RBAC decides what a chart may create — Vinaire's own ServiceAccount
+  is never used for it, and it must stay that way (otherwise anyone who can open
+  the Marketplace could install a ClusterRole with Vinaire's rights). Guard
+  rails: the repositories come only from `catalog.json` / `CATALOG_CONFIG`
+  (https, no credentials) — **a request can never name a repository or a chart
+  URL**; the catalog's HTTP client refuses loopback/link-local/multicast
+  addresses (checked on the connected address, so DNS can't redirect it), never
+  follows a redirect out of https, and caps index (48 MiB) and chart (32 MiB)
+  sizes; a chart is used only if its download matches the **sha256 in the
+  repository index** (no digest, no install); library charts are refused;
+  uninstall needs `{"confirmName": ...}` repeating the release name; upgrade
+  refuses to swap in a different chart; every action is audited as
+  `helm-install`/`helm-upgrade`/`helm-rollback`/`helm-uninstall` (and `-failed`,
+  since a failed install can leave objects behind) with repo/chart/version/
+  namespace/release — **never the values**, which can hold passwords. Reading a
+  release's values (`GET .../values`, needed to pre-fill an upgrade) is audited as
+  `helm-reveal-values`, the same way a Secret reveal is. The release list never
+  carries values or the manifest. Helm keeps a release as a Secret in its
+  namespace, so the caller needs Secret access there.
 - (Phase 24, unchanged:) cluster management via the web UI (Settings page): create/get/update on exactly
   one Secret (`vinaire-clusters`, in this backend's own namespace, via a
   dedicated narrow `Role`/`RoleBinding` — never the broad, cluster-wide
@@ -403,6 +429,16 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["delete"]
+  # Phase 28's Marketplace: Helm keeps each release as a Secret
+  # (type helm.sh/release.v1) in the release's namespace, so installing,
+  # upgrading, rolling back and uninstalling need these on Secrets — on top of
+  # whatever the chart itself creates (Deployments, Services, ClusterRoles,
+  # CRDs...), which is the caller's RBAC too. Listing releases needs the
+  # cluster-wide list on Secrets already granted above. Omit for a catalog that
+  # can browse but not install.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "update", "delete"]
   # Phase 27's namespace delete — irreversible and cascading; omit unless
   # this identity should be able to remove whole namespaces.
   - apiGroups: [""]

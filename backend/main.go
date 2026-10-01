@@ -25,6 +25,7 @@ import (
 	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/clusters"
 	"github.com/shiraku/vinaire/backend/internal/config"
+	"github.com/shiraku/vinaire/backend/internal/helm"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 	"github.com/shiraku/vinaire/backend/internal/provision"
 	"github.com/shiraku/vinaire/backend/internal/stream"
@@ -121,6 +122,19 @@ func main() {
 		}
 	}
 	workloadsHandler.ProvisionAllowInsecure = os.Getenv("PROVISION_ALLOW_INSECURE") == "true"
+
+	// Roadmap Phase 28: the Helm catalog. Its repositories come only from
+	// configuration (catalog.json built in, or CATALOG_CONFIG), never from a request.
+	catalogCfg := helm.DefaultConfig()
+	if path := os.Getenv("CATALOG_CONFIG"); path != "" {
+		if c, err := helm.LoadConfig(path); err != nil {
+			slog.Error("CATALOG_CONFIG is invalid — using the built-in catalog", "path", path, "error", err)
+		} else {
+			catalogCfg = c
+		}
+	}
+	workloadsHandler.Catalog = helm.NewCatalog(catalogCfg)
+	workloadsHandler.Releases = &helm.Releases{Catalog: workloadsHandler.Catalog}
 	provisionStream := stream.ServeProvision(workloadsHandler.Provisions, auth, cfg.CORSAllowedOrigins)
 
 	streamHandler := unavailableWSHandler
@@ -174,6 +188,14 @@ func main() {
 		protected.Get("/forms/{resourceType}", workloadsHandler.FormSchemaByType)
 		protected.Get("/namespaces", workloadsHandler.Namespaces)
 		protected.Get("/namespaces/{name}", workloadsHandler.NamespaceDetail)
+		// Roadmap Phase 28: browsing the Helm catalog and reading releases;
+		// the writes are in the writeLimiter group below.
+		protected.Get("/catalog/repos", workloadsHandler.CatalogRepos)
+		protected.Get("/catalog/charts", workloadsHandler.CatalogSearch)
+		protected.Get("/catalog/charts/{repo}/{chart}", workloadsHandler.CatalogChart)
+		protected.Get("/catalog/releases", workloadsHandler.CatalogReleases)
+		protected.Get("/catalog/releases/{namespace}/{name}/history", workloadsHandler.CatalogReleaseHistory)
+		protected.Get("/catalog/releases/{namespace}/{name}/values", workloadsHandler.CatalogReleaseValues)
 		protected.Get("/nodes/provision/defaults", workloadsHandler.ProvisionDefaults)
 		protected.Get("/provision/options", workloadsHandler.ProvisionOptionsHandler)
 		protected.Get("/nodes/provision/{id}", workloadsHandler.ProvisionStatus)
@@ -264,6 +286,11 @@ func main() {
 			// Roadmap Phase 25's generic YAML create/update (any kind the
 			// cluster serves; the caller's own RBAC decides) — see
 			// internal/k8s/apply.go and AGENTS.md.
+			// Roadmap Phase 28: Helm releases — see internal/api/catalog.go and AGENTS.md.
+			w.Post("/catalog/install", workloadsHandler.CatalogInstall)
+			w.Post("/catalog/releases/{namespace}/{name}/upgrade", workloadsHandler.CatalogUpgrade)
+			w.Post("/catalog/releases/{namespace}/{name}/rollback", workloadsHandler.CatalogRollback)
+			w.Delete("/catalog/releases/{namespace}/{name}", workloadsHandler.CatalogUninstall)
 			w.Post("/resources", workloadsHandler.CreateResource)
 			w.Put("/resources", workloadsHandler.UpdateResource)
 		})

@@ -456,3 +456,21 @@ export function ClustersIcon({ size = 16, className }: IconProps) {
     </svg>
   );
 }
+
+export function StoreIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <path d="M4 9l1.5-5h13L20 9" />
+      <path d="M4 9a2.7 2.7 0 005.3 0 2.7 2.7 0 005.4 0A2.7 2.7 0 0020 9" />
+      <path d="M5 12v8h14v-8" />
+      <path d="M10 20v-4.5h4V20" />
+    </svg>
+  );
+}
