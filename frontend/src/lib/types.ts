@@ -625,3 +625,31 @@ export type NamespaceDetail = {
   protected: boolean;
   yaml: string;
 };
+
+// Roadmap Phase 32 — matches the backend's api.ResourceMetricsResponse.
+// `available: false` = Prometheus couldn't be asked (reason says why);
+// `available: true, noData: true` = it answered with no samples. Neither is
+// a chart with points, and neither should render as an empty chart.
+export type MetricType = "cpu" | "memory" | "network" | "filesystem";
+export type MetricRange = "1h" | "6h" | "24h" | "7d";
+export type MetricResolution = "low" | "medium" | "high";
+export type MetricResourceType = "pods" | "deployments" | "nodes";
+
+export type MetricsSeries = {
+  name: string;
+  // [unix seconds, value]
+  points: [number, number][];
+};
+
+export type ResourceMetrics = {
+  available: boolean;
+  noData: boolean;
+  reason?: string;
+  type: MetricType;
+  unit: "cores" | "bytes" | "bytes/s";
+  range: MetricRange;
+  stepSeconds: number;
+  start: number;
+  end: number;
+  series: MetricsSeries[];
+};

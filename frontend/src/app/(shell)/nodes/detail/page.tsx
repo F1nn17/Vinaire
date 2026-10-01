@@ -8,14 +8,16 @@ import { friendlyErrorMessage } from "@/lib/api/errors";
 import type { NodeScheduledPodRow } from "@/lib/types";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
+import { MetricsPanel } from "@/components/metrics/MetricsPanel";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 
-type Tab = "overview" | "pods" | "yaml";
+type Tab = "overview" | "pods" | "metrics" | "yaml";
 
 const tabs: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "pods", label: "Pods" },
+  { key: "metrics", label: "Metrics" },
   { key: "yaml", label: "YAML" },
 ];
 
@@ -222,6 +224,10 @@ function NodeDetailPage() {
           }
           emptyLabel="No pods scheduled on this node."
         />
+      )}
+
+      {tab === "metrics" && (
+        <MetricsPanel resourceType="nodes" namespace="" name={name} />
       )}
 
       {tab === "yaml" && (

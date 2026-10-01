@@ -8,6 +8,7 @@ import { friendlyErrorMessage } from "@/lib/api/errors";
 import type { DeploymentPodRow } from "@/lib/types";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
+import { MetricsPanel } from "@/components/metrics/MetricsPanel";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -36,12 +37,13 @@ type PendingAction =
   | { kind: "delete" }
   | { kind: "rollback"; revision: number };
 
-type Tab = "overview" | "pods" | "revisions" | "yaml";
+type Tab = "overview" | "pods" | "revisions" | "metrics" | "yaml";
 
 const tabs: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "pods", label: "Pods" },
   { key: "revisions", label: "Revisions" },
+  { key: "metrics", label: "Metrics" },
   { key: "yaml", label: "YAML" },
 ];
 
@@ -330,6 +332,14 @@ function DeploymentDetailPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {tab === "metrics" && (
+        <MetricsPanel
+          resourceType="deployments"
+          namespace={deploymentNamespace}
+          name={deploymentName}
+        />
       )}
 
       {tab === "yaml" && (

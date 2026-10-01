@@ -786,11 +786,22 @@ kubectl rollout restart deployment/vinaire -n <namespace>`}
       <div>
         <div className="font-semibold text-foreground">Prometheus</div>
         <div className="mt-1 text-text-muted">
-          На сегодня в интерфейсе Vinaire нет собственного графика, построенного
-          на данных Prometheus — CPU/Memory на Overview и в Nodes берутся
-          напрямую из metrics-server, без Prometheus вообще. Подключение ниже
-          даёт бэкенду прокси-эндпоинт для сырых PromQL- запросов на будущее —
-          сейчас он ничего дополнительно не показывает в самом приложении.
+          Prometheus рисует вкладку Metrics на страницах Pod, Deployment и Node
+          — история CPU, памяти, сети и файловой системы со ступенчатым графиком
+          (диапазон 1 ч — 7 дней, живое обновление каждые 10 секунд). Текущие
+          значения на Overview и в Nodes по-прежнему берутся из metrics-server и
+          Prometheus не требуют. Vinaire сам составляет PromQL и ждёт обычные
+          метрики cAdvisor из kubelet (
+          <span className="font-mono">container_cpu_usage_seconds_total</span>,{" "}
+          <span className="font-mono">container_memory_working_set_bytes</span>,{" "}
+          <span className="font-mono">container_network_*_bytes_total</span>,{" "}
+          <span className="font-mono">container_fs_usage_bytes</span>) — их
+          отдаёт kube-prometheus-stack «из коробки». Для Node нужна метка{" "}
+          <span className="font-mono">node</span> на этих сериях (в
+          kube-prometheus-stack она есть). Если какой-то метрики нет (частый
+          случай — файловая система пода на containerd), вкладка честно пишет
+          «нет данных», а не рисует пустой график; без PROMETHEUS_URL — «метрики
+          недоступны».
         </div>
         <Code>
           {`kubectl set env deployment/vinaire -n <namespace> \\

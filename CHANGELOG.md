@@ -538,6 +538,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `delete-namespace`. New read endpoints `GET /api/v1/namespaces[/{name}]`;
   the Helm chart and AGENTS.md ClusterRole gained `namespaces`/
   `resourcequotas`/`limitranges` read and an explicit `namespaces` delete.
+- A Metrics tab on Pod, Deployment and Node detail (Roadmap Phase 32): a
+  step-line chart (recharts, `stepAfter`) of CPU / Memory / Network /
+  Filesystem history with a time-range (1h/6h/24h/7d) and resolution
+  (low/medium/high) selector, a hover tooltip with the exact time and value,
+  live polling every 10s as a sliding window, and a Pause/Resume that really
+  stops the polling. New read-only endpoints
+  `GET /api/v1/{pods|deployments}/{namespace}/{name}/metrics` and
+  `GET /api/v1/nodes/{name}/metrics` build the PromQL server-side (names are
+  validated before they go into a selector) over the existing
+  `PROMETHEUS_URL`; a Deployment matches its pods by the
+  `<name>-<hash>-<hash>` pattern so earlier rollouts stay in the history. An
+  unconfigured/unreachable Prometheus returns `available: false` with a
+  reason and a Prometheus that simply has no samples returns `noData: true` —
+  the UI shows an explicit message for each, never an empty chart. Settings'
+  Prometheus help was rewritten (it still said no chart used Prometheus).
 
 ### Changed
 

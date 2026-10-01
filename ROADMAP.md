@@ -2475,7 +2475,26 @@ through the plain YAML path.
 
 ---
 
-## Phase 32 — A Metrics tab (live charts, separate from Overview)
+## Phase 32 — A Metrics tab (live charts, separate from Overview) ✅ done
+
+> **Outcome note:** All four metric types shipped (Network/Filesystem were
+> allowed to be placeholders but cAdvisor has them). The generic
+> `/api/v1/metrics/query_range` proxy the spec says to "extend" already
+> existed from Phase 16, so the new work is only the purpose-built
+> per-resource endpoints, which respond with `available: false` (+reason) when
+> Prometheus can't be asked and `noData: true` when it answers with nothing.
+> Node queries rely on a `node` label on the cAdvisor series (present in
+> kube-prometheus-stack; documented in Settings). Verified against a real
+> Prometheus scraping k3d's kubelet cAdvisor (a throwaway local container, the
+> cluster itself untouched): 1h -> 6h redraws the chart with a different step
+> (24s -> 144s; resolution high gives 15s), hovering shows
+> "Date: …, cpu (cores): …", Pause produced 0 requests over 25s and Resume
+> brought polling back. The real cluster exposed exactly the case the spec
+> warns about — cAdvisor exports no `container_fs_usage_bytes` for pods on
+> containerd — and the tab shows "No filesystem data for this pod" instead of
+> an empty chart, while a Node's Filesystem shows one line per device. Testing
+> also caught that a series with a single point draws no line at all (a 24h
+> range over a few minutes of history), so small series now draw dots.
 
 **Goal:** a detailed, historical metrics view — added as an *additional*
 tab on Pod detail, Deployment detail, and Node detail (Phase 19), not a

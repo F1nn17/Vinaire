@@ -7,6 +7,7 @@ import { usePod } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
+import { MetricsPanel } from "@/components/metrics/MetricsPanel";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
 import { ActionBar, ActionButton } from "@/components/ui/ActionBar";
@@ -17,12 +18,13 @@ import { deletePod } from "@/lib/api/podActions";
 import { LogsTab } from "./LogsTab";
 import { TerminalTab } from "./TerminalTab";
 
-type Tab = "overview" | "logs" | "terminal" | "events" | "yaml";
+type Tab = "overview" | "logs" | "terminal" | "metrics" | "events" | "yaml";
 
 const tabs: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "logs", label: "Logs" },
   { key: "terminal", label: "Terminal" },
+  { key: "metrics", label: "Metrics" },
   { key: "events", label: "Events" },
   { key: "yaml", label: "YAML" },
 ];
@@ -215,6 +217,14 @@ function PodDetailPage() {
             <EventRow key={i} {...e} />
           ))}
         </div>
+      )}
+
+      {tab === "metrics" && (
+        <MetricsPanel
+          resourceType="pods"
+          namespace={podNamespace}
+          name={podName}
+        />
       )}
 
       {tab === "yaml" && (

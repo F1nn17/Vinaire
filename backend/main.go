@@ -183,6 +183,10 @@ func main() {
 		protected.Get("/crds/{crdName}/instances/{name}", workloadsHandler.CRDInstanceDetail)
 		protected.Get("/metrics/query", workloadsHandler.MetricsQuery)
 		protected.Get("/metrics/query_range", workloadsHandler.MetricsQueryRange)
+		// Roadmap Phase 32: per-resource metric series for the Metrics tab.
+		protected.Get("/pods/{namespace}/{name}/metrics", workloadsHandler.PodMetrics)
+		protected.Get("/deployments/{namespace}/{name}/metrics", workloadsHandler.DeploymentMetrics)
+		protected.Get("/nodes/{name}/metrics", workloadsHandler.NodeMetrics)
 		protected.Get("/alerts", workloadsHandler.Alerts)
 		protected.Get("/dashboard/summary", workloadsHandler.DashboardSummary)
 		protected.Get("/events", workloadsHandler.Events)
