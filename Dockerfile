@@ -9,7 +9,7 @@
 # existed — this image is only built for a prod/test deploy.
 
 # ---- frontend: `next build` (output: "export") -> frontend/out ----
-FROM node:22-alpine AS frontend
+FROM node:26-alpine AS frontend
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
