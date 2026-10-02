@@ -96,6 +96,21 @@
   Explorer, Apps/Marketplace, Workloads, Service Discovery, Storage, Policy, More Resources, Events, Monitoring, CIS/сканы,
   Fleet/GitOps, пользователи и права) и составить список недостающего с приоритетами, затем завести фазы.
 
+## Лицензия
+
+- [ ] **Перевести проект с MIT на Apache License 2.0.** Сейчас `LICENSE` — MIT (`Copyright (c) 2026 shiraku`),
+  в README раздел «License» ссылается на него. Что сделать:
+  - заменить `LICENSE` текстом Apache-2.0 (с указанием владельца авторских прав) и добавить файл `NOTICE`;
+  - обновить раздел «License» в `README.md`; указать `license: Apache-2.0` в `package.json` (корень и `frontend/`)
+    и в `charts/vinaire/Chart.yaml` (аннотация `artifacthub.io/license`), если нужно;
+  - решить, нужны ли заголовки лицензии в исходных файлах (для Apache-2.0 рекомендуются, но не обязательны);
+  - проверить совместимость зависимостей — прямые (Helm, go-git, client-go, oras — Apache-2.0; chi, gorilla — BSD/MIT;
+    Next.js, React, Monaco, recharts — MIT) совместимы, но перед релизом прогнать сканер лицензий
+    (`go-licenses`, `license-checker`) и приложить список в `NOTICE`; отдельно проверить встроенные шрифты
+    (IBM Plex Sans, JetBrains Mono — OFL) и их условия распространения;
+  - учесть, что все существующие коммиты — авторские (владелец один), поэтому смена лицензии не требует согласия
+    сторонних контрибьюторов; если они появятся до смены — потребуется их согласие или CLA.
+
 ## Метрики одной кнопкой
 
 - [ ] См. **Phase 37** в `ROADMAP.md`: определение стека метрик, установка Prometheus через Helm одной кнопкой,
