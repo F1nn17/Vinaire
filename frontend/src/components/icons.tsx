@@ -457,6 +457,25 @@ export function ClustersIcon({ size = 16, className }: IconProps) {
   );
 }
 
+export function GitOpsIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <circle cx="6" cy="5.5" r="2.2" />
+      <circle cx="6" cy="18.5" r="2.2" />
+      <circle cx="18" cy="9" r="2.2" />
+      <path d="M6 7.7v8.6" />
+      <path d="M18 11.2c0 3.4-3 3.4-6 4.2-2.4.6-6 .8-6 .8" />
+    </svg>
+  );
+}
+
 export function StoreIcon({ size = 16, className }: IconProps) {
   return (
     <svg

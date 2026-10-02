@@ -2372,7 +2372,45 @@ node.
 
 ---
 
-## Phase 29 — GitOps sync with a choice of backend (ArgoCD or native)
+## Phase 29 — GitOps sync with a choice of backend (ArgoCD or native) ✅ done
+
+> **Outcome note:** Shipped to the spec, with decisions made with the project
+> owner before coding (this phase adds write paths): **(1) Identity** — native
+> mode runs with nobody logged in, so it applies as a *ServiceAccount token the
+> user supplies per source* (checked against the cluster when the source is
+> created; a cluster-admin token is flagged), not as Vinaire's own identity. **(2)
+> Git** — HTTPS plus an optional read-only token, via `go-git` in memory (no git
+> binary, nothing on disk, no argument injection), through a new shared guarded
+> HTTP client (`internal/netguard`, which the Helm catalog now uses too); SSH was
+> left out. **(3) No pruning** — poll + apply only; removed objects are listed as
+> "no longer in git" (kept in memory for the process's life). **(4) Argo CD mode**
+> lists Applications, creates one through Phase 25's generic apply (a template, no
+> endpoint of its own) and "Sync now" sets the Application's `operation`. Other
+> decisions: the mode and the sources are a sealed document next to the cluster
+> registry (new `DocStore`; the Secret store now preserves its other keys on save —
+> it used to overwrite the whole Secret), and it refuses to store tokens when the
+> store isn't encrypted; "in sync" is a server-side dry-run compared with the live
+> object — **found by testing**: a dry-run keeps the live resourceVersion, so the
+> first version (comparing resourceVersions) called every change "Synced"; `force`
+> ("take over fields") is an opt-in per source because without it a field changed by
+> kubectl is a conflict, which is what keeps Vinaire from fighting another
+> controller. Ordering is Namespaces → CRDs → the rest, with one retry after the
+> cluster's API discovery is refreshed (so a custom resource can follow its CRD in one
+> sync). **Verified** against the real dev cluster with a real `git http-backend`
+> server: a manifest pushed to the repository appeared in the cluster as the limited
+> ServiceAccount with no `kubectl apply` (field manager `vinaire-gitops`, labelled with
+> its source); a new commit updated it; no-op polls left the resourceVersion alone; a
+> Namespace the account may not create came back as the cluster's real 403 on that
+> object while the rest synced; a hand edit was reported as a conflict (naming
+> `kubectl-patch` and the field) and, with take-over on, reverted within one poll;
+> with auto-sync off a poll only reported and Sync now applied; an object removed from
+> git was listed as an orphan and **not** deleted; the source and its tokens survived
+> a restart; the tokens were not in the backend log, the API responses or the audit
+> lines, and the data file was sealed. Argo CD mode was exercised against the
+> `applications.argoproj.io` CRD with a stand-in Application (list, detection, the
+> native-mode warning, Sync now, a second sync refused as already pending, 404) — **not
+> against a real Argo CD controller**, so the sync operation being picked up is
+> unverified. Not clicked through in a browser (type-checked, linted, built).
 
 **Goal:** every registered cluster (Phase 11) can have its own GitOps
 story — a real ArgoCD it already runs, a minimal built-in poller for

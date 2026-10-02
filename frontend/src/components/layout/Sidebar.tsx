@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useGitOps } from "@/lib/hooks/useGitOps";
 import {
   ClustersIcon,
   ConfigMapIcon,
+  GitOpsIcon,
   GridIcon,
   GrapeLogo,
   LayersIcon,
@@ -25,6 +27,8 @@ type NavItem = {
   label: string;
   icon: ReactNode;
   isActive: (pathname: string) => boolean;
+  // shown only when the current cluster's GitOps mode isn't "off"
+  gitops?: boolean;
 };
 
 type NavGroup = {
@@ -87,6 +91,13 @@ const groups: NavGroup[] = [
         label: "Marketplace",
         icon: <StoreIcon />,
         isActive: (p) => p.startsWith("/marketplace"),
+      },
+      {
+        href: "/gitops",
+        label: "GitOps",
+        icon: <GitOpsIcon />,
+        isActive: (p) => p.startsWith("/gitops"),
+        gitops: true,
       },
     ],
   },
@@ -164,6 +175,10 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 
 export function Sidebar() {
   const pathname = usePathname();
+  // Roadmap Phase 29: with GitOps off for this cluster the section isn't shown.
+  // (It is switched on from the Clusters page, or by opening /gitops.)
+  const { data: gitops } = useGitOps();
+  const showGitOps = !!gitops && gitops.mode !== "off";
 
   return (
     <nav
@@ -182,13 +197,15 @@ export function Sidebar() {
           <span className="px-2.5 pb-1 pt-0.5 text-[10.5px] uppercase tracking-wider text-text-faint">
             {group.label}
           </span>
-          {group.items.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={item.isActive(pathname)}
-            />
-          ))}
+          {group.items
+            .filter((item) => !item.gitops || showGitOps)
+            .map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                active={item.isActive(pathname)}
+              />
+            ))}
         </div>
       ))}
 

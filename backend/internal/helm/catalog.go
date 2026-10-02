@@ -8,15 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/shiraku/vinaire/backend/internal/netguard"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/repo"
@@ -91,56 +90,11 @@ func newCatalog(cfg Config, client *http.Client) *Catalog {
 // Repos is the configured repository list.
 func (c *Catalog) Repos() []Repo { return c.cfg.Repos }
 
-// forbiddenAddr reports addresses a catalog fetch must never reach.
-func forbiddenAddr(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsUnspecified() || ip.IsMulticast() || ip.IsInterfaceLocalMulticast()
-}
-
-// safeClient is the HTTP client for repositories. The check runs in the dialer's
-// Control hook, on the address actually being connected to, so a hostname that
-// resolves somewhere forbidden (or changes between lookups) can't get past it.
+// safeClient is the HTTP client for repositories: the shared netguard client
+// (no loopback, link-local or multicast addresses; https-only redirects).
 // allowLoopback exists for tests against httptest servers only.
 func safeClient(allowLoopback bool) *http.Client {
-	dialer := &net.Dialer{
-		Timeout: 10 * time.Second,
-		Control: func(_, address string, _ syscall.RawConn) error {
-			host, _, err := net.SplitHostPort(address)
-			if err != nil {
-				return err
-			}
-			ip := net.ParseIP(host)
-			if ip == nil {
-				return fmt.Errorf("refusing to connect to %q", host)
-			}
-			if forbiddenAddr(ip) && !(allowLoopback && ip.IsLoopback()) {
-				return fmt.Errorf("refusing to connect to %s", ip)
-			}
-			return nil
-		},
-	}
-	tr := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           dialer.DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 20 * time.Second,
-		MaxIdleConns:          10,
-		IdleConnTimeout:       30 * time.Second,
-		DisableCompression:    false,
-	}
-	return &http.Client{
-		Transport: tr,
-		Timeout:   fetchTimeout,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 5 {
-				return errors.New("too many redirects")
-			}
-			if req.URL.Scheme != "https" && !allowLoopback {
-				return errors.New("refusing to follow a redirect away from https")
-			}
-			return nil
-		},
-	}
+	return netguard.Client(netguard.Options{AllowLoopback: allowLoopback, Timeout: fetchTimeout})
 }
 
 // fetchLimited GETs rawURL and returns at most max bytes of its body; a larger

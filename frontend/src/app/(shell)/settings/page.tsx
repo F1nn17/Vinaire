@@ -14,12 +14,19 @@ const tabs: { id: SettingsTab; label: string }[] = [
 ];
 
 type HelpSection =
-  "cluster" | "node" | "marketplace" | "crds" | "keycloak" | "observability";
+  | "cluster"
+  | "node"
+  | "marketplace"
+  | "gitops"
+  | "crds"
+  | "keycloak"
+  | "observability";
 
 const helpSections: { id: HelpSection; label: string }[] = [
   { id: "cluster", label: "Подключение кластера" },
   { id: "node", label: "Добавление ноды" },
   { id: "marketplace", label: "Marketplace (Helm)" },
+  { id: "gitops", label: "GitOps" },
   { id: "crds", label: "Кастомные ресурсы" },
   { id: "keycloak", label: "Вход по логину и паролю" },
   { id: "observability", label: "Метрики, логи, алерты" },
@@ -161,6 +168,7 @@ export default function SettingsPage() {
             {helpSection === "cluster" && <ClusterHelp />}
             {helpSection === "node" && <NodeHelp />}
             {helpSection === "marketplace" && <MarketplaceHelp />}
+            {helpSection === "gitops" && <GitOpsHelp />}
             {helpSection === "crds" && <CustomResourcesHelp />}
             {helpSection === "keycloak" && <KeycloakHelp />}
             {helpSection === "observability" && <ObservabilityHelp />}
@@ -952,6 +960,90 @@ function MarketplaceHelp() {
           «Forbidden» — у вашего токена не хватает прав; сообщение называет,
           каких именно. Релиз со статусом «failed» остаётся в списке — его можно
           откатить или удалить.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GitOpsHelp() {
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <div className="mb-1 text-[13px] font-semibold">Что такое GitOps</div>
+        <div className="text-xs text-text-muted">
+          Состояние кластера описано файлами в git, а специальный контроллер
+          следит, чтобы кластер им соответствовал. В Vinaire режим задаётся для
+          каждого кластера отдельно на странице GitOps (на странице кластеров
+          есть кнопка «GitOps»). Пока режим «Off», пункта GitOps в меню нет.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">Native</div>
+        <div className="mt-1 text-text-muted">
+          Небольшая встроенная синхронизация — для кластеров без Argo CD. Вы
+          добавляете источник: https-адрес репозитория, ветку или тег и папку с
+          манифестами. Vinaire периодически читает репозиторий, сравнивает
+          каждый объект с кластером и применяет то, что отличается. Показывается
+          статус по каждому объекту, коммит, который проверен и применён, и
+          кнопка Sync now.
+        </div>
+        <ul className="mt-2 list-disc pl-5 text-xs text-text-muted">
+          <li>
+            <span className="font-semibold">От чьего имени применяется.</span>{" "}
+            Фоновая синхронизация идёт, когда никто не вошёл, поэтому ваш токен
+            использовать нельзя, а от имени самой Vinaire она не применяет
+            ничего — это дало бы любому, кто может добавить источник, права
+            Vinaire. Вместо этого при создании источника вы даёте токен
+            отдельного ServiceAccount; права этого аккаунта и есть всё, что
+            репозиторий сможет сделать. Страница покажет, от чьего имени идёт
+            синхронизация, и предупредит, если это cluster-admin.
+          </li>
+          <li>
+            <span className="font-semibold">Автоприменение.</span> Включено —
+            каждое изменение в git применяется, а ручные правки того, чем
+            управляет git, возвращаются. Выключено — Vinaire только сообщает о
+            расхождениях, применяет по Sync now.
+          </li>
+          <li>
+            <span className="font-semibold">Забирать поля у других.</span> Без
+            этой опции поле, изменённое через kubectl или другим контроллером,
+            показывается как конфликт и не затирается. Включите её, чтобы git
+            был единственным источником правды.
+          </li>
+          <li>
+            <span className="font-semibold">Удаления нет.</span> Объект,
+            убранный из git, из кластера не удаляется: он помечается «removed
+            from git — still in the cluster». Удалять придётся самим.
+          </li>
+          <li>
+            Читаются только файлы .yaml/.yml/.json (kustomize и Helm-шаблоны
+            здесь не раскрываются), порядок: Namespaces, затем CRD, затем всё
+            остальное. Приватный репозиторий — токен только на чтение; он, как и
+            токен ServiceAccount, хранится зашифрованным и больше не
+            показывается.
+          </li>
+        </ul>
+        <Code>
+          {`kubectl create serviceaccount gitops -n <ns>
+kubectl create role gitops -n <ns> --verb=get,list,create,patch,update \
+  --resource=configmaps,services,deployments.apps
+kubectl create rolebinding gitops -n <ns> --role=gitops --serviceaccount=<ns>:gitops
+kubectl create token gitops -n <ns> --duration=8760h`}
+        </Code>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">Argo CD</div>
+        <div className="mt-1 text-text-muted">
+          Если Argo CD уже стоит в кластере (его можно поставить из Marketplace,
+          репозиторий <span className="font-mono">argo</span>), этот режим
+          показывает его Application — синхронизацию и здоровье — и даёт Sync
+          now и создание Application по шаблону. Всё это идёт от вашего имени,
+          права решает RBAC. Если выбрать Native там, где Argo CD найден, будет
+          предупреждение: два контроллера на одном кластере могут перезаписывать
+          друг друга.
         </div>
       </div>
     </div>

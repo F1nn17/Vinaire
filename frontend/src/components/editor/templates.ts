@@ -248,3 +248,30 @@ spec:
 `,
   };
 }
+
+// An Argo CD Application (Roadmap Phase 29), created through the same generic
+// apply as everything else — Argo CD mode has no write endpoint of its own for it.
+const argoApplication: ResourceTemplate = {
+  label: "Argo CD Application",
+  yaml: `apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/example/repo
+    targetRevision: HEAD
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+`,
+};
+
+export const argoApplicationTemplates = [argoApplication];

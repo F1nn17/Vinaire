@@ -505,6 +505,9 @@ func (h *Handler) RemoveCluster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.Clusters.Remove(name)
+	if h.GitOps != nil {
+		h.GitOps.ForgetCluster(r.Context(), name) // its sources apply to a cluster that's gone
+	}
 	statusMu.Lock()
 	delete(statusCache, name)
 	statusMu.Unlock()

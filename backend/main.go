@@ -25,8 +25,10 @@ import (
 	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/clusters"
 	"github.com/shiraku/vinaire/backend/internal/config"
+	"github.com/shiraku/vinaire/backend/internal/gitops"
 	"github.com/shiraku/vinaire/backend/internal/helm"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/shiraku/vinaire/backend/internal/netguard"
 	"github.com/shiraku/vinaire/backend/internal/provision"
 	"github.com/shiraku/vinaire/backend/internal/stream"
 )
@@ -108,6 +110,28 @@ func main() {
 		workloadsHandler.ClusterStore = clusterStore
 	}
 	workloadsHandler.DiscoveryPaths = cfg.DiscoveryKubeconfigPaths
+
+	// Roadmap Phase 29: GitOps. Its configuration (modes, sources and their
+	// tokens) is a sealed document next to the cluster registry, so it needs the
+	// same store; without one GitOps is unavailable. Git is fetched through the
+	// guarded HTTP client (no loopback/link-local targets).
+	if os.Getenv("GITOPS_ALLOW_INSECURE_GIT") == "true" {
+		gitops.AllowInsecureGit = true // local development only: plain http://, loopback
+		slog.Warn("GITOPS_ALLOW_INSECURE_GIT is set: git sources may use http:// on loopback. Never set this on a real deployment.")
+	}
+	var gitopsDocs clusters.DocStore
+	if ds, ok := clusterStore.(clusters.DocStore); ok && clusterStoreOK {
+		gitopsDocs = ds
+	}
+	var devGit *http.Client
+	if gitops.AllowInsecureGit {
+		devGit = netguard.Client(netguard.Options{AllowLoopback: true, Timeout: 2 * time.Minute})
+	}
+	gitops.InstallTransport(netguard.Client(netguard.Options{Timeout: 2 * time.Minute}), devGit)
+	workloadsHandler.GitOps = gitops.NewManager(gitopsDocs, registry, gitops.GitFetcher{}, workloadsHandler.AuditBackground)
+	if err := workloadsHandler.GitOps.Start(ctx); err != nil {
+		slog.Error("gitops: couldn't load its configuration — it stays off", "error", err)
+	}
 	go detectClusterTypes(ctx, registry)
 	writeLimiter := api.NewWriteRateLimiter(writeRateLimit, writeRateBurst)
 
@@ -198,6 +222,10 @@ func main() {
 		protected.Get("/catalog/releases", workloadsHandler.CatalogReleases)
 		protected.Get("/catalog/releases/{namespace}/{name}/history", workloadsHandler.CatalogReleaseHistory)
 		protected.Get("/catalog/releases/{namespace}/{name}/values", workloadsHandler.CatalogReleaseValues)
+		// Roadmap Phase 29: GitOps reads; the writes are in the writeLimiter group.
+		protected.Get("/gitops", workloadsHandler.GitOpsOverview)
+		protected.Get("/gitops/sources/{id}", workloadsHandler.GitOpsSource)
+		protected.Get("/gitops/argocd/applications", workloadsHandler.GitOpsArgoApplications)
 		protected.Get("/nodes/provision/defaults", workloadsHandler.ProvisionDefaults)
 		protected.Get("/provision/options", workloadsHandler.ProvisionOptionsHandler)
 		protected.Get("/nodes/provision/{id}", workloadsHandler.ProvisionStatus)
@@ -288,6 +316,12 @@ func main() {
 			// Roadmap Phase 25's generic YAML create/update (any kind the
 			// cluster serves; the caller's own RBAC decides) — see
 			// internal/k8s/apply.go and AGENTS.md.
+			// Roadmap Phase 29: GitOps — see internal/gitops, internal/api/gitops.go and AGENTS.md.
+			w.Put("/gitops/mode", workloadsHandler.GitOpsSetMode)
+			w.Post("/gitops/sources", workloadsHandler.GitOpsAddSource)
+			w.Delete("/gitops/sources/{id}", workloadsHandler.GitOpsRemoveSource)
+			w.Post("/gitops/sources/{id}/sync", workloadsHandler.GitOpsSyncSource)
+			w.Post("/gitops/argocd/applications/{namespace}/{name}/sync", workloadsHandler.GitOpsArgoSync)
 			// Roadmap Phase 28: Helm releases — see internal/api/catalog.go and AGENTS.md.
 			w.Post("/catalog/install", workloadsHandler.CatalogInstall)
 			w.Post("/catalog/releases/{namespace}/{name}/upgrade", workloadsHandler.CatalogUpgrade)

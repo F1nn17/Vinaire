@@ -20,6 +20,7 @@ import (
 	"github.com/shiraku/vinaire/backend/internal/audit"
 	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/clusters"
+	"github.com/shiraku/vinaire/backend/internal/gitops"
 	"github.com/shiraku/vinaire/backend/internal/helm"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 	"github.com/shiraku/vinaire/backend/internal/provision"
@@ -83,6 +84,9 @@ type Handler struct {
 	// nil means "not configured" and the endpoints answer 503.
 	Catalog  *helm.Catalog
 	Releases *helm.Releases
+
+	// Roadmap Phase 29: per-cluster GitOps mode and native sources. nil = off.
+	GitOps *gitops.Manager
 }
 
 // ObservabilityConfig groups the optional observability-stack URLs

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shiraku/vinaire/backend/internal/netguard"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/storage/driver"
@@ -73,8 +74,8 @@ func TestForbiddenAddr(t *testing.T) {
 		"224.0.0.1": true, "fe80::1": true,
 		"10.0.0.5": false, "192.168.1.1": false, "93.184.216.34": false, "2606:4700::1": false,
 	} {
-		if got := forbiddenAddr(net.ParseIP(ip)); got != want {
-			t.Errorf("forbiddenAddr(%s) = %v, want %v", ip, got, want)
+		if got := netguard.Forbidden(net.ParseIP(ip)); got != want {
+			t.Errorf("Forbidden(%s) = %v, want %v", ip, got, want)
 		}
 	}
 }

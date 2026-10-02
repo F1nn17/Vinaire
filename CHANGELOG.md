@@ -651,6 +651,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   slow repository no longer holds the page up: it is reported as still loading and the
   list fills in by itself. Indexes load in the background at startup.
 
+- GitOps per cluster (Roadmap Phase 29). Each cluster has a mode: **off** (the
+  GitOps menu entry is hidden), **native** or **argocd**; it is switched on the
+  GitOps page (reachable from the Clusters page). **Native** is a small
+  poll-and-apply loop for clusters without Argo CD: add a git repository (https,
+  optional read-only token), a branch or tag and a path, and Vinaire clones it in
+  memory on an interval, compares each manifest with the cluster using a server-side
+  dry-run and applies what differs (server-side apply), with per-object status,
+  the commit that was checked and applied, "Sync now" and an option to apply
+  automatically — which also puts back hand edits. It applies as a ServiceAccount
+  whose token you give it for that source, never as Vinaire itself, so the cluster's
+  RBAC bounds what a repository can do (the page shows who it applies as, and warns
+  if that is a cluster-admin). It does not delete: objects removed from git are listed
+  as "no longer in git" and stay. Tokens are stored sealed and never shown again.
+  **Argo CD** mode lists the cluster's Applications with sync and health, has Sync now,
+  and creates an Application from a template; selecting native on a cluster where Argo
+  CD is detected shows a warning (two controllers applying to one cluster).
+
 ### Changed
 
 - Replaced the draft `ROADMAP.md` with a detailed, phase-by-phase technical

@@ -80,6 +80,19 @@ type Store interface {
 	Encrypted() bool
 }
 
+// DocStore keeps named, sealed documents next to the cluster registry (Roadmap
+// Phase 29's GitOps configuration, which holds git and ServiceAccount tokens).
+// Both stores implement it; the document is sealed with the same key as the
+// registry. Encrypted() on the Store says whether that is really so — a caller
+// that stores credentials must refuse to when it is not.
+type DocStore interface {
+	Store
+	// LoadDoc returns the plaintext of the named document, or nil if it doesn't
+	// exist yet.
+	LoadDoc(ctx context.Context, name string) ([]byte, error)
+	SaveDoc(ctx context.Context, name string, plain []byte) error
+}
+
 func marshalList(c *Cipher, list []StoredCluster) ([]byte, error) {
 	data, err := json.Marshal(list)
 	if err != nil {
@@ -205,18 +218,73 @@ func (s *SecretStore) Save(ctx context.Context, list []StoredCluster) error {
 	if err != nil {
 		return err
 	}
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: clustersSecretName, Namespace: s.namespace},
-		Data:       map[string][]byte{clustersSecretKey: data},
+	return s.putKey(ctx, clustersSecretKey, data)
+}
+
+// putKey writes one key of the registry Secret, leaving the others (the
+// registry list and every document live side by side in it) untouched.
+func (s *SecretStore) putKey(ctx context.Context, key string, data []byte) error {
+	secrets := s.clientset.CoreV1().Secrets(s.namespace)
+	for attempt := 0; attempt < 3; attempt++ {
+		secret, err := secrets.Get(ctx, clustersSecretName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			_, err = secrets.Create(ctx, &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clustersSecretName, Namespace: s.namespace},
+				Data:       map[string][]byte{key: data},
+			}, metav1.CreateOptions{})
+			if apierrors.IsAlreadyExists(err) {
+				continue // someone created it between our Get and Create
+			}
+		} else if err == nil {
+			if secret.Data == nil {
+				secret.Data = map[string][]byte{}
+			}
+			secret.Data[key] = data
+			_, err = secrets.Update(ctx, secret, metav1.UpdateOptions{})
+			if apierrors.IsConflict(err) {
+				continue
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("save %s secret: %w", clustersSecretName, err)
+		}
+		return nil
 	}
-	_, err = s.clientset.CoreV1().Secrets(s.namespace).Update(ctx, secret, metav1.UpdateOptions{})
+	return fmt.Errorf("save %s secret: too many concurrent updates", clustersSecretName)
+}
+
+// LoadDoc / SaveDoc: documents are stored under "doc-<name>" in the same Secret.
+func (s *SecretStore) LoadDoc(ctx context.Context, name string) ([]byte, error) {
+	secret, err := s.clientset.CoreV1().Secrets(s.namespace).Get(ctx, clustersSecretName, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		_, err = s.clientset.CoreV1().Secrets(s.namespace).Create(ctx, secret, metav1.CreateOptions{})
+		return nil, nil
 	}
 	if err != nil {
-		return fmt.Errorf("save %s secret: %w", clustersSecretName, err)
+		return nil, fmt.Errorf("get %s secret: %w", clustersSecretName, err)
 	}
-	return nil
+	return openDoc(s.cipher, secret.Data["doc-"+name])
+}
+
+func (s *SecretStore) SaveDoc(ctx context.Context, name string, plain []byte) error {
+	data := plain
+	if s.cipher != nil {
+		data = s.cipher.Seal(plain)
+	}
+	return s.putKey(ctx, "doc-"+name, data)
+}
+
+// openDoc unseals a stored document (nil in, nil out).
+func openDoc(c *Cipher, data []byte) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	if IsSealed(data) {
+		if c == nil {
+			return nil, errors.New("the stored document is encrypted but no key is available")
+		}
+		return c.Open(data)
+	}
+	return data, nil
 }
 
 // --- File store (running outside a cluster, e.g. a home server) ---
@@ -371,4 +439,35 @@ func VerifyConnection(entry *Entry) error {
 		return fmt.Errorf("connect to cluster: %w", err)
 	}
 	return nil
+}
+
+// LoadDoc / SaveDoc: a document is <dir>/<name>.enc, sealed like clusters.enc.
+func (f *FileStore) LoadDoc(_ context.Context, name string) ([]byte, error) {
+	data, err := os.ReadFile(filepath.Join(f.dir, name+".enc"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return openDoc(f.cipher, data)
+}
+
+func (f *FileStore) SaveDoc(_ context.Context, name string, plain []byte) error {
+	tmp, err := os.CreateTemp(f.dir, name+".enc.tmp-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(0o600); err != nil && !errors.Is(err, os.ErrPermission) {
+		slog.Debug("doc store: chmod not supported", "error", err)
+	}
+	if _, err := tmp.Write(f.cipher.Seal(plain)); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), filepath.Join(f.dir, name+".enc"))
 }

@@ -122,6 +122,50 @@ flow.
   `helm-reveal-values`, the same way a Secret reveal is. The release list never
   carries values or the manifest. Helm keeps a release as a Secret in its
   namespace, so the caller needs Secret access there.
+- GitOps (Roadmap Phase 29) — `PUT /api/v1/gitops/mode`, `POST
+  /api/v1/gitops/sources`, `DELETE /api/v1/gitops/sources/{id}`, `POST
+  /api/v1/gitops/sources/{id}/sync` and `POST
+  /api/v1/gitops/argocd/applications/{namespace}/{name}/sync`
+  (`internal/gitops`, `internal/api/gitops.go`). Two different things:
+  - **Argo CD mode** only lists Applications and "Sync now" sets the
+    Application's `operation` (a merge patch, what `argocd app sync` does) —
+    **as the caller**, so the cluster's RBAC decides. Creating an Application
+    goes through Phase 25's generic apply with a template; there is no endpoint
+    of its own.
+  - **Native mode** is the sensitive one: a background worker applies manifests
+    from git with server-side apply (field manager `vinaire-gitops`) when
+    **nobody is logged in**. It therefore must **never** use Vinaire's own
+    identity (anyone who could create a source could then apply anything with
+    Vinaire's rights) and cannot use the caller's short-lived token. Each source
+    carries the token of a **ServiceAccount the user supplies**, which the
+    cluster checks when the source is created (`SelfSubjectReview`; a
+    cluster-admin token earns a warning on the source) — so the cluster's RBAC
+    bounds what a repository can do. Rules to keep: it is **poll + apply only —
+    no pruning** (an object removed from git stays in the cluster and is listed
+    as "no longer in git"), no hooks, no health checks, no sync waves beyond
+    "Namespaces, then CRDs, then the rest"; git is read with `go-git` **in
+    memory** (shallow, one commit, only `*.yaml/*.yml/*.json` under the source's
+    path, hidden directories skipped, bounded in files/size/objects) through the
+    guarded HTTP client (`internal/netguard`: no loopback/link-local, https
+    only; `GITOPS_ALLOW_INSECURE_GIT=true` is the dev-only opt-out, never on a
+    real deployment) and a repository URL can't carry credentials, a query or a
+    non-https scheme; the git token and the ServiceAccount token arrive in a POST
+    body over a secure transport only (`requireSecureTransport`), live in
+    `gitops.Secret` (prints `[REDACTED]`), are stored **sealed** in a document next
+    to the cluster registry (`DocStore`; `AddSource` refuses to save tokens when
+    the store is not encrypted) and are never returned by the API, logged or
+    audited; "in sync" is decided by a server-side **dry-run** apply compared with
+    the live object (not by resourceVersion — a dry-run never changes it);
+    `force` ("take over fields other tools set") is off by default so a field
+    changed by kubectl/another controller shows as a conflict rather than being
+    overwritten; the cluster's mode must be `native` for a source to be added or
+    to run. Audited as `gitops-mode`, `gitops-source-create` /
+    `gitops-source-delete` (repo, revision, path, who it applies as — no
+    tokens), `gitops-sync-now`, `gitops-argocd-sync`, and — from the background
+    worker, as `gitops:<source>` or the person who clicked Sync now —
+    `gitops-apply` with the commit and counts, only when something was applied
+    or failed (not on every no-op poll). Creating/removing sources is, like the
+    cluster registry, not gated by Kubernetes RBAC: Phase 36 should revisit it.
 - (Phase 24, unchanged:) cluster management via the web UI (Settings page): create/get/update on exactly
   one Secret (`vinaire-clusters`, in this backend's own namespace, via a
   dedicated narrow `Role`/`RoleBinding` — never the broad, cluster-wide
@@ -446,6 +490,12 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["create", "update", "delete"]
+  # Phase 29's Argo CD mode: listing Applications needs read on them (grant
+  # the group like any other CRD above), "Sync now" a patch. Native mode needs
+  # nothing here — it applies as the source's own ServiceAccount.
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["patch"]
   # Phase 27's namespace delete — irreversible and cascading; omit unless
   # this identity should be able to remove whole namespaces.
   - apiGroups: [""]
