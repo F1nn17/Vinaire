@@ -3361,3 +3361,114 @@ contains no `"*"`. The image runs as non-root with
 `readOnlyRootFilesystem`. The ZAP baseline scan finds nothing High.
 `docs/security.md` exists: threat model, verified properties, known
 risks.
+
+---
+
+## Phase 37 — Установка и подключение стека метрик одной кнопкой
+
+**Зависимости:** Phase 28 (Helm SDK); расширяет Phase 16, 18 и 32.
+
+Сейчас без Prometheus карточки и графики метрик показывают "unavailable" и
+дальше идти некуда. Фаза добавляет определение того, что есть в кластере,
+установку недостающего через Helm (Phase 28) и подключение найденного.
+
+**Backend**
+- `GET /api/v1/clusters/{cluster}/metrics/status` — определяет:
+  (а) metrics-server (APIService `v1beta1.metrics.k8s.io` в состоянии
+  Available), (б) Prometheus-совместимый сервер (Service/Pod с меткой
+  `app.kubernetes.io/name=prometheus`, а также VictoriaMetrics
+  vmsingle/vmselect), (в) kube-state-metrics и node-exporter по меткам,
+  (г) адрес, заданный вручную в настройках кластера.
+  Ответ: `none` | `metrics-server-only` | `prometheus-ready` | `partial`,
+  плюс найденный адрес и список того, чего не хватает для графиков по
+  CPU/Memory/Network/Filesystem.
+- Доступ к Prometheus из Phase 16 переключить на service proxy Kubernetes
+  API (`/api/v1/namespaces/{ns}/services/{name}:{port}/proxy/`): работает
+  одинаково для любого кластера из реестра (Phase 11, 34), и Prometheus не
+  нужно публиковать наружу. Права на `services/proxy` ограничить через
+  `resourceNames` конкретного сервиса Prometheus.
+- `POST /api/v1/clusters/{cluster}/metrics/install` (body: `profile`,
+  `namespace`, `retention`, `storageSize`, `storageClass`, `nodeSelector`) —
+  установка через Helm SDK из Phase 28. Профили:
+  - `lite`: только metrics-server (если его ещё нет); текущие значения
+    CPU/Memory, без истории;
+  - `standard` (по умолчанию): Prometheus server + kube-state-metrics +
+    node-exporter из chart `prometheus-community/prometheus`, без Grafana и
+    Alertmanager; скрейп kubelet/cAdvisor включён; retention 7d, PVC 10Gi по
+    умолчанию; requests/limits заданы;
+  - `full`: kube-prometheus-stack, только по явному выбору и с
+    предупреждением о потреблении ресурсов.
+
+  Версии чартов фиксируются в конфиге бэкенда, не "latest".
+- Установка выполняется под токеном **текущего пользователя**, а не под
+  ServiceAccount Vinaire (чарты создают ClusterRole'ы и DaemonSet'ы, давать
+  такие права самому Vinaire нельзя — см. Phase 36). Перед показом кнопки и
+  перед запуском проверять права через SelfSubjectAccessReview; без прав
+  кнопка недоступна с понятным объяснением.
+- Preflight перед установкой: свободные ресурсы по нодам (Phase 22), наличие
+  default StorageClass (если нет — предложить выбрать класс либо `emptyDir`
+  с явным предупреждением "метрики пропадут при перезапуске пода"),
+  уже установленный prometheus-operator или его CRD (в этом случае
+  предложить "Connect existing", а не ставить второй), ограничения Pod
+  Security (node-exporter требует hostNetwork/hostPID).
+- На k3s metrics-server уже встроен — не ставить второй.
+- Прогресс установки стримится клиенту (статус Helm release и готовность
+  подов); uninstall — через тот же Helm release (Phase 28), данные метрик
+  при удалении не стираются без отдельного подтверждения.
+- После готовности адрес автоматически сохраняется в настройках кластера;
+  через 1–2 минуты после первого скрейпа проверяется, что запрос
+  `container_cpu_usage_seconds_total` возвращает данные, иначе показать
+  диагностику "установлено, данных пока нет" с причиной.
+
+**Frontend**
+- Везде, где сейчас плейсхолдер "Metrics unavailable" / "Metrics coming in a
+  later phase" (Pod/Deployment/Node detail, Dashboard, вкладка Metrics из
+  Phase 32) — вместо тупика кнопка "Install metrics", либо "Connect existing
+  Prometheus", если стек найден, но адрес не задан.
+- Диалог установки: выбор профиля с пояснением примерного потребления RAM и
+  диска, namespace, retention, storage class, необязательный выбор ноды
+  (переиспользовать выпадающий список из Phase 19/28), результат preflight,
+  живой прогресс, в конце сообщение "графики появятся после первого
+  скрейпа".
+- Settings → Metrics для каждого кластера: что найдено, адрес, кнопки
+  Re-detect, Test connection, Uninstall.
+- После установки графики Phase 32 и карточки Dashboard (Phase 18)
+  подхватывают данные без перезагрузки страницы.
+
+**Complexity:** M — сама установка идёт через уже готовый Helm SDK
+(Phase 28), основная работа в определении состояния кластера и preflight.
+
+**New dependencies**
+- `go.mod`: новых пакетов нет
+- `package.json`: новых пакетов нет
+
+**Risks to check early**
+- Prometheus потребляет память и диск: на нодах с 2 ГБ RAM использовать lite
+  либо выбирать более крупную ноду через nodeSelector, обязательно задавать
+  limits и retention.
+- Без PVC история теряется при перезапуске пода, поэтому в preflight это
+  показывается явно.
+- Network/Filesystem-метрики зависят от cAdvisor и kubelet; на разных
+  дистрибутивах (k3s, kubeadm) настройки скрейпа различаются, поэтому нужна
+  проверка наличия данных, а не только факта установки.
+- Второй Prometheus Operator в соседнем namespace может конфликтовать с уже
+  установленными CRD, детект до установки обязателен.
+- Права на `services/proxy` дают доступ к любому HTTP-эндпоинту сервиса,
+  ограничивать `resourceNames`.
+
+**Definition of done**
+На чистом k3d без Prometheus на Dashboard и Pod detail виден статус "none" с
+кнопкой "Install metrics"; выбрать профиль standard, дождаться установки —
+через пару минут на Pod detail, Deployment detail и Node detail появляются
+живые графики CPU/Memory (Phase 32) без ручных команд; на кластере с уже
+стоящим Prometheus кнопка предлагает "Connect existing" и не создаёт
+дубликатов; пользователь без прав на создание ClusterRole видит недоступную
+кнопку с объяснением, а не ошибку 403.
+
+> **Заметка при реализации (из Phase 36):** `POST .../metrics/install` — новый
+> путь записи: его нужно добавить в список разрешённых записей в `AGENTS.md`
+> (как Helm-релизы из Phase 28: от токена вызывающего, с аудитом без values), а
+> изменение сохранённого адреса Prometheus в настройках кластера — это
+> изменение конфигурации самого Vinaire, то есть оно проходит через
+> `requireVinaireRight`.
+
