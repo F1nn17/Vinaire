@@ -149,7 +149,7 @@ func Discover(ctx context.Context, opts DiscoverOptions) DiscoverResult {
 		if _, err := os.Stat(path); err != nil {
 			continue
 		}
-		f, err := os.Open(path)
+		f, err := os.Open(path) // #nosec G304 -- a kubeconfig path from this machine's own discovery list, never from a request
 		if err != nil {
 			res.Unreadable = append(res.Unreadable, UnreadableFile{Path: path, Hint: unreadableHint(path)})
 			continue
@@ -262,7 +262,7 @@ func probeLocalAPI(ctx context.Context, addr string) (string, bool) {
 	conn.Close()
 	client := &http.Client{
 		Timeout:   1500 * time.Millisecond,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, //nolint:gosec // identity probe only; nothing is sent or trusted
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, // #nosec G402 -- identity probe of a local cluster; nothing is sent to it or trusted from it
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+addr+"/version", nil)
 	resp, err := client.Do(req)

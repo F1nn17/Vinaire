@@ -72,7 +72,7 @@ func (m *Manager) HandleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "failed to prepare login")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly is set; Secure is configurable (default true) and SameSite is Lax on purpose for the OIDC redirect
 		Name:     oidcPendingCookie,
 		Value:    base64.RawURLEncoding.EncodeToString(pending),
 		Path:     "/",
@@ -145,14 +145,21 @@ func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = idToken.Claims(&claims)
 
+	expiry := m.capExpiry(idToken.Expiry)
+	if old, err := r.Cookie(sessionCookie); err == nil {
+		m.Sessions.Delete(old.Value) // a new login never inherits an existing session
+	}
 	sess := &Session{
-		ID:        uuid.NewString(),
+		ID:        NewSessionID(),
 		K8sToken:  rawIDToken,
 		Username:  claims.PreferredUsername,
-		ExpiresAt: idToken.Expiry,
+		ExpiresAt: expiry,
 	}
-	m.Sessions.Create(sess)
-	m.setSessionCookie(w, sess.ID, idToken.Expiry)
+	if err := m.Sessions.Create(sess); err != nil {
+		respondError(w, http.StatusServiceUnavailable, "the server can't take more logins right now")
+		return
+	}
+	m.setSessionCookie(w, sess.ID, expiry)
 
 	redirectTo := m.FrontendURL
 	if redirectTo == "" {
@@ -162,7 +169,7 @@ func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func clearOIDCPendingCookie(w http.ResponseWriter, secure bool) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- clearing the OIDC state cookie, same attributes as when it was set
 		Name:     oidcPendingCookie,
 		Value:    "",
 		Path:     "/",

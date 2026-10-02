@@ -542,6 +542,36 @@ kubectl config use-context <имя-нужного-кластера>`}
 kubectl create clusterrolebinding vinaire-viewer \\
   --clusterrole=vinaire-viewer --serviceaccount=<namespace>:vinaire-viewer`}
           </Code>
+          <div className="mt-2 text-text-muted">
+            <span className="font-semibold">Изменение самой Vinaire</span> —
+            добавить или удалить кластер, сменить его тип, режим и источники
+            GitOps — не действие Kubernetes, поэтому нужно отдельное право,
+            которого нет у обычных пользователей. Vinaire спрашивает кластер,
+            может ли пользователь{" "}
+            <span className="font-mono">create/update/delete</span> ресурсы{" "}
+            <span className="font-mono">clusters.vinaire.io</span> и{" "}
+            <span className="font-mono">gitops.vinaire.io</span> (самих ресурсов
+            в кластере нет — это имена права; поэтому роль задаётся YAML-ом, а
+            не командой{" "}
+            <span className="font-mono">kubectl create clusterrole</span>).
+            Выдайте её тем, кто администрирует Vinaire; чарт создаёт такую роль
+            (<span className="font-mono">&lt;release&gt;-admin</span>) без
+            привязок:
+          </div>
+          <Code>
+            {`apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vinaire-admin
+rules:
+  - apiGroups: ["vinaire.io"]
+    resources: ["clusters", "gitops"]
+    verbs: ["create", "update", "delete"]`}
+          </Code>
+          <Code>
+            {`kubectl create clusterrolebinding vinaire-admin-me \
+  --clusterrole=vinaire-admin --serviceaccount=<namespace>:vinaire-viewer`}
+          </Code>
         </div>
 
         <div className="mt-3 rounded-md border border-border p-3">

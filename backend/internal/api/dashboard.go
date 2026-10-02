@@ -98,7 +98,7 @@ func (h *Handler) DashboardSummary(w http.ResponseWriter, r *http.Request) {
 		HealthyPods:    len(pods) - podsDown,
 		Namespaces:     namespaces,
 	}
-	resp.CPU, resp.Memory = h.clusterResourceUsage(r.Context(), clientset, cluster.MetricsClientset)
+	resp.CPU, resp.Memory = h.clusterResourceUsage(r.Context(), clientset, h.metricsFor(r, cluster))
 
 	// A discarding ResponseWriter: resolveDynamic writes its own HTTP error
 	// on failure, but an ArgoCD-detection hiccup should only make this one

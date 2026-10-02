@@ -20,6 +20,14 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "vinaire.serviceAccountName" . }}
+      # Roadmap Phase 36: the pod needs no privileges at all.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: vinaire
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -39,13 +47,24 @@ spec:
             - name: OIDC_CLIENT_ID
               value: {{ .Values.oidc.clientID | quote }}
             - name: OIDC_CLIENT_SECRET
-              value: {{ .Values.oidc.clientSecret | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oidc.existingSecret | default (printf "%s-oidc" (include "vinaire.fullname" .)) }}
+                  key: {{ .Values.oidc.existingSecretKey | default "clientSecret" }}
             - name: OIDC_REDIRECT_URL
               value: {{ .Values.oidc.redirectURL | quote }}
             {{- end }}
             {{- with .Values.frontendURL }}
             - name: FRONTEND_URL
               value: {{ . | quote }}
+            {{- end }}
+            - name: AUDIT_LOG_PATH
+              value: /audit/audit.log
+            - name: SESSION_MAX_TTL
+              value: {{ .Values.sessionMaxTTL | quote }}
+            {{- if .Values.trustForwardedFor }}
+            - name: TRUST_FORWARDED_FOR
+              value: "true"
             {{- end }}
             - name: COOKIE_SECURE
               value: {{ .Values.cookie.secure | quote }}
@@ -74,8 +93,23 @@ spec:
             httpGet:
               path: /healthz
               port: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            # the only places Vinaire writes: the durable audit log, and scratch space
+            - {name: audit, mountPath: /audit}
+            - {name: tmp, mountPath: /tmp}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: audit
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

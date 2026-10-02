@@ -41,7 +41,7 @@ func readyStatus(ready, desired int32) (status string, color StatusColor) {
 // podReadyCount returns how many of a pod's containers are ready, and how
 // many containers it has in total.
 func podReadyCount(pod corev1.Pod) (ready, total int32) {
-	total = int32(len(pod.Status.ContainerStatuses))
+	total = int32(len(pod.Status.ContainerStatuses)) // #nosec G115 -- a pod has a handful of containers; the length can't overflow an int32
 	for _, cs := range pod.Status.ContainerStatuses {
 		if cs.Ready {
 			ready++

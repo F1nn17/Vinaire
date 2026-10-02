@@ -181,7 +181,8 @@ func (h *Handler) GatewayRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	namespace := r.URL.Query().Get("namespace")
-	if cluster.GatewayClientset == nil {
+	gateway := h.gatewayFor(r, cluster) // acts as the caller, not as Vinaire
+	if gateway == nil {
 		respondJSON(w, GatewayResourcesResponse{
 			Available: false,
 			Reason:    "Gateway API client is not configured on this backend",
@@ -191,7 +192,7 @@ func (h *Handler) GatewayRoutes(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	gateways, err := cluster.GatewayClientset.GatewayV1().Gateways(namespace).List(ctx, metav1.ListOptions{})
+	gateways, err := gateway.GatewayV1().Gateways(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		if isGatewayAPIUnavailable(err) {
 			respondJSON(w, GatewayResourcesResponse{
@@ -204,7 +205,7 @@ func (h *Handler) GatewayRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpRoutes, err := cluster.GatewayClientset.GatewayV1().HTTPRoutes(namespace).List(ctx, metav1.ListOptions{})
+	httpRoutes, err := gateway.GatewayV1().HTTPRoutes(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		if isGatewayAPIUnavailable(err) {
 			respondJSON(w, GatewayResourcesResponse{

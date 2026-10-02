@@ -7,11 +7,34 @@
 package authn
 
 import (
+	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"sync"
 	"time"
 )
+
+// NewSessionID returns 256 bits from crypto/rand, URL-safe. It is the only thing
+// the browser holds, so it must be unguessable; a fresh one is issued at every
+// login (never reusing whatever cookie the browser arrived with), which is what
+// rules out session fixation.
+func NewSessionID() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand failed: " + err.Error())
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// ErrTooManySessions is returned when the store is full.
+var ErrTooManySessions = errors.New("too many active sessions")
+
+// maxSessions bounds the in-memory store. Logins are validated against the
+// cluster before a session exists, so this is defence in depth, not the first line.
+const maxSessions = 5000
 
 // Session is one logged-in user's server-side state.
 type Session struct {
@@ -36,7 +59,7 @@ func (s *Session) OwnerKey() string {
 // implementation for now — swappable for Redis later (per Roadmap
 // Phase 10) without any caller needing to change.
 type Store interface {
-	Create(sess *Session)
+	Create(sess *Session) error
 	Get(id string) (*Session, bool)
 	Delete(id string)
 }
@@ -52,10 +75,45 @@ func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{sessions: make(map[string]*Session)}
 }
 
-func (s *MemoryStore) Create(sess *Session) {
+func (s *MemoryStore) Create(sess *Session) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if len(s.sessions) >= maxSessions {
+		s.purgeLocked(time.Now())
+		if len(s.sessions) >= maxSessions {
+			return ErrTooManySessions
+		}
+	}
 	s.sessions[sess.ID] = sess
+	return nil
+}
+
+func (s *MemoryStore) purgeLocked(now time.Time) {
+	for id, sess := range s.sessions {
+		if now.After(sess.ExpiresAt) {
+			delete(s.sessions, id)
+		}
+	}
+}
+
+// StartJanitor removes expired sessions every minute until ctx ends. Get already
+// refuses an expired session, but one that is never looked at again would sit in
+// memory (holding a Kubernetes token) forever without this.
+func (s *MemoryStore) StartJanitor(ctx context.Context) {
+	go func() {
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case now := <-t.C:
+				s.mu.Lock()
+				s.purgeLocked(now)
+				s.mu.Unlock()
+			}
+		}
+	}()
 }
 
 // Get returns the session for id, transparently deleting and reporting

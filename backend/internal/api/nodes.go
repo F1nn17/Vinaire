@@ -108,10 +108,11 @@ func (h *Handler) Nodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	metrics := h.metricsFor(r, cluster) // as the caller; built once, not per node
 	rows := make([]NodeRow, 0, len(nodes))
 	for _, n := range nodes {
 		row := NodeRowOf(n)
-		row.CPU, row.Memory = nodeResourceUsage(r.Context(), cluster.MetricsClientset, n)
+		row.CPU, row.Memory = nodeResourceUsage(r.Context(), metrics, n)
 		rows = append(rows, row)
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
@@ -196,7 +197,7 @@ func (h *Handler) NodeDetail(w http.ResponseWriter, r *http.Request) {
 		pods = nil
 	}
 
-	cpu, memory := nodeResourceUsage(r.Context(), cluster.MetricsClientset, *node)
+	cpu, memory := nodeResourceUsage(r.Context(), h.metricsFor(r, cluster), *node)
 
 	respondJSON(w, buildNodeDetail(*node, pods, cpu, memory))
 }

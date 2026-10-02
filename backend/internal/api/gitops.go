@@ -134,6 +134,9 @@ func (h *Handler) GitOpsOverview(w http.ResponseWriter, r *http.Request) {
 
 // GitOpsSetMode handles PUT /api/v1/gitops/mode.
 func (h *Handler) GitOpsSetMode(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "gitops", "update") {
+		return
+	}
 	if !h.gitopsAvailable(w) {
 		return
 	}
@@ -185,6 +188,9 @@ type sourceBody struct {
 // the body (never a URL), only over a secure transport, are sealed at rest, and
 // are never returned or logged.
 func (h *Handler) GitOpsAddSource(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "gitops", "create") {
+		return
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	if !h.gitopsAvailable(w) || !h.requireSecureTransport(w, r) {
 		return
@@ -244,6 +250,9 @@ func (h *Handler) GitOpsSource(w http.ResponseWriter, r *http.Request) {
 // GitOpsRemoveSource handles DELETE /api/v1/gitops/sources/{id}. What the source
 // applied stays in the cluster.
 func (h *Handler) GitOpsRemoveSource(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "gitops", "delete") {
+		return
+	}
 	v, _, ok := h.sourceFor(w, r)
 	if !ok {
 		return
@@ -258,6 +267,9 @@ func (h *Handler) GitOpsRemoveSource(w http.ResponseWriter, r *http.Request) {
 
 // GitOpsSyncSource handles POST /api/v1/gitops/sources/{id}/sync.
 func (h *Handler) GitOpsSyncSource(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "gitops", "update") {
+		return
+	}
 	v, _, ok := h.sourceFor(w, r)
 	if !ok {
 		return

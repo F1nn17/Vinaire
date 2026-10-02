@@ -49,3 +49,90 @@ RBAC binding exists for whoever the backend runs as.
 {{- default "default" .Values.serviceAccount.name -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Everything Vinaire's UI can browse (read-only) plus the fixed, audited write
+actions AGENTS.md's core rule allows, as RBAC rules. Used by the "viewer"
+ClusterRole a person is bound to, and — only when rbac.broad or authMode
+"disabled" says so — by the ServiceAccount's own ClusterRole.
+*/}}
+{{- define "vinaire.broadRules" -}}
+- apiGroups: ["", "apps", "batch", "networking.k8s.io"]
+  resources:
+    - pods
+    - deployments
+    - statefulsets
+    - daemonsets
+    - jobs
+    - configmaps
+    - secrets
+    - services
+    - ingresses
+    - events
+    - replicasets
+    - serviceaccounts
+    - persistentvolumeclaims
+    - persistentvolumes
+    - nodes
+    # Roadmap Phase 27's Namespaces page.
+    - namespaces
+    - resourcequotas
+    - limitranges
+  verbs: ["get", "list", "watch"]
+# metrics-server's aggregated API — Pod/Node CPU/Memory gauges and the
+# Dashboard's cluster-wide usage all degrade to an honest "—" without
+# this rather than failing loudly, so it's easy to forget.
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+# pods/log and pods/exec are separate RBAC subresources — granting
+# "pods" above does NOT imply either of these.
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+# Phase 26's Forward port (the /proxy reverse proxy) — another separate
+# subresource; drop it to disable the feature.
+- apiGroups: [""]
+  resources: ["pods/portforward"]
+  verbs: ["create"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gateways", "httproutes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["get", "list", "watch"]
+# The fixed write actions AGENTS.md's core rule allows (Phase 9's
+# restart/delete/rollback, Phase 33's pause/resume/scale/pod delete).
+# Phase 25's generic YAML create/update is deliberately NOT granted here:
+# add the create/update verbs you want on the kinds you want through
+# rbac.extraRules, so what Vinaire may write stays an explicit decision.
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments/scale", "statefulsets/scale"]
+  verbs: ["get", "update"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["delete"]
+# Phase 30's "Add node" gate (a SelfSubjectAccessReview for create on
+# nodes) — not an API call the join makes, only the permission to ask.
+# Drop it to disable the feature for this identity.
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["create"]
+# Phase 27's namespace delete — irreversible and cascading, so granted
+# explicitly rather than folded into anything broader.
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["delete"]
+{{- end -}}

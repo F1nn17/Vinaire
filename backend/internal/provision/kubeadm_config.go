@@ -109,7 +109,7 @@ func DefaultKubeadmConfig() KubeadmConfig {
 
 // LoadKubeadmConfig reads a replacement configuration file.
 func LoadKubeadmConfig(path string) (KubeadmConfig, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is KUBEADM_CONFIG, set by the operator
 	if err != nil {
 		return KubeadmConfig{}, err
 	}

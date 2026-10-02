@@ -1,8 +1,14 @@
 {{- if .Values.rbac.create }}
-# Matches AGENTS.md's "Example: a minimal ClusterRole for Vinaire" —
-# read-only across everything Vinaire's UI browses, plus the exact three
-# Deployment write actions the project's core rule names as the
-# deliberate, audited exception. Not cluster-admin.
+{{- /*
+Vinaire's OWN ServiceAccount. In token and OIDC mode every request a user makes
+runs as that user's identity, so this account only needs what the live-update
+informers and cluster-type detection read with Vinaire's own credentials —
+nothing that writes, and no Secrets. The broad browse-and-act set is a separate
+role (<release>-viewer) for people to be bound to. Only AUTH_MODE=disabled (a
+disposable local cluster, where every request uses this account) or an explicit
+rbac.broad=true gives this account the broad set.
+*/ -}}
+{{- $broad := or (eq .Values.authMode "disabled") .Values.rbac.broad }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -10,85 +16,74 @@ metadata:
   labels:
     {{- include "vinaire.labels" . | nindent 4 }}
 rules:
-  - apiGroups: ["", "apps", "batch", "networking.k8s.io"]
-    resources:
-      - pods
-      - deployments
-      - statefulsets
-      - daemonsets
-      - jobs
-      - configmaps
-      - secrets
-      - services
-      - ingresses
-      - events
-      - replicasets
-      - serviceaccounts
-      - persistentvolumeclaims
-      - persistentvolumes
-      - nodes
-      # Roadmap Phase 27's Namespaces page.
-      - namespaces
-      - resourcequotas
-      - limitranges
+  {{- if $broad }}
+  {{- include "vinaire.broadRules" . | nindent 2 }}
+  {{- else }}
+  # The live-update informers (internal/stream) watch these cluster-wide.
+  - apiGroups: ["", "apps", "batch"]
+    resources: [pods, deployments, statefulsets, daemonsets, jobs, nodes]
     verbs: ["get", "list", "watch"]
-  # metrics-server's aggregated API — Pod/Node CPU/Memory gauges and the
-  # Dashboard's cluster-wide usage all degrade to an honest "—" without
-  # this rather than failing loudly, so it's easy to forget.
-  - apiGroups: ["metrics.k8s.io"]
-    resources: ["pods", "nodes"]
-    verbs: ["get", "list"]
-  # pods/log and pods/exec are separate RBAC subresources — granting
-  # "pods" above does NOT imply either of these.
+  # Cluster-type detection and "is this the same cluster" (internal/clusters):
+  # one namespace and one ConfigMap, by name.
   - apiGroups: [""]
-    resources: ["pods/log"]
+    resources: [namespaces]
+    resourceNames: [kube-system]
     verbs: ["get"]
   - apiGroups: [""]
-    resources: ["pods/exec"]
-    verbs: ["create"]
-  # Phase 26's Forward port (the /proxy reverse proxy) — another separate
-  # subresource; drop it to disable the feature.
-  - apiGroups: [""]
-    resources: ["pods/portforward"]
-    verbs: ["create"]
-  - apiGroups: ["storage.k8s.io"]
-    resources: ["storageclasses"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["rbac.authorization.k8s.io"]
-    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["gateway.networking.k8s.io"]
-    resources: ["gateways", "httproutes"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["apiextensions.k8s.io"]
-    resources: ["customresourcedefinitions"]
-    verbs: ["get", "list", "watch"]
+    resources: [configmaps]
+    resourceNames: [kubeadm-config]
+    verbs: ["get"]
+  {{- end }}
   {{- with .Values.rbac.extraRules }}
   {{- toYaml . | nindent 2 }}
   {{- end }}
-  # The fixed write actions AGENTS.md's core rule allows (Phase 9's
-  # restart/delete/rollback, Phase 33's pause/resume/scale/pod delete).
-  # Phase 25's generic YAML create/update is deliberately NOT granted here:
-  # add the create/update verbs you want on the kinds you want through
-  # rbac.extraRules, so what Vinaire may write stays an explicit decision.
-  - apiGroups: ["apps"]
-    resources: ["deployments"]
-    verbs: ["patch", "delete"]
-  - apiGroups: ["apps"]
-    resources: ["deployments/scale", "statefulsets/scale"]
-    verbs: ["get", "update"]
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["delete"]
-  # Phase 30's "Add node" gate (a SelfSubjectAccessReview for create on
-  # nodes) — not an API call the join makes, only the permission to ask.
-  # Drop it to disable the feature for this identity.
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["create"]
-  # Phase 27's namespace delete — irreversible and cascading, so granted
-  # explicitly rather than folded into anything broader.
-  - apiGroups: [""]
-    resources: ["namespaces"]
-    verbs: ["delete"]
+---
+{{- if .Values.rbac.viewer.create }}
+# What a person needs to use Vinaire fully: bind this to the ServiceAccount or
+# user that logs in (see NOTES). Not bound to anyone by default.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "vinaire.fullname" . }}-viewer
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+rules:
+  {{- include "vinaire.broadRules" . | nindent 2 }}
+  {{- with .Values.rbac.extraRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+---
+{{- end }}
+{{- if .Values.rbac.adminRole.create }}
+# Permission to change Vinaire ITSELF (Roadmap Phase 36): add/remove clusters in
+# its registry, change a cluster's type, GitOps mode and sources. These resources
+# don't exist in the cluster — they are only names for the permission, which
+# Vinaire checks with a SelfSubjectAccessReview as the caller. Bind this to
+# whoever administers Vinaire; ordinary users who can browse can't change it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "vinaire.fullname" . }}-admin
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["vinaire.io"]
+    resources: ["clusters", "gitops"]
+    verbs: ["create", "update", "delete"]
+{{- with .Values.rbac.adminRole.subjects }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "vinaire.fullname" $ }}-admin
+  labels:
+    {{- include "vinaire.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "vinaire.fullname" $ }}-admin
+subjects:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}
 {{- end }}

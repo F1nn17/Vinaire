@@ -117,12 +117,21 @@ kubectl rollout status deployment/vinaire -n vinaire
 kubectl port-forward -n vinaire svc/vinaire 8080:8080
 ```
 
-Then get a bounded-duration token for the chart's own ServiceAccount and
-paste it into the login screen at `http://localhost:8080`:
+Then log in with a bounded-duration token of a ServiceAccount that is allowed to
+browse. The chart's own ServiceAccount is deliberately minimal (it can neither read
+Secrets nor change anything — it only feeds the live-update watchers), so give yourself
+one, bound to the chart's `viewer` role:
 
 ```bash
-kubectl create token vinaire -n vinaire --duration=1h
+kubectl create serviceaccount me -n vinaire
+kubectl create clusterrolebinding me-vinaire-viewer \
+  --clusterrole=vinaire-viewer --serviceaccount=vinaire:me
+kubectl create token me -n vinaire --duration=1h
 ```
+
+Changing Vinaire *itself* — adding or removing clusters, GitOps modes and sources — needs
+one more permission, so ordinary users can't: bind `vinaire-admin` (named `<fullname>-admin`) to whoever
+administers it. See [docs/security.md](./docs/security.md).
 
 See `charts/vinaire/values.yaml` for every option — most notably
 `authMode` (`token` by default; `oidc` for real login via Keycloak or
@@ -130,6 +139,21 @@ another provider, `disabled` for no login at all on a disposable local
 cluster) and `rbac.extraRules` for granting read access to CRDs your own
 cluster has installed (Custom Resources, see Vinaire's own Settings ->
 Справка once logged in).
+
+## Security
+
+Read [docs/security.md](./docs/security.md) before putting Vinaire anywhere real: a short
+threat model, the properties that were verified (and how to verify them again), and the risks
+that remain. In short:
+
+- **Don't expose Vinaire directly to the internet.** Reach it over a VPN (WireGuard, NetBird,
+  Tailscale). If it must be public, only behind HTTPS with a real certificate (cert-manager).
+- **Vinaire is a single point with access to every cluster registered in it** — treat it like a
+  bastion host, and keep `CLUSTER_STORE_KEY` out of the repository and the image.
+- Almost everything runs as the signed-in user, so the cluster's own RBAC decides; the roles in
+  the chart (`viewer`, `admin`) are created unbound — bind them deliberately.
+- The `Security` workflow (govulncheck, gosec, npm audit, gitleaks, Trivy, an OWASP ZAP
+  baseline and browser checks of the CSP) runs on every pull request and weekly.
 
 ## Repository layout
 

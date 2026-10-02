@@ -7,6 +7,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/shiraku/vinaire/backend/internal/authn"
+	"github.com/shiraku/vinaire/backend/internal/clusters"
 )
 
 // ServeWS upgrades the request to a WebSocket and streams every Event
@@ -21,25 +22,32 @@ import (
 // from `?cluster=` (Roadmap Phase 11), since that isn't something a cookie
 // can carry.
 //
-// This Hub's informers watch with the backend's own credentials (a Phase 2
-// design predating per-user auth, unchanged here) — the stream isn't
-// scoped to what the caller's own RBAC would let them `list`, only to
-// "logged in or not". A namespace a user's own token can't otherwise list
-// via REST may still surface here. Narrowing that would mean per-user
-// informers (expensive) or a per-event RBAC check (also expensive); out of
-// scope for this phase, flagged for whoever revisits this stream's trust
-// model next.
-func ServeWS(hubs *HubRegistry, defaultCluster string, allowedOrigins []string, auth *authn.Manager) http.HandlerFunc {
+// This Hub's informers watch with the backend's own credentials, so what they
+// see is the whole cluster. Each event is therefore checked, as the connected
+// user, against the cluster's RBAC before it is sent (see authz.go): a
+// namespace the user's own token can't list never surfaces here either.
+// authn.ModeDisabled has no user identity and skips the check.
+func ServeWS(hubs *HubRegistry, registry *clusters.Registry, defaultCluster string, allowedOrigins []string, auth *authn.Manager) http.HandlerFunc {
 	upgrader := websocket.Upgrader{CheckOrigin: originChecker(allowedOrigins)}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := auth.Authenticate(r); !ok {
+		sess, ok := auth.Authenticate(r)
+		if !ok {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		clusterName := r.URL.Query().Get("cluster")
 		if clusterName == "" {
 			clusterName = defaultCluster
+		}
+		var authorizer *eventAuthorizer
+		if auth.Mode != authn.ModeDisabled {
+			cs, err := clientsetFor(registry, auth, sess, clusterName)
+			if err != nil {
+				http.Error(w, "unknown cluster", http.StatusBadRequest)
+				return
+			}
+			authorizer = newEventAuthorizer(ssarCheck(cs))
 		}
 		hub, ok := hubs.Get(clusterName)
 		if !ok {
@@ -76,6 +84,9 @@ func ServeWS(hubs *HubRegistry, defaultCluster string, allowedOrigins []string, 
 			case evt, ok := <-events:
 				if !ok {
 					return
+				}
+				if authorizer != nil && !authorizer.allow(r.Context(), evt) {
+					continue
 				}
 				if err := conn.WriteJSON(evt); err != nil {
 					return

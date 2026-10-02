@@ -668,6 +668,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and creates an Application from a template; selecting native on a cluster where Argo
   CD is detected shows a warning (two controllers applying to one cluster).
 
+- Security audit and hardening (Roadmap Phase 36); see `docs/security.md`.
+  **Fixed:** the live-update WebSocket sent every pod/deployment/node event of the whole
+  cluster to any logged-in user — it is now checked per event against the user's own RBAC
+  (a token scoped to one namespace sees only that namespace); the Gateway/HTTPRoute list and the
+  metrics gauges used Vinaire's own credentials and now act as the caller; exec sessions were not
+  audited and now are (start and end); a token pasted at login created a session without being
+  checked and without any limit — it is now validated against the cluster first, throttled (per token and per
+  address, with backoff), sessions are capped and expired ones purged, and a session lasts at most 12 h
+  (`SESSION_MAX_TTL`); a cluster added by server URL accepted `http://` and link-local addresses — it
+  is now checked, and every connection to a registered cluster refuses metadata/link-local addresses.
+  **Added:** changes to Vinaire itself (add/remove/import/discover a cluster, cluster type, GitOps mode
+  and sources) need a permission on `clusters.vinaire.io` / `gitops.vinaire.io`, granted with an
+  ordinary ClusterRole (`<fullname>-admin` in the chart); CSRF `Origin`/`Sec-Fetch-Site` check on
+  every state-changing request; security headers and a Content-Security-Policy that allows inline scripts
+  only by hash; the registry's encryption key can be rotated (`CLUSTER_STORE_KEY_PREVIOUS`);
+  `CORS_ALLOWED_ORIGINS` may no longer contain a wildcard; ESLint rules against HTML sinks and web storage;
+  revealed Secret values hide themselves after 30 s; a `Security` CI workflow (govulncheck, gosec,
+  npm audit, gitleaks, Trivy, OWASP ZAP baseline, browser CSP checks) and Dependabot.
+  **Changed (Helm chart 0.2.0):** the pod runs non-root with a read-only root filesystem, no capabilities and
+  a RuntimeDefault seccomp profile, with default requests/limits; Vinaire's own ServiceAccount no longer
+  gets Secrets or any write verb (token/OIDC mode: users act as themselves) — a separate, unbound
+  `<fullname>-viewer` role is for people (see the chart notes: log in as a ServiceAccount bound to
+  it, not as Vinaire's own); the OIDC client secret comes from a Secret; an optional NetworkPolicy; the
+  session cookie defaults to `SameSite=Strict`.
+
 ### Changed
 
 - Replaced the draft `ROADMAP.md` with a detailed, phase-by-phase technical

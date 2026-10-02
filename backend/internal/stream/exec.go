@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
@@ -46,7 +47,11 @@ type execControlMessage struct {
 // Kubernetes RBAC bound to their own logged-in identity — an unauthorized
 // attempt fails with a real error from the exec subresource call itself,
 // same as `kubectl exec` would; Vinaire doesn't evaluate that separately.
-func ServeExec(registry *clusters.Registry, auth *authn.Manager, allowedOrigins []string) http.HandlerFunc {
+//
+// Opening a terminal in a container is one of the most powerful things Vinaire
+// does, so the start and the end of every session are audited (who, which pod and
+// container, from where, for how long) — Roadmap Phase 36.
+func ServeExec(registry *clusters.Registry, auth *authn.Manager, allowedOrigins []string, audit AuditFunc) http.HandlerFunc {
 	upgrader := websocket.Upgrader{CheckOrigin: originChecker(allowedOrigins)}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +81,22 @@ func ServeExec(registry *clusters.Registry, auth *authn.Manager, allowedOrigins 
 			return
 		}
 		defer conn.Close()
+
+		who := sess.Username
+		if who == "" {
+			who = sess.OwnerKey()
+		}
+		started := time.Now()
+		detail := map[string]any{
+			"namespace": namespace, "container": container, "cluster": r.URL.Query().Get("cluster"), "remote_addr": r.RemoteAddr,
+		}
+		if audit != nil {
+			audit("exec", name, who, detail)
+			defer func() {
+				ended := map[string]any{"namespace": namespace, "container": container, "duration_s": int(time.Since(started).Seconds())}
+				audit("exec-ended", name, who, ended)
+			}()
+		}
 
 		req := clientset.CoreV1().RESTClient().Post().
 			Resource("pods").

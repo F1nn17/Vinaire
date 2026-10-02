@@ -203,6 +203,35 @@ If a request conflicts with this — asks for a write action on a resource
 kind or verb not already covered above — stop and flag it rather than
 silently extending write access.
 
+## Security checklist for every phase
+
+Roadmap Phase 36 audited the project against these; every future phase keeps them. `docs/security.md`
+records what was verified and how.
+
+- **Never log, return or store in the clear** a token, Secret value, kubeconfig, SSH credential, git
+  token or session id. Wrap credentials in a type that prints `[REDACTED]`, scrub them from job output,
+  keep them out of URLs and error messages. The canary test (`backend/security_test.go`) is the model:
+  add your flow to it.
+- **Check the caller's permissions before returning data.** Use the caller's own `rest.Config`
+  (`resolveRESTConfig` / `callerConfig`) — never `entry.Clientset`, `entry.MetricsClientset` or
+  `entry.GatewayClientset`, which carry Vinaire's own identity, except for the documented informers. Data
+  that comes out of a shared cache (the live stream) is checked per event as the user.
+- **Validate any input that ends up in a path, a URL, a command or a query**, with a strict pattern; build
+  paths with a containment check; fetch only through `internal/netguard` (or `rest.Config.Dial` for
+  clusters); take repositories and registries from operator configuration, never from a request.
+- **Audit-log every mutating action** (who, what, which object — never the secret), including the
+  background ones (`AuditBackground`) and long-lived sessions (start *and* end, as `exec` does).
+- **Changes to Vinaire's own configuration** call `requireVinaireRight` first.
+- **A new WebSocket endpoint** must use `originChecker` (a test fails the build otherwise); a new
+  state-changing REST route is covered by `OriginGuard` automatically.
+- **Cluster data is untrusted input in the UI**: render as text; `dangerouslySetInnerHTML`, `innerHTML`,
+  `eval` and web storage are lint errors.
+- **Don't weaken a guard to make something work** (CSP, SameSite, origin check, TLS verification, the
+  dial guard). If a feature seems to need it, raise it as a decision. `TestInsecureSkipVerifyOnlyWhereReviewed`
+  and the other codebase rule tests make a quiet weakening fail the build.
+- **Add a test that fails if the property is lost**, and run `govulncheck`, `gosec -severity medium
+  -confidence medium` and `npm audit` (the `Security` workflow does).
+
 ## Port-forward proxy (Phase 26) — not a write, but a new access path
 
 `/proxy/{cluster}/{namespace}/{pod}/{port}/…` (or `{https:port}`) is an
@@ -328,7 +357,16 @@ request context. `AUTH_MODE` selects how that identity was established:
   Phase 10.
 
 There is no separate app-level policy layer (no group→namespace allow-list
-in this codebase): `internal/clusters.Entry.ClientsetForToken` builds a
+in this codebase) — with **one deliberate, narrow exception** (Phase 36): changes to
+Vinaire's *own* state (add/remove/import/discover a cluster, change its type, GitOps mode
+and sources, SSH cluster create/import) aren't Kubernetes actions, so no Kubernetes RBAC
+rule covers them. They are gated by `Handler.requireVinaireRight`, which keeps the same
+philosophy: it asks the cluster, with a `SelfSubjectAccessReview` **as the caller**, whether
+they may `create`/`update`/`delete` the virtual resources `clusters.vinaire.io` /
+`gitops.vinaire.io` on the registry's default cluster (the chart ships an unbound
+`<fullname>-admin` ClusterRole). Any new handler that changes Vinaire's own
+configuration MUST call it first (a test lists every gated handler). Otherwise:
+`internal/clusters.Entry.ClientsetForToken` builds a
 per-request Kubernetes clientset authenticated as the caller's own
 token/identity, so **the target cluster's real RBAC is what decides**
 what a request can do — an unauthorized call gets a real `403`/`401` back
@@ -489,6 +527,13 @@ rules:
   # can browse but not install.
   - apiGroups: [""]
     resources: ["secrets"]
+    verbs: ["create", "update", "delete"]
+  # Phase 36: permission to change Vinaire ITSELF. These resources don't exist in
+  # the cluster — they are names for the permission, asked with a
+  # SelfSubjectAccessReview as the caller. The chart creates this role unbound
+  # (<fullname>-admin); bind it to whoever administers Vinaire.
+  - apiGroups: ["vinaire.io"]
+    resources: ["clusters", "gitops"]
     verbs: ["create", "update", "delete"]
   # Phase 29's Argo CD mode: listing Applications needs read on them (grant
   # the group like any other CRD above), "Sync now" a patch. Native mode needs

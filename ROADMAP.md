@@ -3161,7 +3161,49 @@ from scratch.
 
 ---
 
-## Phase 36 — Security audit and hardening
+## Phase 36 — Security audit and hardening ✅ done
+
+> **Outcome note:** The audit's write-up is `docs/security.md` (threat model, the verified
+> properties and how to re-verify each, the residual risks). The audit found **real problems**,
+> all fixed: **(1) the live-update WebSocket leaked the whole cluster** — informers run as
+> Vinaire, and the stream sent every pod/deployment/node event to any logged-in user; each event
+> is now checked against the user's own RBAC (a `SelfSubjectAccessReview`, cached 10 s, failing
+> closed); **(1b)** the Gateway API list and the metrics gauges used Vinaire's own credentials;
+> **(10) exec was not audited at all**, and a pasted login token created a session unchecked
+> and unthrottled (now validated against the cluster first, throttled per token and per address
+> with backoff, sessions capped, purged and limited to 12 h); a cluster added by server URL
+> accepted `http://` and link-local addresses; the Helm chart gave Vinaire's own ServiceAccount
+> Secrets read and a set of write verbs it never uses in token/OIDC mode and ran the pod with no
+> securityContext at all; development log files were committed to git. **Decision made with the
+> project owner:** actions on Vinaire itself (registry, cluster type, GitOps mode and sources)
+> are gated by a permission on the virtual resources `clusters.vinaire.io` / `gitops.vinaire.io`,
+> asked of the cluster as the caller — it keeps "the cluster's RBAC decides" instead of adding an
+> app-level policy layer, and AGENTS.md now records that single exception. Other deviations from
+> the plan: the CSP keeps `style-src 'unsafe-inline'` (the UI sets style attributes, Monaco
+> injects styles) but scripts are restricted by the hash of each page's inline scripts rather
+> than `unsafe-inline`; the key rotation is "new key + `CLUSTER_STORE_KEY_PREVIOUS`, re-encrypted
+> on first load" rather than a separate command; the NetworkPolicy is off by default (the right
+> egress is cluster-specific); `readOnlyRootFilesystem` needed the audit log moved to a mounted
+> `/audit`. **Verified live** against the dev cluster: a ServiceAccount scoped to one namespace
+> got `403` from every REST endpoint tried for other namespaces and only that namespace's
+> events on the stream while a cluster-admin token got all of them; the permission gate refused
+> an ordinary user, passed once `vinaire-admin` was bound to that one ServiceAccount, and
+> refused again after the binding was removed; the 6th bad login got `429`; the session cookie
+> read back `HttpOnly`/`Secure`/`SameSite=Strict`; in Chromium every page and the Monaco editor
+> (Web Workers included) load with no CSP violation and an injected inline script and handler are
+> blocked; the Linux binary ran in a container with `--read-only --user 65532 --cap-drop ALL`
+> and served, synced its informers and audited an action; `kubectl auth can-i --list` for the
+> minimal ServiceAccount shows only get/list/watch on six kinds and every write and Secret read
+> `no`; the chart renders and is accepted by the API server in token, disabled and OIDC
+> configurations. Scanners run: govulncheck 0 reachable vulnerabilities, gosec clean at
+> medium+ (justified findings annotated `#nosec <rule> -- <why>`), gitleaks 4 test-fixture
+> findings (one a real, expired kubeadm token — replaced), `npm audit` 2 low advisories on
+> Monaco's bundled DOMPurify (accepted, documented). **Not run locally:** Trivy, the OWASP ZAP
+> baseline and NetworkPolicy enforcement — they are in the new `Security` workflow (also
+> weekly) — and an independent manual review, which `docs/security.md` recommends before
+> exposing Vinaire outside a trusted network. **Note for upgrades:** chart 0.2.0 changes the
+> default RBAC — log in as a ServiceAccount bound to the new `<fullname>-viewer` role, not as
+> Vinaire's own (see the chart notes); and `SameSite` now defaults to `Strict`.
 
 **Goal:** verify specific security properties across the whole project
 (Phases 1–35) and lock them in with automated CI checks. This is not a

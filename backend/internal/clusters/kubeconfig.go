@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/shiraku/vinaire/backend/internal/netguard"
 	"net"
 	"net/url"
 	"os"
@@ -60,6 +61,10 @@ type ParseOptions struct {
 // checkServer rejects a server URL that is not https, or that points at
 // addresses with no business being a Kubernetes API (link-local — cloud
 // metadata — unspecified, multicast).
+func CheckServer(server string) error {
+	return checkServer(server)
+}
+
 func checkServer(server string) error {
 	u, err := url.Parse(server)
 	if err != nil || u.Host == "" {
@@ -184,7 +189,7 @@ func inlineFiles(cluster *clientcmdapi.Cluster, user *clientcmdapi.AuthInfo, all
 		if !allowFiles {
 			return fmt.Errorf("the kubeconfig refers to a %s file (%s); paste a kubeconfig with the certificate data inline instead", what, "file reference not allowed")
 		}
-		b, err := os.ReadFile(path)
+		b, err := os.ReadFile(path) // #nosec G304 -- a kubeconfig path from this machine's own discovery list, never from a request
 		if err != nil {
 			return fmt.Errorf("couldn't read the %s file: %w", what, err)
 		}
@@ -224,7 +229,19 @@ func RESTConfigFromKubeconfig(data []byte) (*rest.Config, error) {
 	// tampered one can't smuggle a command in.
 	cfg.ExecProvider = nil
 	cfg.AuthProvider = nil
+	guardDial(cfg)
 	return cfg, nil
+}
+
+// guardDial makes every connection to a registered cluster refuse link-local
+// (cloud metadata), multicast and unspecified addresses — checked on the address
+// actually dialled, so a hostname that resolves there (or is rebound to it) is
+// refused too. Loopback and private ranges stay allowed: that is where clusters
+// live (k3d, kind, a LAN).
+func guardDial(cfg *rest.Config) {
+	if cfg.Dial == nil {
+		cfg.Dial = netguard.DialContext(true)
+	}
 }
 
 func encodeKey(key []byte) string { return base64.StdEncoding.EncodeToString(key) }

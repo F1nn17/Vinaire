@@ -4,8 +4,11 @@
 package config
 
 import (
+	"fmt"
+	"net/url"
 	"os"
 	"strings"
+	"time"
 )
 
 // Config holds all environment-driven settings for the backend.
@@ -109,6 +112,19 @@ type Config struct {
 	// the cluster registry is sealed with. If unset, a key is generated and
 	// kept in a Secret (in-cluster) or a 0600 file in DataDir.
 	ClusterStoreKey string
+	// ClusterStorePrevious (CLUSTER_STORE_KEY_PREVIOUS, comma-separated) are
+	// earlier keys the registry may still be sealed with: set the new key as
+	// CLUSTER_STORE_KEY and the old one here, restart, and everything is
+	// re-encrypted in place on the first load.
+	ClusterStorePrevious []string
+
+	// SessionMaxTTL (SESSION_MAX_TTL, a Go duration like 8h) caps how long a login
+	// lasts however long its token lives; default 12h.
+	SessionMaxTTL time.Duration
+	// TrustForwardedFor (TRUST_FORWARDED_FOR=true): the login throttle counts the
+	// first X-Forwarded-For address instead of the connection's peer. Set it only
+	// behind a proxy you control that sets the header.
+	TrustForwardedFor bool
 
 	// DiscoveryKubeconfigPaths (DISCOVERY_KUBECONFIG_PATHS, comma-separated)
 	// are extra kubeconfig files local discovery should look at, besides
@@ -117,37 +133,38 @@ type Config struct {
 }
 
 const (
-	defaultPort            = "8080"
-	defaultCORSOrigin      = "http://localhost:3100"
-	defaultFrontendURL     = "http://localhost:3100"
-	defaultAuthMode        = "token"
-	defaultOIDCIssuerURL   = "http://localhost:8180/realms/vinaire-dev"
-	defaultOIDCClientID    = "vinaire-frontend"
-	defaultOIDCRedirectURL = "http://localhost:8080/api/v1/auth/oidc/callback"
-	envPort                = "PORT"
-	envKubeconfig          = "KUBECONFIG"
-	envCORSAllowedOrigin   = "CORS_ALLOWED_ORIGINS"
-	envFrontendURL         = "FRONTEND_URL"
-	envAuthMode            = "AUTH_MODE"
-	envCookieSecure        = "COOKIE_SECURE"
-	envCookieSameSite      = "COOKIE_SAMESITE"
-	defaultCookieSecure    = "true"
-	defaultCookieSameSite  = "none"
-	envOIDCIssuerURL       = "OIDC_ISSUER_URL"
-	envOIDCClientID        = "OIDC_CLIENT_ID"
-	envOIDCClientSecret    = "OIDC_CLIENT_SECRET"
-	envOIDCRedirectURL     = "OIDC_REDIRECT_URL"
-	envStaticDir           = "STATIC_DIR"
-	envClusterContexts     = "CLUSTER_CONTEXTS"
-	envClusterName         = "CLUSTER_NAME"
-	envPrometheusURL       = "PROMETHEUS_URL"
-	envLokiURL             = "LOKI_URL"
-	envAlertmanagerURL     = "ALERTMANAGER_URL"
-	envAuditLogPath        = "AUDIT_LOG_PATH"
-	defaultAuditLogPath    = "audit.log"
-	envDataDir             = "VINAIRE_DATA_DIR"
-	envClusterStoreKey     = "CLUSTER_STORE_KEY"
-	envDiscoveryPaths      = "DISCOVERY_KUBECONFIG_PATHS"
+	defaultPort             = "8080"
+	defaultCORSOrigin       = "http://localhost:3100"
+	defaultFrontendURL      = "http://localhost:3100"
+	defaultAuthMode         = "token"
+	defaultOIDCIssuerURL    = "http://localhost:8180/realms/vinaire-dev"
+	defaultOIDCClientID     = "vinaire-frontend"
+	defaultOIDCRedirectURL  = "http://localhost:8080/api/v1/auth/oidc/callback"
+	envPort                 = "PORT"
+	envKubeconfig           = "KUBECONFIG"
+	envCORSAllowedOrigin    = "CORS_ALLOWED_ORIGINS"
+	envFrontendURL          = "FRONTEND_URL"
+	envAuthMode             = "AUTH_MODE"
+	envCookieSecure         = "COOKIE_SECURE"
+	envCookieSameSite       = "COOKIE_SAMESITE"
+	defaultCookieSecure     = "true"
+	defaultCookieSameSite   = "strict"
+	envOIDCIssuerURL        = "OIDC_ISSUER_URL"
+	envOIDCClientID         = "OIDC_CLIENT_ID"
+	envOIDCClientSecret     = "OIDC_CLIENT_SECRET"
+	envOIDCRedirectURL      = "OIDC_REDIRECT_URL"
+	envStaticDir            = "STATIC_DIR"
+	envClusterContexts      = "CLUSTER_CONTEXTS"
+	envClusterName          = "CLUSTER_NAME"
+	envPrometheusURL        = "PROMETHEUS_URL"
+	envLokiURL              = "LOKI_URL"
+	envAlertmanagerURL      = "ALERTMANAGER_URL"
+	envAuditLogPath         = "AUDIT_LOG_PATH"
+	defaultAuditLogPath     = "audit.log"
+	envDataDir              = "VINAIRE_DATA_DIR"
+	envClusterStorePrevious = "CLUSTER_STORE_KEY_PREVIOUS"
+	envClusterStoreKey      = "CLUSTER_STORE_KEY"
+	envDiscoveryPaths       = "DISCOVERY_KUBECONFIG_PATHS"
 )
 
 // Load reads configuration from the environment, falling back to defaults
@@ -175,6 +192,9 @@ func Load() Config {
 
 		DataDir:                  os.Getenv(envDataDir),
 		ClusterStoreKey:          os.Getenv(envClusterStoreKey),
+		ClusterStorePrevious:     splitCSV(os.Getenv(envClusterStorePrevious)),
+		SessionMaxTTL:            parseDuration(os.Getenv("SESSION_MAX_TTL")),
+		TrustForwardedFor:        os.Getenv("TRUST_FORWARDED_FOR") == "true",
 		DiscoveryKubeconfigPaths: splitCSV(os.Getenv(envDiscoveryPaths)),
 	}
 }
@@ -198,4 +218,30 @@ func splitCSV(s string) []string {
 		}
 	}
 	return out
+}
+
+// parseDuration reads a Go duration, returning 0 (meaning "use the default") for
+// empty or invalid input.
+func parseDuration(s string) time.Duration {
+	d, err := time.ParseDuration(strings.TrimSpace(s))
+	if err != nil || d < 0 {
+		return 0
+	}
+	return d
+}
+
+// ValidateCORSOrigins refuses an allow-list that would let any website call the
+// API with the user's cookie: a wildcard, a missing scheme or host, or a path.
+// CORS_ALLOWED_ORIGINS must be exact origins (scheme://host[:port]).
+func ValidateCORSOrigins(origins []string) error {
+	for _, o := range origins {
+		if strings.Contains(o, "*") {
+			return fmt.Errorf("CORS_ALLOWED_ORIGINS may not contain a wildcard (%q): list exact origins, because the API is used with cookies", o)
+		}
+		u, err := url.Parse(o)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || (u.Path != "" && u.Path != "/") || u.RawQuery != "" {
+			return fmt.Errorf("CORS_ALLOWED_ORIGINS entry %q isn't an origin like https://vinaire.example.com", o)
+		}
+	}
+	return nil
 }

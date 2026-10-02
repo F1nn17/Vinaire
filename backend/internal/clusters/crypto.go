@@ -21,11 +21,16 @@ import (
 
 const sealedPrefix = "enc:v1:"
 
-// Cipher seals and opens registry payloads.
-type Cipher struct{ aead cipher.AEAD }
+// Cipher seals and opens registry payloads. It always seals with its current key
+// but can also open data sealed with earlier keys, which is how the key is
+// rotated: start with the new key as current and the old one as previous, and
+// the first load re-encrypts everything in place (see Store.Load).
+type Cipher struct {
+	aead     cipher.AEAD
+	previous []cipher.AEAD
+}
 
-// NewCipher builds an AES-256-GCM cipher from a 32-byte key.
-func NewCipher(key []byte) (*Cipher, error) {
+func newAEAD(key []byte) (cipher.AEAD, error) {
 	if len(key) != 32 {
 		return nil, fmt.Errorf("cluster store key must be 32 bytes, got %d", len(key))
 	}
@@ -33,11 +38,41 @@ func NewCipher(key []byte) (*Cipher, error) {
 	if err != nil {
 		return nil, err
 	}
-	aead, err := cipher.NewGCM(block)
+	return cipher.NewGCM(block)
+}
+
+// NewCipher builds an AES-256-GCM cipher from a 32-byte key, plus any previous
+// keys data may still be sealed with.
+func NewCipher(key []byte, previous ...[]byte) (*Cipher, error) {
+	aead, err := newAEAD(key)
 	if err != nil {
 		return nil, err
 	}
-	return &Cipher{aead: aead}, nil
+	c := &Cipher{aead: aead}
+	for _, p := range previous {
+		old, err := newAEAD(p)
+		if err != nil {
+			return nil, fmt.Errorf("previous key: %w", err)
+		}
+		c.previous = append(c.previous, old)
+	}
+	return c, nil
+}
+
+// ParseKeys decodes a comma-separated list of base64 keys (CLUSTER_STORE_KEY_PREVIOUS).
+func ParseKeys(list string) ([][]byte, error) {
+	var out [][]byte
+	for _, s := range strings.Split(list, ",") {
+		if strings.TrimSpace(s) == "" {
+			continue
+		}
+		k, err := ParseKey(s)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, k)
+	}
+	return out, nil
 }
 
 // GenerateKey returns 32 random bytes.
@@ -76,22 +111,33 @@ func (c *Cipher) Seal(plain []byte) []byte {
 // treated as the legacy plaintext JSON Phase 24 wrote and returned as-is, so
 // an upgrade keeps working; the next Save re-writes it encrypted.
 func (c *Cipher) Open(data []byte) ([]byte, error) {
+	plain, _, err := c.OpenReport(data)
+	return plain, err
+}
+
+// OpenReport is Open that also says whether the data should be re-sealed with
+// the current key: it was sealed with a previous key, or was never sealed.
+func (c *Cipher) OpenReport(data []byte) (plain []byte, reseal bool, err error) {
 	if !bytes.HasPrefix(data, []byte(sealedPrefix)) {
-		return data, nil
+		return data, true, nil
 	}
 	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data[len(sealedPrefix):])))
 	if err != nil {
-		return nil, errors.New("stored cluster data is corrupt")
+		return nil, false, errors.New("stored cluster data is corrupt")
 	}
 	ns := c.aead.NonceSize()
 	if len(raw) < ns {
-		return nil, errors.New("stored cluster data is corrupt")
+		return nil, false, errors.New("stored cluster data is corrupt")
 	}
-	plain, err := c.aead.Open(nil, raw[:ns], raw[ns:], nil)
-	if err != nil {
-		return nil, errors.New("couldn't decrypt the stored clusters — is CLUSTER_STORE_KEY the key they were saved with?")
+	if plain, err := c.aead.Open(nil, raw[:ns], raw[ns:], nil); err == nil {
+		return plain, false, nil
 	}
-	return plain, nil
+	for _, old := range c.previous {
+		if plain, err := old.Open(nil, raw[:ns], raw[ns:], nil); err == nil {
+			return plain, true, nil
+		}
+	}
+	return nil, false, errors.New("couldn't decrypt the stored clusters — is CLUSTER_STORE_KEY the key they were saved with? (after changing the key, put the old one in CLUSTER_STORE_KEY_PREVIOUS)")
 }
 
 // IsSealed reports whether data is in the encrypted format.

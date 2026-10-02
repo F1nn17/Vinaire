@@ -1,0 +1,157 @@
+name: Security
+
+# Roadmap Phase 36. These are checkable claims, not a guarantee of "no
+# vulnerabilities": scanners don't find logic flaws (an RBAC bypass, a wrong
+# permission check) — those are covered by the tests in `go test ./...` and by a
+# manual review before Vinaire is exposed outside a trusted network.
+#
+# Runs on every pull request and push to main, and weekly: a vulnerability is
+# published against a dependency you already ship, not only when you change it.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * 1" # Mondays 05:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go — govulncheck, gosec, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+      # Fails when a dependency this code actually calls has a known vulnerability.
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+      # Medium and above only; every accepted finding carries a `#nosec <rule> -- <why>`
+      # next to the code, so a new one has to be argued for in the diff.
+      - name: gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -quiet -severity medium -confidence medium -exclude-dir=integration ./...
+      # Includes the security tests: namespace-scoped stream, permission gate, login
+      # throttle, CSP, canary-in-logs, codebase rules (no InsecureIgnoreHostKey...).
+      - name: tests
+        run: go test -count=1 ./...
+
+  frontend:
+    name: Frontend — npm audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts
+      # Production dependencies only; high and critical fail the build. (Two low
+      # advisories on monaco-editor's bundled DOMPurify are known and accepted: the
+      # editors never render untrusted markdown — see docs/security.md.)
+      - name: npm audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: lint (includes the no-dangerouslySetInnerHTML / no-web-storage rules)
+        run: npm run lint
+
+  secrets:
+    name: Secrets — gitleaks over the full history
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # every commit, not just the tip
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: gitleaks
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@latest
+          "$(go env GOPATH)/bin/gitleaks" detect --source . --config .gitleaks.toml --no-banner
+
+  image:
+    name: Image — trivy, then a dynamic check against a running instance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t vinaire:ci .
+
+      # Fixable HIGH/CRITICAL vulnerabilities in the OS layer or in Go/npm
+      # libraries baked into the image fail the build; ones with no fix yet don't.
+      - name: trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: vinaire:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      - name: Install k3d and Helm
+        run: |
+          curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Install the chart on a disposable cluster
+        run: |
+          k3d cluster create vinaire-sec --agents 0 --wait --timeout 120s
+          k3d image import vinaire:ci -c vinaire-sec
+          # the chart's own defaults: non-root, read-only root filesystem, no capabilities
+          helm install vinaire charts/vinaire -n vinaire --create-namespace \
+            --set image.repository=vinaire --set image.tag=ci --set image.pullPolicy=Never \
+            --set cookie.secure=false --wait --timeout 180s
+          kubectl -n vinaire rollout status deployment/vinaire --timeout=120s
+      - name: Prove the pod really runs hardened
+        run: |
+          pod=$(kubectl -n vinaire get pod -l app.kubernetes.io/name=vinaire -o jsonpath='{.items[0].metadata.name}')
+          kubectl -n vinaire get pod "$pod" -o jsonpath='{.spec.containers[0].securityContext}{"\n"}{.spec.securityContext}{"\n"}'
+          kubectl -n vinaire get pod "$pod" -o jsonpath='{.spec.containers[0].securityContext.readOnlyRootFilesystem}' | grep -q true
+          kubectl -n vinaire get pod "$pod" -o jsonpath='{.spec.containers[0].securityContext.allowPrivilegeEscalation}' | grep -q false
+          kubectl -n vinaire get pod "$pod" -o jsonpath='{.spec.securityContext.runAsNonRoot}' | grep -q true
+      - name: Vinaire's own ServiceAccount has no wildcard rule and can't read Secrets
+        run: |
+          sa=system:serviceaccount:vinaire:vinaire
+          ! kubectl auth can-i --list --as="$sa" | grep -E '^\*|\[\*\]'
+          [ "$(kubectl auth can-i get secrets -A --as="$sa")" = "no" ]
+          [ "$(kubectl auth can-i delete deployments -A --as="$sa")" = "no" ]
+      - name: Expose it
+        run: |
+          kubectl -n vinaire port-forward svc/vinaire 8080:8080 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8080/healthz && break; sleep 1; done
+
+      # The CSP, headers and CSRF guard checked in a real browser: no violations on
+      # the main pages, an injected inline script is blocked, a cross-site POST is refused.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Browser security checks
+        working-directory: frontend
+        run: |
+          npm install --ignore-scripts
+          npx playwright install --with-deps chromium
+          E2E_BASE_URL=http://localhost:8080 E2E_SAME_ORIGIN=1 npx playwright test e2e/security.spec.ts
+
+      # Passive baseline against the running instance. .zap/rules.tsv turns the
+      # checks for what Phase 36 hardened (CSP, cookie flags, framing, sniffing)
+      # into failures.
+      - name: OWASP ZAP baseline
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: http://localhost:8080
+          rules_file_name: .zap/rules.tsv
+          fail_action: true
+          allow_issue_writing: false

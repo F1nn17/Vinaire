@@ -8,8 +8,8 @@ import (
 func TestScrubKubeadmMasksJoinCredentials(t *testing.T) {
 	hash := strings.Repeat("ab", 32)
 	cases := map[string]string{
-		"[bootstrap-token] Using token: gftt5q.x88y4p4dtjlymjor":        "[bootstrap-token] Using token: [REDACTED]",
-		"kubeadm join 10.0.0.5:6443 --token gftt5q.x88y4p4dtjlymjor \\": "kubeadm join 10.0.0.5:6443 --token [REDACTED] \\",
+		"[bootstrap-token] Using token: abcdef.0123456789abcdef":        "[bootstrap-token] Using token: [REDACTED]",
+		"kubeadm join 10.0.0.5:6443 --token abcdef.0123456789abcdef \\": "kubeadm join 10.0.0.5:6443 --token [REDACTED] \\",
 		"\t--discovery-token-ca-cert-hash sha256:" + hash:               "\t--discovery-token-ca-cert-hash sha256:[REDACTED]",
 		"--control-plane --certificate-key " + strings.Repeat("0f", 32): "--control-plane --certificate-key [REDACTED]",
 	}
@@ -32,14 +32,14 @@ func TestScrubKubeadmMasksJoinCredentials(t *testing.T) {
 }
 
 func TestKubeadmRunsAreScrubbed(t *testing.T) {
-	f := &fakeRunner{output: []string{"[bootstrap-token] Using token: gftt5q.x88y4p4dtjlymjor", "done"}}
+	f := &fakeRunner{output: []string{"[bootstrap-token] Using token: abcdef.0123456789abcdef", "done"}}
 	var logged []string
 	k := Kubeadm{Config: DefaultKubeadmConfig()}
 	err := k.InstallControlPlane(t.Context(), f, ControlPlaneOptions{TLSSAN: "10.0.0.5", Kubeadm: KubeadmOptions{Minor: k.Config.DefaultMinor()}}, func(l string) { logged = append(logged, l) })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(strings.Join(logged, "\n"), "gftt5q") {
+	if strings.Contains(strings.Join(logged, "\n"), "abcdef") {
 		t.Errorf("the bootstrap token reached the log: %v", logged)
 	}
 }

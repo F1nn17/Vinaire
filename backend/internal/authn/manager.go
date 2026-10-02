@@ -3,13 +3,22 @@ package authn
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
 )
+
+// ErrInvalidToken is what a TokenValidator returns for a token the cluster
+// rejects, as opposed to a cluster that couldn't be asked.
+var ErrInvalidToken = errors.New("the cluster doesn't accept this token")
+
+// TokenValidator asks the cluster whether a token is accepted. A token it
+// refuses never gets a session, so the session store can't be filled by someone
+// with no credentials, and a typo shows up at login instead of as 401s later.
+type TokenValidator func(ctx context.Context, token string) error
 
 // Mode selects which AuthProvider implementation is active, via the
 // AUTH_MODE env var (see internal/config).
@@ -48,7 +57,33 @@ type Manager struct {
 	CookieSameSite http.SameSite
 	FrontendURL    string
 
-	oidc *oidcClient // nil unless Mode == ModeOIDC
+	// ValidateToken, when set, is asked about every pasted token before a session
+	// is created (token mode).
+	ValidateToken TokenValidator
+	// MaxSessionTTL caps a session's life however long the token it holds lives
+	// (a ServiceAccount token can be valid for a year).
+	MaxSessionTTL time.Duration
+	// TrustForwardedFor makes the login throttle count X-Forwarded-For's first
+	// address instead of the connection's peer — only for a deployment where a
+	// trusted proxy sets it.
+	TrustForwardedFor bool
+
+	limiter *loginLimiter
+	oidc    *oidcClient // nil unless Mode == ModeOIDC
+}
+
+// defaultMaxSessionTTL is how long a login lasts at most unless configured.
+const defaultMaxSessionTTL = 12 * time.Hour
+
+func (m *Manager) capExpiry(exp time.Time) time.Time {
+	max := m.MaxSessionTTL
+	if max <= 0 {
+		max = defaultMaxSessionTTL
+	}
+	if limit := time.Now().Add(max); exp.After(limit) {
+		return limit
+	}
+	return exp
 }
 
 // ManagerConfig is the subset of internal/config.Config NewManager needs —
@@ -63,6 +98,9 @@ type ManagerConfig struct {
 	OIDCClientID     string
 	OIDCClientSecret string
 	OIDCRedirectURL  string
+	// SessionMaxTTL and TrustForwardedFor: see Manager.
+	SessionMaxTTL     time.Duration
+	TrustForwardedFor bool
 }
 
 func parseSameSite(s string) http.SameSite {
@@ -71,8 +109,10 @@ func parseSameSite(s string) http.SameSite {
 		return http.SameSiteStrictMode
 	case "lax":
 		return http.SameSiteLaxMode
-	default:
+	case "none":
 		return http.SameSiteNoneMode
+	default:
+		return http.SameSiteStrictMode // the safe reading of anything unrecognised
 	}
 }
 
@@ -88,6 +128,13 @@ func NewManager(ctx context.Context, cfg ManagerConfig) (*Manager, error) {
 		CookieSecure:   cfg.CookieSecure,
 		CookieSameSite: parseSameSite(cfg.CookieSameSite),
 		FrontendURL:    cfg.FrontendURL,
+
+		MaxSessionTTL:     cfg.SessionMaxTTL,
+		TrustForwardedFor: cfg.TrustForwardedFor,
+		limiter:           newLoginLimiter(),
+	}
+	if ms, ok := m.Sessions.(*MemoryStore); ok {
+		ms.StartJanitor(ctx)
 	}
 
 	switch m.Mode {
@@ -168,13 +215,44 @@ func (m *Manager) HandleTokenLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ip, tkey := clientIP(r, m.TrustForwardedFor), tokenKey(req.Token)
+	if ok, wait := m.limiter.allowed(ip, tkey); !ok {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		respondError(w, http.StatusTooManyRequests, "too many failed logins — try again in a little while")
+		return
+	}
+	if m.ValidateToken != nil {
+		vctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		err := m.ValidateToken(vctx, req.Token)
+		cancel()
+		switch {
+		case errors.Is(err, ErrInvalidToken):
+			m.limiter.fail(ip, tkey)
+			respondError(w, http.StatusUnauthorized, "the cluster doesn't accept this token")
+			return
+		case err != nil:
+			// the cluster couldn't be asked: not the user's mistake, so not counted
+			respondError(w, http.StatusServiceUnavailable, "couldn't reach the cluster to check this token")
+			return
+		}
+	}
+	m.limiter.success(ip, tkey)
+
 	expiry, err := tokenExpiry(req.Token)
 	if err != nil {
 		expiry = time.Now().Add(defaultTokenSessionTTL)
 	}
+	expiry = m.capExpiry(expiry)
 
-	sess := &Session{ID: uuid.NewString(), K8sToken: req.Token, ExpiresAt: expiry}
-	m.Sessions.Create(sess)
+	// a new login never inherits an existing session
+	if old, err := r.Cookie(sessionCookie); err == nil {
+		m.Sessions.Delete(old.Value)
+	}
+	sess := &Session{ID: NewSessionID(), K8sToken: req.Token, ExpiresAt: expiry}
+	if err := m.Sessions.Create(sess); err != nil {
+		respondError(w, http.StatusServiceUnavailable, "the server can't take more logins right now")
+		return
+	}
 	m.setSessionCookie(w, sess.ID, expiry)
 	respondJSON(w, map[string]string{"status": "ok"})
 }
@@ -190,7 +268,7 @@ func (m *Manager) HandleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Manager) setSessionCookie(w http.ResponseWriter, sessionID string, expiry time.Time) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly always; Secure and SameSite come from configuration (defaults: Secure, Strict)
 		Name:     sessionCookie,
 		Value:    sessionID,
 		Path:     "/",
@@ -202,7 +280,7 @@ func (m *Manager) setSessionCookie(w http.ResponseWriter, sessionID string, expi
 }
 
 func (m *Manager) clearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- clearing the session cookie, same attributes as when it was set
 		Name:     sessionCookie,
 		Value:    "",
 		Path:     "/",

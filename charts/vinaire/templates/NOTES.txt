@@ -11,16 +11,23 @@ Vinaire is installing into namespace "{{ .Release.Namespace }}".
 
 {{- if eq .Values.authMode "token" }}
 
-3. Log in with a bounded-duration token for this chart's own ServiceAccount
-   (already bound to a real, "not cluster-admin" RBAC role by this chart —
-   see AGENTS.md's core rule for exactly what it can/can't do):
+3. Log in with a bounded-duration token of a ServiceAccount (or user) that
+   is allowed to browse. This chart's own ServiceAccount is deliberately
+   minimal — it only feeds the live-update watchers and can neither read
+   Secrets nor change anything — so don't log in as it. Create one for
+   yourself and bind it to the "viewer" role this chart provides:
 
-   kubectl create token {{ include "vinaire.serviceAccountName" . }} -n {{ .Release.Namespace }} --duration=1h
+   kubectl create serviceaccount me -n {{ .Release.Namespace }}
+   kubectl create clusterrolebinding me-vinaire-viewer      --clusterrole={{ include "vinaire.fullname" . }}-viewer --serviceaccount={{ .Release.Namespace }}:me
+   kubectl create token me -n {{ .Release.Namespace }} --duration=1h
 
-   Paste that into Vinaire's login screen. To let someone else log in as
-   themselves instead, create their own ServiceAccount + RoleBinding (see
-   Vinaire's own Settings -> Справка -> "Подключение кластера" once
-   logged in) rather than sharing this one.
+   Paste that token into Vinaire's login screen. A session never outlives
+   {{ .Values.sessionMaxTTL }} whatever the token's own lifetime.
+
+   Changing Vinaire ITSELF — adding or removing clusters, GitOps modes and
+   sources — needs one more permission, on top of the viewer role:
+
+   kubectl create clusterrolebinding me-vinaire-admin      --clusterrole={{ include "vinaire.fullname" . }}-admin --serviceaccount={{ .Release.Namespace }}:me
 {{- else if eq .Values.authMode "oidc" }}
 
 3. AUTH_MODE is "oidc" — Vinaire will redirect to your configured OIDC

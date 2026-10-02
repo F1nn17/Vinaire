@@ -104,24 +104,25 @@ func marshalList(c *Cipher, list []StoredCluster) ([]byte, error) {
 	return data, nil
 }
 
-func unmarshalList(c *Cipher, data []byte) ([]StoredCluster, error) {
-	stored := []StoredCluster{}
+// unmarshalList decodes the stored registry. reseal says it should be written
+// back: it was sealed with a previous key (a key rotation), or not sealed at all.
+func unmarshalList(c *Cipher, data []byte) (stored []StoredCluster, reseal bool, err error) {
+	stored = []StoredCluster{}
 	if len(data) == 0 {
-		return stored, nil
+		return stored, false, nil
 	}
 	if IsSealed(data) && c == nil {
-		return nil, errors.New("the stored clusters are encrypted but no key is available")
+		return nil, false, errors.New("the stored clusters are encrypted but no key is available")
 	}
 	if c != nil {
-		var err error
-		if data, err = c.Open(data); err != nil {
-			return nil, err
+		if data, reseal, err = c.OpenReport(data); err != nil {
+			return nil, false, err
 		}
 	}
 	if err := json.Unmarshal(data, &stored); err != nil {
-		return nil, fmt.Errorf("parse stored clusters: %w", err)
+		return nil, false, fmt.Errorf("parse stored clusters: %w", err)
 	}
-	return stored, nil
+	return stored, reseal, nil
 }
 
 // --- Secret store (running in-cluster) ---
@@ -142,7 +143,7 @@ type SecretStore struct {
 // If neither works (typically an older install whose Role predates that
 // Secret) the store still works but writes unencrypted, as Phase 24 did, and
 // says so loudly; Encrypted() lets the UI warn too.
-func NewSecretStore(ctx context.Context, envKey string) (*SecretStore, bool) {
+func NewSecretStore(ctx context.Context, envKey string, previous ...string) (*SecretStore, bool) {
 	restConfig, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, false
@@ -162,7 +163,12 @@ func NewSecretStore(ctx context.Context, envKey string) (*SecretStore, bool) {
 		slog.Warn("cluster store: no encryption key available — added clusters will be stored UNENCRYPTED. Set CLUSTER_STORE_KEY, or let Vinaire manage the Secret "+storeKeySecretName+" (grant it get/create in the cluster-manager Role)", "error", err)
 		return s, true
 	}
-	if s.cipher, err = NewCipher(key); err != nil {
+	prev, perr := ParseKeys(strings.Join(previous, ","))
+	if perr != nil {
+		slog.Warn("cluster store: CLUSTER_STORE_KEY_PREVIOUS is invalid — ignoring it", "error", perr)
+		prev = nil
+	}
+	if s.cipher, err = NewCipher(key, prev...); err != nil {
 		slog.Warn("cluster store: invalid encryption key — storing unencrypted", "error", err)
 	}
 	return s, true
@@ -210,7 +216,17 @@ func (s *SecretStore) Load(ctx context.Context) ([]StoredCluster, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get %s secret: %w", clustersSecretName, err)
 	}
-	return unmarshalList(s.cipher, secret.Data[clustersSecretKey])
+	list, reseal, err := unmarshalList(s.cipher, secret.Data[clustersSecretKey])
+	if err == nil && reseal && s.cipher != nil && len(list) > 0 {
+		// A key rotation (or a registry written before encryption existed):
+		// re-seal with the current key now rather than at some later write.
+		if serr := s.Save(ctx, list); serr != nil {
+			slog.Warn("cluster store: couldn't re-encrypt the registry with the current key", "error", serr)
+		} else {
+			slog.Info("cluster store: re-encrypted the registry with the current key")
+		}
+	}
+	return list, err
 }
 
 func (s *SecretStore) Save(ctx context.Context, list []StoredCluster) error {
@@ -262,7 +278,13 @@ func (s *SecretStore) LoadDoc(ctx context.Context, name string) ([]byte, error) 
 	if err != nil {
 		return nil, fmt.Errorf("get %s secret: %w", clustersSecretName, err)
 	}
-	return openDoc(s.cipher, secret.Data["doc-"+name])
+	plain, reseal, err := openDoc(s.cipher, secret.Data["doc-"+name])
+	if err == nil && reseal && s.cipher != nil && len(plain) > 0 {
+		if serr := s.SaveDoc(ctx, name, plain); serr != nil {
+			slog.Warn("cluster store: couldn't re-encrypt a document with the current key", "document", name, "error", serr)
+		}
+	}
+	return plain, err
 }
 
 func (s *SecretStore) SaveDoc(ctx context.Context, name string, plain []byte) error {
@@ -273,18 +295,18 @@ func (s *SecretStore) SaveDoc(ctx context.Context, name string, plain []byte) er
 	return s.putKey(ctx, "doc-"+name, data)
 }
 
-// openDoc unseals a stored document (nil in, nil out).
-func openDoc(c *Cipher, data []byte) ([]byte, error) {
+// openDoc unseals a stored document (nil in, nil out); reseal as for unmarshalList.
+func openDoc(c *Cipher, data []byte) (plain []byte, reseal bool, err error) {
 	if len(data) == 0 {
-		return nil, nil
+		return nil, false, nil
 	}
 	if IsSealed(data) {
 		if c == nil {
-			return nil, errors.New("the stored document is encrypted but no key is available")
+			return nil, false, errors.New("the stored document is encrypted but no key is available")
 		}
-		return c.Open(data)
+		return c.OpenReport(data)
 	}
-	return data, nil
+	return data, true, nil
 }
 
 // --- File store (running outside a cluster, e.g. a home server) ---
@@ -299,7 +321,7 @@ type FileStore struct {
 }
 
 // NewFileStore opens (creating if needed) the data directory.
-func NewFileStore(dir, envKey string) (*FileStore, error) {
+func NewFileStore(dir, envKey string, previous ...string) (*FileStore, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
@@ -313,7 +335,11 @@ func NewFileStore(dir, envKey string) (*FileStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	c, err := NewCipher(key)
+	prev, err := ParseKeys(strings.Join(previous, ","))
+	if err != nil {
+		return nil, err
+	}
+	c, err := NewCipher(key, prev...)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +347,7 @@ func NewFileStore(dir, envKey string) (*FileStore, error) {
 }
 
 func loadOrCreateKeyFile(path string) ([]byte, error) {
-	if b, err := os.ReadFile(path); err == nil {
+	if b, err := os.ReadFile(path); err == nil { // #nosec G304 -- the key file inside the data directory
 		key, perr := ParseKey(string(b))
 		if perr != nil {
 			return nil, fmt.Errorf("%s is not a valid key file: %w", path, perr)
@@ -334,7 +360,7 @@ func loadOrCreateKeyFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- the key file inside the data directory
 	if err != nil {
 		return nil, fmt.Errorf("create key file: %w", err)
 	}
@@ -348,7 +374,7 @@ func loadOrCreateKeyFile(path string) ([]byte, error) {
 func (f *FileStore) Kind() string    { return "file" }
 func (f *FileStore) Encrypted() bool { return true }
 
-func (f *FileStore) Load(_ context.Context) ([]StoredCluster, error) {
+func (f *FileStore) Load(ctx context.Context) ([]StoredCluster, error) {
 	data, err := os.ReadFile(filepath.Join(f.dir, fileStoreName))
 	if errors.Is(err, os.ErrNotExist) {
 		return []StoredCluster{}, nil
@@ -356,7 +382,15 @@ func (f *FileStore) Load(_ context.Context) ([]StoredCluster, error) {
 	if err != nil {
 		return nil, err
 	}
-	return unmarshalList(f.cipher, data)
+	list, reseal, err := unmarshalList(f.cipher, data)
+	if err == nil && reseal && len(list) > 0 {
+		if serr := f.Save(ctx, list); serr != nil {
+			slog.Warn("cluster store: couldn't re-encrypt the registry with the current key", "error", serr)
+		} else {
+			slog.Info("cluster store: re-encrypted the registry with the current key")
+		}
+	}
+	return list, err
 }
 
 // Save writes atomically (temp file + rename) so a crash never leaves a
@@ -399,6 +433,7 @@ func EntryFromStored(sc StoredCluster) (*Entry, error) {
 		}
 	} else {
 		restConfig = &rest.Config{Host: sc.Server, BearerToken: sc.Token}
+		guardDial(restConfig)
 		if sc.CAData != "" {
 			restConfig.TLSClientConfig = rest.TLSClientConfig{CAData: []byte(sc.CAData)}
 		} else {
@@ -442,15 +477,21 @@ func VerifyConnection(entry *Entry) error {
 }
 
 // LoadDoc / SaveDoc: a document is <dir>/<name>.enc, sealed like clusters.enc.
-func (f *FileStore) LoadDoc(_ context.Context, name string) ([]byte, error) {
-	data, err := os.ReadFile(filepath.Join(f.dir, name+".enc"))
+func (f *FileStore) LoadDoc(ctx context.Context, name string) ([]byte, error) {
+	data, err := os.ReadFile(filepath.Join(f.dir, name+".enc")) // #nosec G304 -- a fixed document name inside the data directory
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return openDoc(f.cipher, data)
+	plain, reseal, err := openDoc(f.cipher, data)
+	if err == nil && reseal && len(plain) > 0 {
+		if serr := f.SaveDoc(ctx, name, plain); serr != nil {
+			slog.Warn("cluster store: couldn't re-encrypt a document with the current key", "document", name, "error", serr)
+		}
+	}
+	return plain, err
 }
 
 func (f *FileStore) SaveDoc(_ context.Context, name string, plain []byte) error {

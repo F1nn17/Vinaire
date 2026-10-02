@@ -152,7 +152,7 @@ func (c *Catalog) index(ctx context.Context, r Repo) (*repo.IndexFile, error) {
 	}
 	if e.loading == nil {
 		e.loading = make(chan struct{})
-		go c.refresh(r, e)
+		go c.refresh(r, e) // #nosec G118 -- the load is shared between requests, so it must outlive the one that started it
 	}
 	done := e.loading
 	e.mu.Unlock()

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSecrets } from "@/lib/hooks/useSecrets";
 import { revealSecretKey } from "@/lib/api/secrets";
 import { friendlyErrorMessage } from "@/lib/api/errors";
@@ -10,6 +10,9 @@ import { CreateResourceModal } from "@/components/editor/CreateResourceModal";
 import { secretTemplates } from "@/components/editor/templates";
 import { PlusIcon, SecretIcon } from "@/components/icons";
 import type { SecretDetail } from "@/lib/types";
+
+// How long a revealed Secret value stays on screen (Roadmap Phase 36).
+const REVEAL_TIMEOUT_MS = 30_000;
 
 type RevealState =
   | { status: "loading" }
@@ -32,6 +35,25 @@ export default function SecretsPage() {
     setSelectedId(id);
     setRevealState({});
   }
+
+  // A revealed value is plaintext in memory, so it doesn't stay: it is hidden
+  // again after REVEAL_TIMEOUT_MS, whenever the tab is hidden, and when leaving
+  // the page (the state goes with the component).
+  const anyRevealed = Object.values(revealState).some(
+    (r) => r.status === "revealed",
+  );
+  useEffect(() => {
+    if (!anyRevealed) return;
+    const timer = setTimeout(() => setRevealState({}), REVEAL_TIMEOUT_MS);
+    const onHide = () => {
+      if (document.hidden) setRevealState({});
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  }, [anyRevealed, revealState]);
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">

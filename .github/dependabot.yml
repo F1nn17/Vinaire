@@ -1,0 +1,19 @@
+# Roadmap Phase 36: dependency updates, so a fixed vulnerability reaches Vinaire as
+# a pull request rather than waiting for someone to notice.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /backend
+    schedule: {interval: weekly}
+    groups:
+      kubernetes:
+        patterns: ["k8s.io/*", "sigs.k8s.io/*"]
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: {interval: weekly}
+  - package-ecosystem: docker
+    directory: /
+    schedule: {interval: weekly}
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: weekly}

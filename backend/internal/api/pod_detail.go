@@ -104,7 +104,7 @@ func (h *Handler) PodDetail(w http.ResponseWriter, r *http.Request) {
 		events = nil
 	}
 
-	respondJSON(w, h.buildPodDetail(r.Context(), cluster.MetricsClientset, *pod, events))
+	respondJSON(w, h.buildPodDetail(r.Context(), h.metricsFor(r, cluster), *pod, events))
 }
 
 func (h *Handler) buildPodDetail(ctx context.Context, metricsClientset *metricsclientset.Clientset, pod corev1.Pod, events []corev1.Event) PodDetailResponse {

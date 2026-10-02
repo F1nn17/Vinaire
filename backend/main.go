@@ -52,6 +52,10 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: &logLevel})))
 
 	cfg := config.Load()
+	if err := config.ValidateCORSOrigins(cfg.CORSAllowedOrigins); err != nil {
+		slog.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -70,10 +74,17 @@ func main() {
 		OIDCClientID:     cfg.OIDCClientID,
 		OIDCClientSecret: cfg.OIDCClientSecret,
 		OIDCRedirectURL:  cfg.OIDCRedirectURL,
+
+		SessionMaxTTL:     cfg.SessionMaxTTL,
+		TrustForwardedFor: cfg.TrustForwardedFor,
 	})
 	if err != nil {
 		slog.Error("auth provider initialization failed", "auth_mode", cfg.AuthMode, "error", err)
 		os.Exit(1)
+	}
+	if auth.Mode == authn.ModeToken {
+		// a pasted token must be accepted by the cluster before it gets a session
+		auth.ValidateToken = tokenValidator(registry)
 	}
 	slog.Info("auth provider initialized", "mode", auth.Mode)
 
@@ -167,15 +178,18 @@ func main() {
 	logsHandler := unavailableWSHandler
 	execHandler := unavailableWSHandler
 	if !registry.Empty() {
-		streamHandler = stream.ServeWS(hubRegistry, registry.Default().Name, cfg.CORSAllowedOrigins, auth)
+		streamHandler = stream.ServeWS(hubRegistry, registry, registry.Default().Name, cfg.CORSAllowedOrigins, auth)
 		logsHandler = stream.ServeLogs(registry, auth, cfg.CORSAllowedOrigins)
-		execHandler = stream.ServeExec(registry, auth, cfg.CORSAllowedOrigins)
+		execHandler = stream.ServeExec(registry, auth, cfg.CORSAllowedOrigins, workloadsHandler.AuditBackground)
 	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
+	r.Use(securityHeaders)
+	// state-changing requests must come from this site or an allowed origin (CSRF defence in depth)
+	r.Use(api.OriginGuard(cfg.CORSAllowedOrigins))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.CORSAllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -435,13 +449,13 @@ func buildClusterRegistry(ctx context.Context, cfg config.Config) (*clusters.Reg
 // buildClusterStore picks where added clusters persist: a Secret when running
 // in-cluster, otherwise an encrypted file in VINAIRE_DATA_DIR.
 func buildClusterStore(ctx context.Context, cfg config.Config) (clusters.Store, bool) {
-	if s, ok := clusters.NewSecretStore(ctx, cfg.ClusterStoreKey); ok {
+	if s, ok := clusters.NewSecretStore(ctx, cfg.ClusterStoreKey, cfg.ClusterStorePrevious...); ok {
 		return s, true
 	}
 	if cfg.DataDir == "" {
 		return nil, false
 	}
-	s, err := clusters.NewFileStore(cfg.DataDir, cfg.ClusterStoreKey)
+	s, err := clusters.NewFileStore(cfg.DataDir, cfg.ClusterStoreKey, cfg.ClusterStorePrevious...)
 	if err != nil {
 		slog.Error("cluster store: couldn't open the data directory", "dir", cfg.DataDir, "error", err)
 		return nil, false

@@ -456,7 +456,7 @@ func (m *Manager) run(ctx context.Context, rt *runtime) {
 	interval := time.Duration(rt.src.IntervalSeconds) * time.Second
 	m.refreshIdentity(ctx, rt)
 	// the first look is soon, but not for every source at the same instant
-	timer := time.NewTimer(time.Duration(500+rand.IntN(2500)) * time.Millisecond)
+	timer := time.NewTimer(time.Duration(500+rand.IntN(2500)) * time.Millisecond) // #nosec G404 -- poll jitter, not a security value
 	defer timer.Stop()
 	for {
 		select {
@@ -467,7 +467,7 @@ func (m *Manager) run(ctx context.Context, rt *runtime) {
 		case who := <-rt.trigger:
 			m.reconcile(ctx, rt, who)
 		}
-		timer.Reset(interval + time.Duration(rand.IntN(5000))*time.Millisecond)
+		timer.Reset(interval + time.Duration(rand.IntN(5000))*time.Millisecond) // #nosec G404 -- poll jitter, not a security value
 	}
 }
 

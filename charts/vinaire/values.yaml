@@ -42,7 +42,11 @@ authMode: token
 oidc:
   issuerURL: ""
   clientID: ""
+  # Stored in a Secret this chart creates, never as a plain env value. Or point
+  # at an existing Secret instead (then leave clientSecret empty):
   clientSecret: ""
+  existingSecret: ""
+  existingSecretKey: clientSecret
   redirectURL: ""
 
 # The public URL this Vinaire install is reachable at (e.g.
@@ -55,7 +59,18 @@ frontendURL: ""
 
 cookie:
   secure: true
-  sameSite: none
+  # strict: the session cookie is never sent on a cross-site request. Use "lax"
+  # only if something legitimately links into Vinaire from another site, and
+  # "none" only for a deployment where the UI and the API are on different sites.
+  sameSite: strict
+
+# How long a login lasts at most, whatever the token's own lifetime (a
+# ServiceAccount token can be valid for a year). A Go duration.
+sessionMaxTTL: 12h
+
+# Set true ONLY when a proxy you control (the ingress) sets X-Forwarded-For: the
+# login throttle then counts the real client address instead of the proxy's.
+trustForwardedFor: false
 
 # Optional, independent proxies to an already-running observability
 # stack (Vinaire never installs or evaluates these itself) — see
@@ -78,6 +93,24 @@ rbac:
   # a minimal ClusterRole for Vinaire" for exactly what each rule backs.
   # Turn this off only if you're binding an existing role yourself.
   create: true
+  # Give Vinaire's OWN ServiceAccount the broad browse-and-act set. Off by
+  # default: in token/OIDC mode users act as themselves and this account only
+  # needs the little the informers read (and nothing that writes, no Secrets).
+  # AUTH_MODE=disabled turns it on automatically — every request then runs as it.
+  broad: false
+  # A role for PEOPLE: everything Vinaire's UI browses and its fixed audited
+  # actions. Created unbound — bind it to the ServiceAccount or user that logs in
+  # (see NOTES.txt). It still can't change Vinaire itself; that needs adminRole.
+  viewer:
+    create: true
+  # Permission to change Vinaire ITSELF (add/remove clusters, GitOps mode and
+  # sources): resources clusters.vinaire.io and gitops.vinaire.io, which exist
+  # only as names for this permission. subjects, if given, are bound to it:
+  #   subjects:
+  #     - {kind: User, name: alice, apiGroup: rbac.authorization.k8s.io}
+  adminRole:
+    create: true
+    subjects: []
   # Extra rules appended to the generated ClusterRole — most commonly for
   # Custom Resources (Phase 15) whose API groups this chart can't know in
   # advance. Example:
@@ -94,7 +127,32 @@ rbac:
   clusterManagement:
     create: true
 
-resources: {}
+# Requests/limits (Roadmap Phase 36) — Vinaire is light; raise the memory limit if
+# you register many clusters or large Helm repositories.
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# Roadmap Phase 36. Off by default because the right egress depends on your
+# cluster (and it needs a CNI that enforces NetworkPolicy). When on: inbound only
+# from ingressFrom, outbound only to DNS, 443/6443 (never the metadata address)
+# and optionally SSH.
+networkPolicy:
+  enabled: false
+  # Who may reach Vinaire, as NetworkPolicyPeers. Empty = anything in the cluster.
+  #   ingressFrom:
+  #     - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+  ingressFrom: []
+  # SSH provisioning (Add node / Add cluster over SSH) needs port 22 outbound.
+  allowSSH: false
+  # Anything else Vinaire must reach, e.g. Prometheus on a non-443 port:
+  #   extraEgress:
+  #     - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]
+  #       ports: [{port: 9090, protocol: TCP}]
+  extraEgress: []
 
 nodeSelector: {}
 tolerations: []

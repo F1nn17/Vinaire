@@ -38,6 +38,10 @@ type clusterSSHRequest struct {
 func (h *Handler) ClusterSSHStart(mode string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		// it adds a cluster to Vinaire's registry as well as running code on a server
+		if !h.requireVinaireRight(w, r, "clusters", "create") {
+			return
+		}
 		if !h.provisioningEnabled(w) || !h.requireSecureTransport(w, r) {
 			return
 		}

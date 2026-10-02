@@ -8,6 +8,7 @@
 package netguard
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -30,6 +31,31 @@ type Options struct {
 	AllowLoopback bool
 	// Timeout bounds one whole request (0 = 30s).
 	Timeout time.Duration
+}
+
+// DialContext is a dial function with the same guard, for clients that don't go
+// through net/http's transport (client-go's rest.Config.Dial). Loopback is
+// allowed when allowLoopback is set: a Kubernetes API on 127.0.0.1 is a normal
+// thing (k3d, kind), while link-local, multicast and unspecified never are.
+func DialContext(allowLoopback bool) func(ctx context.Context, network, address string) (net.Conn, error) {
+	d := &net.Dialer{
+		Timeout: 10 * time.Second,
+		Control: func(_, address string, _ syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			ip := net.ParseIP(host)
+			if ip == nil {
+				return fmt.Errorf("refusing to connect to %q", host)
+			}
+			if Forbidden(ip) && !(allowLoopback && ip.IsLoopback()) {
+				return fmt.Errorf("refusing to connect to %s", ip)
+			}
+			return nil
+		},
+	}
+	return d.DialContext
 }
 
 // Client returns an HTTP client with the guard. The check runs in the dialer's

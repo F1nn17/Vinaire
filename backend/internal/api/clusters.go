@@ -197,6 +197,12 @@ func (h *Handler) registerCluster(ctx context.Context, r *http.Request, sc clust
 		return nil, &regError{http.StatusConflict, "a cluster named " + sc.Name + " is already configured"}
 	}
 
+	// The server URL is whatever the caller typed (or a kubeconfig said): refuse
+	// anything that isn't https or points at link-local/metadata addresses before
+	// Vinaire connects to it, whatever way the cluster was added.
+	if err := clusters.CheckServer(sc.Server); err != nil {
+		return nil, &regError{http.StatusBadRequest, err.Error()}
+	}
 	entry, err := clusters.EntryFromStored(sc)
 	if err != nil {
 		return nil, &regError{http.StatusBadRequest, "failed to build a client for this cluster: " + err.Error()}
@@ -257,6 +263,9 @@ type addClusterRequest struct {
 // web UI, server + bearer token form. Validates the submitted credentials
 // against a real API call before persisting or registering anything.
 func (h *Handler) AddCluster(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "clusters", "create") {
+		return
+	}
 	var req addClusterRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -345,6 +354,9 @@ func (h *Handler) PreviewKubeconfig(w http.ResponseWriter, r *http.Request) {
 // accepted, and exec/auth-provider plugins are refused (they'd run commands
 // on the Vinaire host).
 func (h *Handler) ImportKubeconfig(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "clusters", "create") {
+		return
+	}
 	req, ok := decodeKubeconfigRequest(w, r)
 	if !ok {
 		return
@@ -372,6 +384,9 @@ func (h *Handler) ImportKubeconfig(w http.ResponseWriter, r *http.Request) {
 
 // DiscoverClusters handles GET /api/v1/clusters/discover.
 func (h *Handler) DiscoverClusters(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "clusters", "create") {
+		return
+	}
 	var registered []*clusters.Entry
 	for _, name := range h.Clusters.Names() {
 		if e, ok := h.Clusters.Get(name); ok {
@@ -391,6 +406,9 @@ type addDiscoveredRequest struct {
 // sends only the candidate id from a discovery scan — never a file path — and
 // the server re-resolves it against the fixed list of locations it scans.
 func (h *Handler) AddDiscoveredCluster(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "clusters", "create") {
+		return
+	}
 	var req addDiscoveredRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&req); err != nil || req.ID == "" {
 		respondError(w, http.StatusBadRequest, `request body must be {"id": "<discovered cluster id>"}`)
@@ -429,6 +447,9 @@ type setTypeRequest struct {
 // detection. Persisted for clusters added through the UI; for an
 // env-configured cluster it lasts until the next restart.
 func (h *Handler) SetClusterType(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "clusters", "update") {
+		return
+	}
 	name := chi.URLParam(r, "name")
 	entry, ok := h.Clusters.Get(name)
 	if !ok {
@@ -472,6 +493,9 @@ func (h *Handler) SetClusterType(w http.ResponseWriter, r *http.Request) {
 // dynamically, since those would just reappear on the next restart from their
 // env var anyway.
 func (h *Handler) RemoveCluster(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "clusters", "delete") {
+		return
+	}
 	if h.ClusterStore == nil {
 		respondError(w, http.StatusServiceUnavailable, "cluster management is unavailable here")
 		return

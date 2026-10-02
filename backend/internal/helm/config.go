@@ -172,7 +172,7 @@ func DefaultConfig() Config {
 
 // LoadConfig reads and validates the configuration file at path.
 func LoadConfig(path string) (Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is CATALOG_CONFIG, set by the operator
 	if err != nil {
 		return Config{}, fmt.Errorf("reading catalog config: %w", err)
 	}

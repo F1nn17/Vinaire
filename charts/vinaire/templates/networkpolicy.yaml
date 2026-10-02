@@ -1,0 +1,52 @@
+{{- if .Values.networkPolicy.enabled }}
+# Roadmap Phase 36. Inbound: only from where you say (the ingress controller);
+# outbound: DNS, HTTPS/6443 (the Kubernetes API, other registered clusters, Helm
+# repositories, git) and optionally SSH (provisioning) — never the cloud metadata
+# address. Needs a CNI that enforces NetworkPolicy. Add anything else Vinaire
+# must reach (Prometheus, Loki, Alertmanager) under networkPolicy.extraEgress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vinaire.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "vinaire.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports:
+        - port: 8080
+          protocol: TCP
+      {{- with .Values.networkPolicy.ingressFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  egress:
+    # DNS
+    - ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    # the Kubernetes API of this and other clusters, Helm repositories, git, registries
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: ["169.254.0.0/16"]
+      ports:
+        - {port: 443, protocol: TCP}
+        - {port: 6443, protocol: TCP}
+    {{- if .Values.networkPolicy.allowSSH }}
+    # SSH provisioning of servers outside the cluster
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: ["169.254.0.0/16"]
+      ports:
+        - {port: 22, protocol: TCP}
+    {{- end }}
+    {{- with .Values.networkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

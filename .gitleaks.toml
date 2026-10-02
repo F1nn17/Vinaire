@@ -1,0 +1,22 @@
+# gitleaks configuration (Roadmap Phase 36). The default rules apply; the entries
+# below are the only things allowed, each a deliberate fake.
+title = "Vinaire"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fake credentials used by tests and documentation examples"
+regexes = [
+  # kubeadm's documented example token, used in comments and scrubber tests
+  '''abcdef\.0123456789abcdef''',
+  # a token from a throwaway test container, long expired, kept in git history
+  '''gftt5q\.x88y4p4dtjlymjor''',
+  # the SSH-key-shaped fixture in the redactor test
+  '''-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAAB''',
+]
+# A fake key that exists only to prove the redactor hides key material; the one
+# file it lives in is listed, nothing broader.
+paths = [
+  '''backend/internal/provision/provision_test\.go''',
+]

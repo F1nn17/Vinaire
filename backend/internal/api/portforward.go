@@ -91,7 +91,13 @@ func proxyAuditDue(key string) bool {
 // PortForwardRedirect adds the trailing slash so a bare
 // /proxy/{cluster}/{ns}/{pod}/{port} URL resolves relative links correctly.
 func (h *Handler) PortForwardRedirect(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, r.URL.Path+"/", http.StatusPermanentRedirect)
+	// Only ever to this route's own path plus a slash: it must stay a path on
+	// this host (a "//host/..." value would be read as another site).
+	if !strings.HasPrefix(r.URL.Path, "/proxy/") {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, r.URL.Path+"/", http.StatusPermanentRedirect) // #nosec G710 -- checked to be this route's own /proxy/ path above
 }
 
 // PortForwardProxy handles /proxy/{cluster}/{namespace}/{pod}/{target}/*.
@@ -155,7 +161,7 @@ func (h *Handler) PortForwardProxy(w http.ResponseWriter, r *http.Request) {
 		// Pods commonly serve self-signed certificates. The hop to the pod is
 		// already inside the authenticated Kubernetes tunnel, so there is no
 		// meaningful chain to verify here.
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // #nosec G402 -- pods serve self-signed certs; the connection is a tunnel through the Kubernetes API
 	}
 
 	proxy := &httputil.ReverseProxy{
