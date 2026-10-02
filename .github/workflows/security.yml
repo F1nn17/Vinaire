@@ -55,7 +55,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: npm install --ignore-scripts
@@ -135,7 +135,7 @@ jobs:
 
       # The CSP, headers and CSRF guard checked in a real browser: no violations on
       # the main pages, an injected inline script is blocked, a cross-site POST is refused.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Browser security checks
