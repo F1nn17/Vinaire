@@ -72,6 +72,28 @@
   sha256 с индексом. Отдельно: сообщение «backend is unavailable» вводит в заблуждение, когда бэкенд жив, а не
   загрузился конкретный чарт — показывать реальную причину (репозиторий недоступен / нет digest / слишком большой
   чарт) и кнопку «Повторить».
+- [ ] **Баг: установка PostgreSQL падает — «cannot get resource networkpolicies … in namespace postgresql».**
+  Ошибка: `user "system:serviceaccount:vinaire:me" cannot get resource "networkpolicies" in API group
+  "networking.k8s.io"`. Это не сбой Vinaire: по Phase 28 Helm работает с **правами вызывающего**, а Helm перед
+  созданием каждого объекта чарта делает `get` на него. У токена `me` нет прав на `networkpolicies`: роль
+  `<fullname>-viewer` в чарте даёт `networking.k8s.io` только на `ingresses` (`networkpolicies` в ней нет вовсе),
+  а «админских» прав на установку `me` не получал. Что сделать:
+  - **Разобраться, что значит «от админа»:** вход был как ServiceAccount `me`, а не как cluster-admin. Для
+    установки из Marketplace нужна отдельная роль «установщик» (создание/обновление/удаление объектов чарта + Secret'ы
+    релиза), а не viewer; в README/Settings → Справка описать, какой роли и каким правам соответствует «может
+    ставить из Marketplace», и дать пример (для разработки — `cluster-admin` на тестовом ServiceAccount, с
+    пометкой «только для локального теста»).
+  - **Добавить в `-viewer` чтение `networkpolicies`** (и проверить остальные частые виды объектов чартов, которые
+    список сейчас не покрывает: `poddisruptionbudgets`, `horizontalpodautoscalers`, `cronjobs`, `roles`,
+    `rolebindings`, `serviceaccounts` уже есть) — иначе даже страницы просмотра этих ресурсов отдают 403. Это
+    расширение только на чтение, модель Phase 36 не меняется.
+  - **Preflight перед установкой:** отрендерить чарт (`helm template` внутри SDK), собрать список видов объектов и
+    через `SelfSubjectAccessReview` проверить права вызывающего на `get/create/update` для каждого kind/namespace;
+    если чего-то не хватает — показать понятный список «не хватает прав на: networkpolicies, …» и **не начинать
+    установку** (сейчас она падает посередине и, возможно, оставляет частично созданные объекты — проверить
+    `helm-install-failed` и чистку).
+  - **Читаемое сообщение об ошибке:** сейчас в UI приходит сырая фраза Kubernetes; показывать заголовок «Недостаточно
+    прав для установки», что именно запрещено, какой ServiceAccount, и подсказку `kubectl auth can-i … --as=…`.
 
 ## ConfigMaps и Secrets
 
