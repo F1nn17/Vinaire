@@ -75,14 +75,19 @@
 - [ ] **Баг: установка PostgreSQL падает — «cannot get resource networkpolicies … in namespace postgresql».**
   Ошибка: `user "system:serviceaccount:vinaire:me" cannot get resource "networkpolicies" in API group
   "networking.k8s.io"`. Это не сбой Vinaire: по Phase 28 Helm работает с **правами вызывающего**, а Helm перед
-  созданием каждого объекта чарта делает `get` на него. У токена `me` нет прав на `networkpolicies`: роль
-  `<fullname>-viewer` в чарте даёт `networking.k8s.io` только на `ingresses` (`networkpolicies` в ней нет вовсе),
-  а «админских» прав на установку `me` не получал. Что сделать:
-  - **Разобраться, что значит «от админа»:** вход был как ServiceAccount `me`, а не как cluster-admin. Для
-    установки из Marketplace нужна отдельная роль «установщик» (создание/обновление/удаление объектов чарта + Secret'ы
-    релиза), а не viewer; в README/Settings → Справка описать, какой роли и каким правам соответствует «может
-    ставить из Marketplace», и дать пример (для разработки — `cluster-admin` на тестовом ServiceAccount, с
-    пометкой «только для локального теста»).
+  созданием каждого объекта чарта делает `get` на него. **Причина — название роли вводит в заблуждение:**
+  `<fullname>-admin` (`vinaire-admin`) — это **не** «администратор кластера», а право менять *сам Vinaire*
+  (реестр кластеров, GitOps) через виртуальные ресурсы `clusters.vinaire.io` / `gitops.vinaire.io`; в самом
+  Kubernetes она не даёт **ни одного** права (`charts/vinaire/templates/clusterrole.yaml`). Токен `me`, привязанный
+  только к `vinaire-admin`, поэтому не может ни читать, ни ставить чарты. (В первой версии этой заметки ошибочно
+  говорилось, что `me` был привязан к viewer; на деле — к `vinaire-admin`.) Что сделать:
+  - **Переименовать/пояснить роль.** `-admin` читается как «всё можно». Либо переименовать в `-manage` /
+    `-vinaire-admin` (с миграцией: старое имя остаётся на один релиз), либо везде — в `NOTES.txt`, README,
+    Settings → Справка, описании роли — жирно писать: «это право менять настройки Vinaire, оно **не** заменяет
+    viewer и не даёт прав в кластере; привяжите вместе с viewer/installer». В Phase 38 (NOTES, README) это учесть.
+  - **Роль для установки из Marketplace:** отдельная роль «installer» (создание/обновление/удаление объектов
+    чарта + Secret'ы релиза) либо пример с `cluster-admin` для теста; описать комбинации (viewer + installer +
+    `-admin`), чтобы человек понимал, какая роль за что отвечает.
   - **Добавить в `-viewer` чтение `networkpolicies`** (и проверить остальные частые виды объектов чартов, которые
     список сейчас не покрывает: `poddisruptionbudgets`, `horizontalpodautoscalers`, `cronjobs`, `roles`,
     `rolebindings`, `serviceaccounts` уже есть) — иначе даже страницы просмотра этих ресурсов отдают 403. Это
