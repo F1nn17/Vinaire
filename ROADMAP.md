@@ -3472,3 +3472,183 @@ risks.
 > изменение конфигурации самого Vinaire, то есть оно проходит через
 > `requireVinaireRight`.
 
+---
+
+## Phase 38 — Простая и понятная установка Vinaire в Kubernetes/K3s
+
+**Зависимости:** Phase 21 (Helm chart), Phase 10 (режимы входа), Phase 36
+(RBAC chart'а, `<fullname>-viewer`/`-admin`). Ничего из уже работающей модели
+RBAC и безопасности не переписывается — фаза добавляет то, чего не хватает
+вокруг неё: Ingress, схему значений, готовые примеры, внятную документацию и
+NOTES.
+
+Сейчас chart установится, но дальше человек остаётся один: непонятно, как
+доставить локальный образ в K3s, почему после ввода токена его возвращает на
+экран входа, чем ServiceAccount самого Vinaire отличается от
+ServiceAccount пользователя и откуда брать роль `vinaire-viewer`. Цель —
+чтобы путь "собрал образ → импортировал в K3s → `helm upgrade --install` →
+открыл браузер → вошёл по токену" проходил по README без догадок.
+
+**Что уже есть (сверено с кодом, не делать заново)**
+- Readiness/liveness-пробы на `/healthz` в `templates/deployment.yaml`.
+- Имена `<fullname>-viewer` и `<fullname>-admin` строятся через helper
+  (`vinaire.fullname`), а не зашиты строкой; `NOTES.txt` уже печатает шаги для
+  режима `token`.
+- `cookie.secure` по умолчанию `true`, `cookie.sameSite` по умолчанию `strict`.
+- Chart создаёт собственный ServiceAccount Vinaire (в Deployment не подставляется
+  `default`).
+
+**Чего нет:** `templates/ingress.yaml` и блока `ingress` в `values.yaml`,
+`values.schema.json`, каталога `charts/vinaire/examples/`, раздела про K3s и
+локальный образ в README, публикации образов (в CI нет GHCR).
+
+**Chart**
+- `values.yaml`: блок `ingress` (`enabled: false`, `className: ""`,
+  `annotations: {}`, `hosts: [{host: vinaire.example.com, paths: [{path: /,
+  pathType: Prefix}]}]`, `tls: []`) и `templates/ingress.yaml`, который смотрит
+  на уже существующие Service и порт (имя сервиса — через helper, порт — из
+  `service.port`). Включается только по флагу; поведение по умолчанию не
+  меняется.
+- `values.schema.json` (JSON Schema draft-07, как понимает Helm):
+  `authMode` — enum `token` | `oidc` | `disabled`; `image.repository`
+  (непустая строка), `image.pullPolicy` — enum `Always` | `IfNotPresent` |
+  `Never`; `service.port` — integer 1–65535; `cookie.secure` — boolean,
+  `cookie.sameSite` — enum `strict` | `lax` | `none`; поля `ingress.*`
+  (типы, `pathType` — enum `Prefix` | `Exact` | `ImplementationSpecific`);
+  поля `oidc.*` (issuer/clientId/redirectUrl — строки; обязательность — только
+  когда `authMode: oidc`, через `if/then`). `additionalProperties` не
+  запрещать на верхнем уровне, чтобы не ломать чужие `-f` с лишними ключами.
+  `authMode: tokens` должен падать на `helm lint`/`install` с понятным
+  сообщением.
+- `examples/values-local.yaml`: образ `vinaire:latest` с `pullPolicy:
+  IfNotPresent`, `clusterName: home_cluster`, `authMode: token`,
+  `cookie.secure: false`, ingress включён, `className: traefik`, хост
+  `vinaire.k3s.home`. В шапке файла — предупреждение, что это **только для
+  локального HTTP**.
+- `examples/values-production.yaml`: образ из реестра с зафиксированным
+  тегом, `authMode: oidc`, `cookie.secure: true`, TLS-Ingress, `networkPolicy`
+  включена, `existingSecret` для OIDC-секрета.
+- `templates/NOTES.txt` переписать на вычисленные имена (никаких жёстко
+  прописанных `vinaire`): namespace, имя Service, текущий `authMode`, имя
+  viewer-ClusterRole, команды `create serviceaccount` /
+  `create clusterrolebinding` / `create token`, URL Ingress (если включён и
+  есть host, с `https` при наличии `tls`), иначе `kubectl port-forward -n
+  <ns> svc/<fullname> 8080:<port>`. Предупреждение, если `cookie.secure: true`
+  и Ingress без `tls` ("вход по HTTP не сработает, см. README → Troubleshooting").
+- RBAC-имена не менять — проверка только подтвердила, что они уже строятся от
+  fullname; если по ходу найдутся жёстко прописанные места, правка идёт вместе
+  с миграцией (старое имя остаётся рабочим на один релиз), чтобы не ломать
+  существующие привязки.
+- Публикация образа в GHCR (`ghcr.io/<owner>/vinaire:<version>`, пустой
+  `image.tag` → `.Chart.AppVersion`) — **отдельным шагом и только если CI к
+  этому готов**: workflow на тег `v*`, сборка тем же Dockerfile, пуш с `GITHUB_TOKEN`,
+  проверка Trivy перед пушем, подпись — по возможности. Владельца (`<owner>`)
+  уточнить: в go.mod и AGENTS.md это `shiraku`, в черновике промпта — другое имя;
+  до уточнения в README стоит плейсхолдер, а основной путь описывает локальный
+  импорт образа.
+
+**README (раздел "Installation (Helm)" переписать, не дублируя Docker-раздел)**
+1. Установка: `helm upgrade --install vinaire ./charts/vinaire --namespace
+   vinaire --create-namespace`, затем `kubectl rollout status
+   deployment/vinaire -n vinaire`, `kubectl get pods -n vinaire`, `kubectl get
+   svc -n vinaire`. Пояснить: Deployment, Service, ServiceAccount и RBAC руками
+   создавать не нужно — это делает chart (заодно заменить `helm install` на
+   `upgrade --install` везде в README).
+2. **K3s:** kubeconfig лежит в `/etc/rancher/k3s/k3s.yaml`; для root —
+   `export KUBECONFIG=/etc/rancher/k3s/k3s.yaml`, либо `sudo k3s kubectl ...`;
+   Helm CLI в K3s не входит, его нужно поставить отдельно.
+3. **Локальный образ:** для k3d — `k3d image import vinaire:latest -c <cluster>`;
+   для K3s на сервере — `docker save vinaire:latest -o vinaire.tar`, `scp` на
+   сервер, `sudo k3s ctr images import /tmp/vinaire.tar`, проверка `sudo k3s ctr
+   images list | grep vinaire`. Явно написать, что `k3d image import` на
+   удалённый K3s не действует, и объяснить `imagePullPolicy`: для локального
+   образа — `IfNotPresent` (или `Never`), иначе кластер полезет за ним в реестр
+   и получит `ImagePullBackOff`.
+4. **Ingress:** пример для Traefik (`--set ingress.enabled=true --set
+   ingress.className=traefik --set ingress.hosts[0].host=vinaire.k3s.home`) —
+   перед вставкой в README прогнать через `helm template`.
+5. **`cookie.secure`:** по умолчанию `true` — это правильно для HTTPS. По
+   обычному HTTP браузер отбрасывает Secure-cookie, и пользователя возвращает
+   на экран входа сразу после ввода токена. Для локального HTTP —
+   `--set cookie.secure=false`, с заметным предупреждением, что на реальном
+   развёртывании так делать нельзя. Дефолт не менять.
+6. **Два разных ServiceAccount:** (а) собственный ServiceAccount Vinaire —
+   создаётся chart'ом, его трогать и заменять на `default` не нужно; (б)
+   ServiceAccount **пользователя**, чей токен вставляется на экране входа:
+   `kubectl create serviceaccount me -n vinaire`, `kubectl create
+   clusterrolebinding me-vinaire-viewer --clusterrole=vinaire-viewer
+   --serviceaccount=vinaire:me`, `kubectl create token me -n vinaire
+   --duration=1h`. Имя роли в примерах — `<fullname>-viewer`; для релиза
+   `vinaire` это `vinaire-viewer`.
+7. **Проверка прав:** `kubectl auth can-i list pods
+   --as=system:serviceaccount:vinaire:me --all-namespaces` → `yes`. **Не копировать
+   из черновика пример "`list secrets` → `no`"**: сейчас `vinaire-viewer`
+   (`vinaire.broadRules`) *включает* `get/list/watch` на `secrets` — так
+   устроена Phase 36 (метаданные Secret'ов и аудируемый `reveal`; Helm-релизы
+   из Phase 28 тоже лежат в Secret'ах). Поэтому в README пример должен
+   показывать реальное поведение (`yes`) и честно говорить, что для
+   пользователя, которому Secret'ы видеть нельзя, нужна своя роль без них
+   (пример YAML). Если позже решено вывести `secrets` из viewer — это
+   отдельное решение с миграцией, а не побочная правка этой фазы.
+8. **Таблица `authMode`:** `token` — по умолчанию, вход вставкой токена
+   ServiceAccount; `oidc` — рекомендуемый для production (Keycloak и др.);
+   `disabled` — только для временной локальной разработки, и это **не** "дать
+   всем права default ServiceAccount": Vinaire в этом режиме работает со своими
+   правами. Cluster-admin для обычной работы нигде не рекомендовать.
+9. **Три сценария**, каждый отдельным блоком, а не одним длинным набором команд:
+   (1) быстрый локальный K3s/homelab — сборка, импорт образа, `-f
+   examples/values-local.yaml`; (2) обычный Kubernetes — образ из реестра,
+   Ingress, вход по токену; (3) production — образ из реестра, HTTPS,
+   `cookie.secure=true`, OIDC, TLS-Ingress, `-f examples/values-production.yaml`.
+10. **Troubleshooting:** `ImagePullBackOff` (проверить образ на ноде `sudo k3s ctr
+    images list | grep vinaire`, `pullPolicy`, тег); `clusterrole "vinaire-viewer"
+    not found` (Deployment ставили без chart'а — ролей нет, ставить через
+    `helm upgrade --install`); цикл возврата на логин после ввода токена
+    (проверить `authMode`, `cookie.secure` при HTTP, HTTP vs HTTPS в
+    Ingress/`port-forward`, не истёк ли токен); `pods is forbidden` (`kubectl auth
+    can-i ...`, перепутаны два ServiceAccount, нет `ClusterRoleBinding`).
+
+**Complexity:** S–M — чарт и документация, без изменений Go-кода и без новых
+записей в списке разрешённых операций в `AGENTS.md`.
+
+**New dependencies**
+- `go.mod`: новых пакетов нет
+- `package.json`: новых пакетов нет
+
+**Risks to check early**
+- `values.schema.json` проверяет *все* значения, в том числе пришедшие из чужих
+  `-f`: слишком строгая схема сломает существующие установки. Проверить на
+  значениях Phase 36 (`rbac.*`, `networkPolicy`, `oidc.existingSecret`,
+  `sessionMaxTTL`) и не запрещать неизвестные ключи.
+- Ingress с `cookie.secure: true` без TLS даёт именно тот "вход по кругу", из-за
+  которого фаза и затевается — NOTES и README должны ловить это явно.
+- Смена `helm install` → `upgrade --install` меняет поведение для тех, кто
+  ставил chart повторно: проверить `helm upgrade` с chart 0.2.0 поверх 0.1.x
+  (RBAC по умолчанию уже изменился в Phase 36).
+- Публикация в GHCR выдаёт образ наружу: без Trivy-проверки и закреплённого тега
+  не включать, а владелец реестра — решение владельца проекта.
+- Хост `vinaire.k3s.home` в примерах — не реальный; в README пояснить, как его
+  прописать в `/etc/hosts`/DNS, иначе пример "не открывается".
+
+**Definition of done**
+Проверка на чистом K3s/k3d с нуля, каждый пункт — реальным запуском, а не
+чтением:
+- `helm lint charts/vinaire` и `helm template` проходят для значений по
+  умолчанию, `examples/values-local.yaml` и `examples/values-production.yaml`;
+  `authMode: tokens` отклоняется схемой с понятным сообщением; невалидный
+  `service.port`/`image.pullPolicy`/`ingress.hosts[].paths[].pathType` — тоже.
+- Реальный `helm upgrade --install` в чистый namespace; `rollout status`, поды
+  `Ready`, Service отвечает, ClusterRole'ы `<fullname>-viewer`/`-admin`
+  существуют.
+- Матрица вариантов: `authMode` `token` и `disabled`; Ingress включён и
+  выключен; `cookie.secure` `true` и `false`; локальный образ с `IfNotPresent`;
+  вход токеном viewer-ServiceAccount; Secret'ы для viewer'а — проверено и
+  описано как есть (см. п. 7); OIDC-конфигурация (`oidc.*`, `existingSecret`)
+  не сломана схемой.
+- По README от первой до последней команды сценарий 1 проходит у человека,
+  который не видел проект, и заканчивается рабочим входом в UI.
+- Итоговый отчёт по фазе: список изменённых файлов, что и зачем изменено,
+  команды для K3s/homelab и для production, результаты `helm lint` /
+  `helm template`, и **отдельным списком** ломающие изменения (если есть) с
+  путём миграции.
+
