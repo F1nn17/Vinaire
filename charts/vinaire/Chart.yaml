@@ -10,3 +10,5 @@ appVersion: "0.1.0"
 home: https://github.com/shiraku/vinaire
 sources:
   - https://github.com/shiraku/vinaire
+annotations:
+  artifacthub.io/license: Apache-2.0

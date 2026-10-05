@@ -1,0 +1,15 @@
+Vinaire
+Copyright 2026 shiraku
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It includes or links to third-party software under their own licenses, among
+them: Kubernetes client libraries, Helm, go-git, oras-go and chi (Apache-2.0 /
+BSD / MIT); Next.js, React, Monaco Editor and Recharts (MIT); and the fonts
+IBM Plex Sans and JetBrains Mono, bundled in frontend/src/app/fonts under the
+SIL Open Font License 1.1 (https://openfontlicense.org). The fonts remain under
+that license; it does not change the license of Vinaire's own code.
+
+A machine-generated list of every dependency and its license should be produced
+at release time (for example with `go-licenses report ./...` in /backend and
+`npx license-checker --production` in /frontend) and attached to the release.

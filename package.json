@@ -1,6 +1,7 @@
 {
   "name": "vinaire",
   "private": true,
+  "license": "Apache-2.0",
   "description": "Root orchestrator scripts for the Vinaire monorepo (frontend + backend). See README.md.",
   "scripts": {
     "dev": "concurrently -k -n BACKEND,FRONTEND -c blue,magenta \"npm:dev:backend\" \"npm:dev:frontend\"",

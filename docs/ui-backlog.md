@@ -140,7 +140,7 @@
 
 ## Лицензия
 
-- [ ] **Перевести проект с MIT на Apache License 2.0.** Сейчас `LICENSE` — MIT (`Copyright (c) 2026 shiraku`),
+- [x] **Перевести проект с MIT на Apache License 2.0.** (сделано: `LICENSE`, `NOTICE`, README, `package.json`, `Chart.yaml`; остаётся при релизе сгенерировать полный список зависимостей — команды в `NOTICE`) Сейчас `LICENSE` — MIT (`Copyright (c) 2026 shiraku`),
   в README раздел «License» ссылается на него. Что сделать:
   - заменить `LICENSE` текстом Apache-2.0 (с указанием владельца авторских прав) и добавить файл `NOTICE`;
   - обновить раздел «License» в `README.md`; указать `license: Apache-2.0` в `package.json` (корень и `frontend/`)

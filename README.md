@@ -170,4 +170,4 @@ that remain. In short:
 
 ## License
 
-[MIT](./LICENSE)
+Licensed under the [Apache License 2.0](./LICENSE). See [NOTICE](./NOTICE) for third-party components (including the bundled fonts, under the SIL Open Font License).
