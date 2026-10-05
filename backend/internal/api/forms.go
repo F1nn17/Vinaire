@@ -19,7 +19,8 @@ const (
 	FormFieldString   FormFieldType = "string"
 	FormFieldNumber   FormFieldType = "number"
 	FormFieldKeyValue FormFieldType = "keyvalue"
-	FormFieldNode     FormFieldType = "node" // dropdown fed by the nodes list (Phase 19)
+	FormFieldNode     FormFieldType = "node"   // dropdown fed by the nodes list (Phase 19)
+	FormFieldSelect   FormFieldType = "select" // dropdown of a fixed list (Options)
 )
 
 type FormField struct {
@@ -32,6 +33,11 @@ type FormField struct {
 	Help        string        `json:"help,omitempty"`
 	Secret      bool          `json:"secret,omitempty"` // mask values in the UI
 	Group       string        `json:"group,omitempty"`
+	// Options are the choices of a select field.
+	Options []string `json:"options,omitempty"`
+	// For a keyvalue field: what the two columns are called, instead of KEY / value.
+	KeyPlaceholder   string `json:"keyPlaceholder,omitempty"`
+	ValuePlaceholder string `json:"valuePlaceholder,omitempty"`
 }
 
 type FormSchema struct {
@@ -75,6 +81,37 @@ var formSchemas = map[string]FormSchema{
 			nameField,
 			namespaceField,
 			{Key: "data", Label: "Data", Type: FormFieldKeyValue, Secret: true, Help: "Sent as plain text; Kubernetes encodes it (stringData)."},
+		},
+	},
+	// Roadmap backlog (Services & Ingress "+ Create"): the two network kinds people
+	// create most. Anything beyond one rule/path/port set is YAML, and switching
+	// back to the form is refused rather than dropping fields (see the converters).
+	"service": {
+		ResourceType: "service", Kind: "Service", Label: "Service",
+		Fields: []FormField{
+			nameField,
+			namespaceField,
+			{Key: "type", Label: "Type", Type: FormFieldSelect, Default: "ClusterIP", Options: []string{"ClusterIP", "NodePort", "LoadBalancer"},
+				Help: "ClusterIP: reachable inside the cluster. NodePort: also on every node's IP. LoadBalancer: asks the cloud/ServiceLB for an external address."},
+			{Key: "selector", Label: "Selector (which pods)", Type: FormFieldKeyValue, KeyPlaceholder: "label", ValuePlaceholder: "value",
+				Help: "Pods carrying all of these labels receive the traffic — usually app = <your deployment>."},
+			{Key: "ports", Label: "Ports", Type: FormFieldKeyValue, Required: true, KeyPlaceholder: "service port, e.g. 80", ValuePlaceholder: "container port (empty = same)",
+				Help: "The container port may also be a named port."},
+		},
+	},
+	"ingress": {
+		ResourceType: "ingress", Kind: "Ingress", Label: "Ingress",
+		Fields: []FormField{
+			nameField,
+			namespaceField,
+			{Key: "className", Label: "Ingress class", Type: FormFieldString, Placeholder: "traefik", Help: "Which controller handles it; empty uses the cluster default."},
+			{Key: "host", Label: "Host", Type: FormFieldString, Placeholder: "app.example.com", Help: "Empty matches any host."},
+			{Key: "path", Label: "Path", Type: FormFieldString, Default: "/"},
+			{Key: "pathType", Label: "Path type", Type: FormFieldSelect, Default: "Prefix", Options: []string{"Prefix", "Exact", "ImplementationSpecific"}},
+			{Key: "serviceName", Label: "Backend Service", Type: FormFieldString, Required: true, Placeholder: "my-app"},
+			{Key: "servicePort", Label: "Backend port", Type: FormFieldNumber, Required: true, Placeholder: "80"},
+			{Key: "tlsSecret", Label: "TLS Secret", Type: FormFieldString, Placeholder: "app-tls", Help: "Name of a kubernetes.io/tls Secret in this namespace; needs a host. Empty serves plain HTTP."},
+			{Key: "annotations", Label: "Annotations", Type: FormFieldKeyValue, KeyPlaceholder: "annotation", ValuePlaceholder: "value"},
 		},
 	},
 	// The optional ResourceQuota the roadmap mentions is a second object, which

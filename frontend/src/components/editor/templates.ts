@@ -152,6 +152,7 @@ metadata:
 
 const service: ResourceTemplate = {
   label: "Service",
+  formType: "service",
   yaml: `apiVersion: v1
 kind: Service
 metadata:
@@ -168,6 +169,7 @@ spec:
 
 const ingress: ResourceTemplate = {
   label: "Ingress",
+  formType: "ingress",
   yaml: `apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

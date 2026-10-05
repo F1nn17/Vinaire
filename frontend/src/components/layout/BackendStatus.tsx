@@ -2,23 +2,24 @@
 
 import { useHealthz } from "@/lib/hooks/useHealthz";
 import { StatusDot } from "@/components/ui/StatusDot";
-import type { StatusColor } from "@/lib/types";
 
+// Shown only when something is wrong. A healthy backend needs no badge — the
+// pages working is the signal — so this stays out of the way until the backend
+// can't be reached.
 export function BackendStatus() {
   const { data, error, isLoading } = useHealthz();
 
-  const connected = !error && data?.status === "ok";
-  const color: StatusColor = isLoading ? "warn" : connected ? "ok" : "err";
-  const label = isLoading
-    ? "backend: connecting…"
-    : connected
-      ? "backend: connected"
-      : "backend: unreachable";
+  if (isLoading || (!error && data?.status === "ok")) {
+    return null;
+  }
 
   return (
-    <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-[3px] font-mono text-[11px] text-text-muted">
-      <StatusDot color={color} size={6} />
-      {label}
+    <span
+      role="status"
+      className="flex items-center gap-1.5 rounded-full border border-err/40 bg-surface px-2.5 py-0.75 font-mono text-[11px] text-err"
+    >
+      <StatusDot color="err" size={6} />
+      backend: unreachable
     </span>
   );
 }

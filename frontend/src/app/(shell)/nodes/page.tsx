@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useNodes, useCapacity } from "@/lib/hooks/useWorkloads";
 import { useNodesStream } from "@/lib/hooks/useNodesStream";
@@ -11,8 +12,8 @@ import { PillTabs } from "@/components/ui/Tabs";
 import { AddNodeModal } from "@/components/nodes/AddNodeModal";
 import { useClusters } from "@/lib/hooks/useClusters";
 import { useCurrentCluster } from "@/lib/clusterStore";
-import { clusterTypeLabels } from "@/components/clusters/ClusterTypeBadge";
 import { PlusIcon } from "@/components/icons";
+import type { ClusterType } from "@/lib/types";
 
 type Tab = "nodes" | "capacity";
 
@@ -220,6 +221,17 @@ function CapacityTab() {
   );
 }
 
+// Why Add node (SSH + installer) isn't offered, and what to do instead, by the
+// detected cluster type (Roadmap Phase 34).
+const addNodeAdviceByType: Partial<Record<ClusterType, string>> = {
+  k3d: "k3d nodes are containers, not machines you can log into — add one with `k3d node create <name> --cluster <cluster>`.",
+  kind: "kind nodes are containers, not machines you can log into — recreate the cluster with more nodes in its config.",
+  minikube:
+    "minikube nodes are VMs or containers it manages itself — use `minikube node add`.",
+  managed:
+    "A managed cluster (EKS, GKE, AKS…) grows through its provider — change the node pool size there.",
+};
+
 export default function NodesPage() {
   const [tab, setTab] = useState<Tab>("nodes");
   const { data, isLoading, error, mutate } = useNodes();
@@ -233,6 +245,10 @@ export default function NodesPage() {
     clusters?.find((c) => c.name === selected) ??
     clusters?.find((c) => c.default);
   const canAddNode = activeCluster?.canAddNode ?? true;
+  const addNodeAdvice = activeCluster
+    ? (addNodeAdviceByType[activeCluster.type] ??
+      "Nodes can't be added over SSH to this kind of cluster.")
+    : "";
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
@@ -240,27 +256,30 @@ export default function NodesPage() {
         <div className="text-[15px] font-semibold">Nodes</div>
         <div className="flex items-center gap-3">
           <PillTabs items={tabs} active={tab} onChange={setTab} />
-          {canAddNode ? (
-            <button
-              type="button"
-              onClick={() => setAddOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
-            >
-              <PlusIcon />
-              Add node
-            </button>
-          ) : (
-            <span
-              className="max-w-[240px] text-[11px] leading-snug text-text-faint"
-              title="Change the cluster's type on the Clusters page if this is wrong"
-            >
-              Adding nodes over SSH isn&apos;t offered for a{" "}
-              {activeCluster ? clusterTypeLabels[activeCluster.type] : ""}{" "}
-              cluster.
-            </span>
-          )}
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            disabled={!canAddNode}
+            title={canAddNode ? undefined : addNodeAdvice}
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <PlusIcon />
+            Add node
+          </button>
         </div>
       </div>
+
+      {!canAddNode && (
+        <div className="rounded-lg border border-border bg-surface p-3 text-xs text-text-muted">
+          <span className="font-semibold text-text">
+            Add node is off for this cluster.
+          </span>{" "}
+          {addNodeAdvice}{" "}
+          <Link href="/clusters" className="text-accent-text underline">
+            Wrong type? Change it on the Clusters page.
+          </Link>
+        </div>
+      )}
 
       {tab === "nodes" ? (
         error ? (

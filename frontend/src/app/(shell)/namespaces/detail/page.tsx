@@ -123,6 +123,11 @@ function NamespaceDetailPage() {
                 ? "System namespaces can't be deleted from Vinaire"
                 : "Delete namespace"
             }
+            hint={
+              ns.protected
+                ? undefined
+                : "Remove the namespace and everything in it — can't be undone"
+            }
             danger
             disabled={ns.protected || ns.status === "Terminating"}
             onClick={() => {

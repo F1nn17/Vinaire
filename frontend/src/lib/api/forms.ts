@@ -8,13 +8,18 @@ import { apiFetch } from "./http";
 export type FormFieldSchema = {
   key: string;
   label: string;
-  type: "string" | "number" | "keyvalue" | "node";
+  type: "string" | "number" | "keyvalue" | "node" | "select";
   required?: boolean;
   default?: string | number;
   placeholder?: string;
   help?: string;
   secret?: boolean;
   group?: string;
+  // choices of a "select" field
+  options?: string[];
+  // what the two columns of a "keyvalue" field are, instead of KEY / value
+  keyPlaceholder?: string;
+  valuePlaceholder?: string;
 };
 
 export type FormSchema = {

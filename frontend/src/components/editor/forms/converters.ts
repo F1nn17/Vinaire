@@ -187,8 +187,181 @@ const namespace: Converter = {
   validate: (s) => (!str(s, "name") ? "Name is required" : null),
 };
 
+// ---- Service ----------------------------------------------------------------
+// One selector, one or more ports (service port -> container port). With several
+// ports Kubernetes requires each to be named, so names are generated; a manifest
+// that names them differently won't round-trip and stays YAML-only.
+
+const portNumber = /^\d+$/;
+const portName = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
+
+const service: Converter = {
+  defaults: () => ({
+    name: "",
+    namespace: "default",
+    type: "ClusterIP",
+    selector: [],
+    ports: [{ key: "80", value: "" }],
+  }),
+  toManifest: (s) => {
+    const ports = rows(s, "ports").map((r) => {
+      const p: Manifest = { port: Number(r.key.trim()) };
+      const target = r.value.trim();
+      if (target !== "") {
+        p.targetPort = portNumber.test(target) ? Number(target) : target;
+      }
+      return p;
+    });
+    if (ports.length > 1) {
+      ports.forEach((p) => {
+        p.name = `port-${String(p.port)}`;
+      });
+    }
+    const spec: Manifest = { type: str(s, "type") || "ClusterIP" };
+    const selector = rows(s, "selector");
+    if (selector.length > 0) spec.selector = toMap(selector);
+    spec.ports = ports;
+    return {
+      apiVersion: "v1",
+      kind: "Service",
+      metadata: { name: str(s, "name"), namespace: str(s, "namespace") },
+      spec,
+    };
+  },
+  fromManifest: (m) => {
+    const ports = at(m, "spec", "ports");
+    return {
+      name: asStr(at(m, "metadata", "name")),
+      namespace: asStr(at(m, "metadata", "namespace")),
+      type: asStr(at(m, "spec", "type")),
+      selector: asMap(at(m, "spec", "selector")),
+      ports: Array.isArray(ports)
+        ? ports.map((p) => ({
+            key: asStr(at(p, "port")),
+            value: asStr(at(p, "targetPort")),
+          }))
+        : [],
+    };
+  },
+  validate: (s) => {
+    if (!str(s, "name")) return "Name is required";
+    if (!str(s, "namespace")) return "Namespace is required";
+    const ports = rows(s, "ports");
+    if (ports.length === 0) return "Add at least one port";
+    for (const r of ports) {
+      const n = Number(r.key.trim());
+      if (!portNumber.test(r.key.trim()) || n < 1 || n > 65535) {
+        return `"${r.key}" isn't a valid service port (1–65535)`;
+      }
+      const t = r.value.trim();
+      if (t !== "" && !portNumber.test(t) && !portName.test(t)) {
+        return `"${t}" isn't a valid container port (a number or a port name)`;
+      }
+      if (portNumber.test(t) && (Number(t) < 1 || Number(t) > 65535)) {
+        return `"${t}" isn't a valid container port (1–65535)`;
+      }
+    }
+    return null;
+  },
+};
+
+// ---- Ingress ----------------------------------------------------------------
+// One host, one path, one backend (and an optional TLS secret) — what most
+// Ingresses are. More rules means YAML.
+
+const ingress: Converter = {
+  defaults: () => ({
+    name: "",
+    namespace: "default",
+    className: "",
+    host: "",
+    path: "/",
+    pathType: "Prefix",
+    serviceName: "",
+    servicePort: "",
+    tlsSecret: "",
+    annotations: [],
+  }),
+  toManifest: (s) => {
+    const meta: Manifest = {
+      name: str(s, "name"),
+      namespace: str(s, "namespace"),
+    };
+    const annotations = rows(s, "annotations");
+    if (annotations.length > 0) meta.annotations = toMap(annotations);
+
+    const rule: Manifest = {};
+    if (str(s, "host")) rule.host = str(s, "host");
+    rule.http = {
+      paths: [
+        {
+          path: str(s, "path") || "/",
+          pathType: str(s, "pathType") || "Prefix",
+          backend: {
+            service: {
+              name: str(s, "serviceName"),
+              port: { number: Number(str(s, "servicePort")) },
+            },
+          },
+        },
+      ],
+    };
+    const spec: Manifest = {};
+    if (str(s, "className")) spec.ingressClassName = str(s, "className");
+    if (str(s, "tlsSecret")) {
+      const tls: Manifest = { secretName: str(s, "tlsSecret") };
+      if (str(s, "host")) tls.hosts = [str(s, "host")];
+      spec.tls = [tls];
+    }
+    spec.rules = [rule];
+    return {
+      apiVersion: "networking.k8s.io/v1",
+      kind: "Ingress",
+      metadata: meta,
+      spec,
+    };
+  },
+  fromManifest: (m) => {
+    const rule = ["spec", "rules", 0] as const;
+    const path = [...rule, "http", "paths", 0] as const;
+    return {
+      name: asStr(at(m, "metadata", "name")),
+      namespace: asStr(at(m, "metadata", "namespace")),
+      className: asStr(at(m, "spec", "ingressClassName")),
+      host: asStr(at(m, ...rule, "host")),
+      path: asStr(at(m, ...path, "path")),
+      pathType: asStr(at(m, ...path, "pathType")),
+      serviceName: asStr(at(m, ...path, "backend", "service", "name")),
+      servicePort: asStr(
+        at(m, ...path, "backend", "service", "port", "number"),
+      ),
+      tlsSecret: asStr(at(m, "spec", "tls", 0, "secretName")),
+      annotations: asMap(at(m, "metadata", "annotations")),
+    };
+  },
+  validate: (s) =>
+    (!str(s, "name") && "Name is required") ||
+    (!str(s, "namespace") && "Namespace is required") ||
+    (!str(s, "serviceName") && "Backend Service is required") ||
+    (!str(s, "servicePort") && "Backend port is required") ||
+    (!portNumber.test(str(s, "servicePort")) ||
+    Number(str(s, "servicePort")) < 1 ||
+    Number(str(s, "servicePort")) > 65535
+      ? "Backend port must be a number from 1 to 65535"
+      : null) ||
+    (!str(s, "path").startsWith("/") && str(s, "path") !== ""
+      ? "Path must start with /"
+      : null) ||
+    (str(s, "tlsSecret") && !str(s, "host")
+      ? "A TLS Secret needs a host — enter one, or clear the TLS Secret"
+      : null) ||
+    null,
+};
+
 const converters: Record<string, Converter> = {
   deployment,
+  service,
+  ingress,
   configmap: keyValueKind("ConfigMap", "data"),
   secret: keyValueKind("Secret", "stringData"),
   namespace,

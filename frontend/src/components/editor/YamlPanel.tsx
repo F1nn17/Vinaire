@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FillHeight } from "@/components/ui/FillHeight";
 import { Toast, type ToastState } from "@/components/ui/Toast";
 import { ApplyPreviewModal } from "./ApplyPreviewModal";
 import { YamlEditor } from "./YamlEditor";
@@ -72,9 +73,9 @@ export function YamlPanel({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-[10px] border border-border">
-        <YamlEditor value={draft} onChange={setDraft} height="560px" />
-      </div>
+      <FillHeight className="overflow-hidden rounded-[10px] border border-border">
+        <YamlEditor value={draft} onChange={setDraft} height="100%" />
+      </FillHeight>
 
       {apply.error && !apply.preview && (
         <div className="rounded-lg border border-err/30 bg-surface-2 p-3 text-xs text-err">

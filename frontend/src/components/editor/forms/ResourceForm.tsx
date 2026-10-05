@@ -75,8 +75,23 @@ function Field({
         <KeyValueEditor
           rows={Array.isArray(value) ? value : []}
           secret={field.secret}
+          keyPlaceholder={field.keyPlaceholder}
+          valuePlaceholder={field.valuePlaceholder}
           onChange={(rows) => set(field.key, rows)}
         />
+      ) : field.type === "select" ? (
+        <select
+          id={`f-${field.key}`}
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => set(field.key, e.target.value)}
+          className={inputClass}
+        >
+          {(field.options ?? []).map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
       ) : field.type === "node" ? (
         <NodeSelect
           id={`f-${field.key}`}
@@ -135,10 +150,14 @@ function NodeSelect({
 function KeyValueEditor({
   rows,
   secret,
+  keyPlaceholder = "KEY",
+  valuePlaceholder = "value",
   onChange,
 }: {
   rows: KV[];
   secret?: boolean;
+  keyPlaceholder?: string;
+  valuePlaceholder?: string;
   onChange: (rows: KV[]) => void;
 }) {
   const update = (i: number, patch: Partial<KV>) =>
@@ -150,7 +169,7 @@ function KeyValueEditor({
           <input
             aria-label="Key"
             value={r.key}
-            placeholder="KEY"
+            placeholder={keyPlaceholder}
             onChange={(e) => update(i, { key: e.target.value })}
             className={inputClass}
           />
@@ -158,7 +177,7 @@ function KeyValueEditor({
             aria-label="Value"
             type={secret ? "password" : "text"}
             value={r.value}
-            placeholder="value"
+            placeholder={valuePlaceholder}
             onChange={(e) => update(i, { value: e.target.value })}
             className={inputClass}
           />

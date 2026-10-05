@@ -117,6 +117,7 @@ function StatefulSetDetailPage() {
           <ActionButton
             icon={<ScaleIcon />}
             label="Scale"
+            hint="Change the number of replicas"
             onClick={handleOpenScale}
           />
         </ActionBar>

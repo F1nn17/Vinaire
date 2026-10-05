@@ -1,4 +1,10 @@
 import type { ReactNode } from "react";
+import { FillHeight } from "@/components/ui/FillHeight";
+
+// A list on the left and the selected item on the right. The block takes the rest
+// of the window (FillHeight): the list scrolls inside itself and so does the detail
+// pane, while the page stays put — no scrollbar for the whole page, no empty band
+// below.
 
 export function ListDetailSplit<T>({
   items,
@@ -16,7 +22,7 @@ export function ListDetailSplit<T>({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 gap-6">
+    <FillHeight className="flex gap-6">
       <div className="w-[420px] shrink-0 overflow-auto rounded-[10px] border border-border bg-surface">
         {items.map((item) => {
           const id = getId(item);
@@ -36,7 +42,9 @@ export function ListDetailSplit<T>({
         })}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3.5">{children}</div>
-    </div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3.5">
+        {children}
+      </div>
+    </FillHeight>
   );
 }

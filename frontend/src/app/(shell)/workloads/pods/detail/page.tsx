@@ -19,13 +19,12 @@ import { deletePod } from "@/lib/api/podActions";
 import { LogsTab } from "./LogsTab";
 import { TerminalTab } from "./TerminalTab";
 
-type Tab = "overview" | "logs" | "terminal" | "metrics" | "events" | "yaml";
+type Tab = "overview" | "logs" | "terminal" | "events" | "yaml";
 
 const tabs: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "logs", label: "Logs" },
   { key: "terminal", label: "Terminal" },
-  { key: "metrics", label: "Metrics" },
   { key: "events", label: "Events" },
   { key: "yaml", label: "YAML" },
 ];
@@ -114,11 +113,17 @@ function PodDetailPage() {
           <ActionButton
             icon={<PortForwardIcon />}
             label="Forward port"
+            hint="Open a port of this pod in a new tab"
             onClick={() => setForwardOpen(true)}
           />
           <ActionButton
             icon={pod.hasController ? <RestartIcon /> : <TrashIcon />}
             label={pod.hasController ? "Restart" : "Delete"}
+            hint={
+              pod.hasController
+                ? "Delete the pod; its controller recreates it"
+                : "Delete the pod — it has no controller, so it stays gone"
+            }
             danger={!pod.hasController}
             onClick={() => setConfirmOpen(true)}
           />
@@ -128,77 +133,89 @@ function PodDetailPage() {
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
-        <div className="grid grid-cols-[1.3fr_1fr] gap-5">
-          <div className="rounded-[10px] border border-border bg-surface p-5">
-            <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
-            <div className="flex flex-col gap-2.5">
-              <Row label="Namespace" value={pod.namespace} />
-              <Row label="Node" value={pod.node} />
-              <Row label="Pod IP" value={pod.podIp} />
-              <Row label="QoS class" value={pod.qosClass} />
-              <Row label="Restarts" value={String(pod.restarts)} />
-              <Row label="Image" value={pod.image} />
-              <Row label="Age" value={pod.age} />
+        <div className="flex flex-col gap-5">
+          <div className="grid grid-cols-[1.3fr_1fr] gap-5">
+            <div className="rounded-[10px] border border-border bg-surface p-5">
+              <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
+              <div className="flex flex-col gap-2.5">
+                <Row label="Namespace" value={pod.namespace} />
+                <Row label="Node" value={pod.node} />
+                <Row label="Pod IP" value={pod.podIp} />
+                <Row label="QoS class" value={pod.qosClass} />
+                <Row label="Restarts" value={String(pod.restarts)} />
+                <Row label="Image" value={pod.image} />
+                <Row label="Age" value={pod.age} />
+              </div>
+              <div className="mt-4 border-t border-border pt-4">
+                <div className="mb-2 text-xs text-text-muted">Labels</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(pod.labels).map(([k, v]) => (
+                    <span
+                      key={k}
+                      className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
+                    >
+                      {k}={v}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="mt-4 border-t border-border pt-4">
-              <div className="mb-2 text-xs text-text-muted">Labels</div>
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(pod.labels).map(([k, v]) => (
-                  <span
-                    key={k}
-                    className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
-                  >
-                    {k}={v}
+
+            <div className="flex flex-col gap-4">
+              <div className="rounded-[10px] border border-border bg-surface p-[18px]">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[13px] font-semibold">CPU</span>
+                  <span className="font-mono text-xs text-text-muted">
+                    {pod.cpu.used} / {pod.cpu.limit}
                   </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded bg-surface-2">
+                  <div
+                    className="h-full bg-accent"
+                    style={{ width: `${pod.cpu.pct}%` }}
+                  />
+                </div>
+              </div>
+              <div className="rounded-[10px] border border-border bg-surface p-[18px]">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[13px] font-semibold">Memory</span>
+                  <span className="font-mono text-xs text-text-muted">
+                    {pod.memory.used} / {pod.memory.limit}
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded bg-surface-2">
+                  <div
+                    className="h-full bg-warn"
+                    style={{ width: `${pod.memory.pct}%` }}
+                  />
+                </div>
+              </div>
+              <div className="rounded-[10px] border border-border bg-surface p-[18px]">
+                <div className="mb-2.5 text-[13px] font-semibold">
+                  Containers
+                </div>
+                {pod.containers.map((c) => (
+                  <div
+                    key={c.name}
+                    className="flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2 text-[12.5px]">
+                      <StatusDot color={c.statusColor} size={7} />
+                      {c.name}
+                    </span>
+                    <span className="font-mono text-[11px] text-text-muted">
+                      {c.restarts} restarts
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
           </div>
-
-          <div className="flex flex-col gap-4">
-            <div className="rounded-[10px] border border-border bg-surface p-[18px]">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-[13px] font-semibold">CPU</span>
-                <span className="font-mono text-xs text-text-muted">
-                  {pod.cpu.used} / {pod.cpu.limit}
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded bg-surface-2">
-                <div
-                  className="h-full bg-accent"
-                  style={{ width: `${pod.cpu.pct}%` }}
-                />
-              </div>
-            </div>
-            <div className="rounded-[10px] border border-border bg-surface p-[18px]">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-[13px] font-semibold">Memory</span>
-                <span className="font-mono text-xs text-text-muted">
-                  {pod.memory.used} / {pod.memory.limit}
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded bg-surface-2">
-                <div
-                  className="h-full bg-warn"
-                  style={{ width: `${pod.memory.pct}%` }}
-                />
-              </div>
-            </div>
-            <div className="rounded-[10px] border border-border bg-surface p-[18px]">
-              <div className="mb-2.5 text-[13px] font-semibold">Containers</div>
-              {pod.containers.map((c) => (
-                <div key={c.name} className="flex items-center justify-between">
-                  <span className="flex items-center gap-2 text-[12.5px]">
-                    <StatusDot color={c.statusColor} size={7} />
-                    {c.name}
-                  </span>
-                  <span className="font-mono text-[11px] text-text-muted">
-                    {c.restarts} restarts
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <MetricsPanel
+            resourceType="pods"
+            namespace={podNamespace}
+            name={podName}
+          />
         </div>
       )}
 
@@ -224,14 +241,6 @@ function PodDetailPage() {
             <EventRow key={i} {...e} />
           ))}
         </div>
-      )}
-
-      {tab === "metrics" && (
-        <MetricsPanel
-          resourceType="pods"
-          namespace={podNamespace}
-          name={podName}
-        />
       )}
 
       {tab === "yaml" && (

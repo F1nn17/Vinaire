@@ -11,6 +11,7 @@ import { UnderlineTabs } from "@/components/ui/Tabs";
 import { MetricsPanel } from "@/components/metrics/MetricsPanel";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { FillHeight } from "@/components/ui/FillHeight";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Toast, type ToastState } from "@/components/ui/Toast";
 import { ActionBar, ActionButton } from "@/components/ui/ActionBar";
@@ -37,13 +38,11 @@ type PendingAction =
   | { kind: "delete" }
   | { kind: "rollback"; revision: number };
 
-type Tab = "overview" | "pods" | "revisions" | "metrics" | "yaml";
+type Tab = "overview" | "revisions" | "yaml";
 
 const tabs: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
-  { key: "pods", label: "Pods" },
   { key: "revisions", label: "Revisions" },
-  { key: "metrics", label: "Metrics" },
   { key: "yaml", label: "YAML" },
 ];
 
@@ -241,26 +240,35 @@ function DeploymentDetailPage() {
           <ActionButton
             icon={<ScaleIcon />}
             label="Scale"
+            hint="Change the number of replicas"
             onClick={handleOpenScale}
           />
           <ActionButton
             icon={<RestartIcon />}
             label="Restart rollout"
+            hint="Replace the pods one by one, with no downtime"
             onClick={() => setPending({ kind: "restart" })}
           />
           <ActionButton
             icon={deployment.paused ? <PlayIcon /> : <PauseIcon />}
             label={deployment.paused ? "Resume rollout" : "Pause rollout"}
+            hint={
+              deployment.paused
+                ? "Let pending changes roll out again"
+                : "Hold the rollout: later changes wait until you resume"
+            }
             onClick={handlePauseResume}
           />
           <ActionButton
             icon={<HistoryIcon />}
             label="Revisions"
+            hint="See earlier versions and roll back to one"
             onClick={() => setTab("revisions")}
           />
           <ActionButton
             icon={<TrashIcon />}
             label="Delete"
+            hint="Remove the deployment and all its pods — can't be undone"
             danger
             onClick={() => setPending({ kind: "delete" })}
           />
@@ -270,76 +278,81 @@ function DeploymentDetailPage() {
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
-        <div className="max-w-xl rounded-[10px] border border-border bg-surface p-5">
-          <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
-          <div className="flex flex-col gap-2.5">
-            <Row label="Namespace" value={deployment.namespace} />
-            <Row label="Replicas" value={deployment.replicas} />
-            <Row label="Strategy" value={deployment.strategy} />
-            <Row label="Image" value={deployment.image} />
-            <Row label="Managed by" value={deployment.managedBy} />
-            <Row label="Age" value={deployment.age} />
+        <div className="flex flex-col gap-5">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+            <div className="rounded-[10px] border border-border bg-surface p-5">
+              <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
+              <div className="flex flex-col gap-2.5">
+                <Row label="Namespace" value={deployment.namespace} />
+                <Row label="Replicas" value={deployment.replicas} />
+                <Row label="Strategy" value={deployment.strategy} />
+                <Row label="Image" value={deployment.image} />
+                <Row label="Managed by" value={deployment.managedBy} />
+                <Row label="Age" value={deployment.age} />
+              </div>
+            </div>
+            <div className="min-w-0">
+              <div className="mb-2.5 text-[13px] font-semibold">
+                Pods ({deployment.pods.length})
+              </div>
+              <DataTable
+                columns={podColumns}
+                rows={deployment.pods}
+                rowKey={(r) => r.name}
+                rowHref={(r) =>
+                  `/workloads/pods/detail?namespace=${encodeURIComponent(deploymentNamespace)}&name=${encodeURIComponent(r.name)}`
+                }
+              />
+            </div>
           </div>
+          <MetricsPanel
+            resourceType="deployments"
+            namespace={deploymentNamespace}
+            name={deploymentName}
+          />
         </div>
-      )}
-
-      {tab === "pods" && (
-        <DataTable
-          columns={podColumns}
-          rows={deployment.pods}
-          rowKey={(r) => r.name}
-          rowHref={(r) =>
-            `/workloads/pods/detail?namespace=${encodeURIComponent(deploymentNamespace)}&name=${encodeURIComponent(r.name)}`
-          }
-        />
       )}
 
       {tab === "revisions" && (
-        <div className="flex max-w-xl flex-col gap-2.5">
-          {deployment.revisions.map((rev) => (
-            <div
-              key={rev.revision}
-              className="flex items-center justify-between rounded-[10px] border p-4"
-              style={{
-                borderColor: rev.current ? "var(--accent)" : "var(--border)",
-                background: "var(--surface)",
-              }}
-            >
-              <div>
-                <div className="text-[13px] font-semibold">
-                  Revision {rev.revision}{" "}
-                  {rev.current && (
-                    <span className="text-[11px] font-normal text-accent-text">
-                      · current
-                    </span>
-                  )}
+        <FillHeight className="max-w-xl overflow-auto">
+          <div className="flex flex-col gap-2.5 pr-1">
+            {deployment.revisions.map((rev) => (
+              <div
+                key={rev.revision}
+                className="flex items-center justify-between rounded-[10px] border p-4"
+                style={{
+                  borderColor: rev.current ? "var(--accent)" : "var(--border)",
+                  background: "var(--surface)",
+                }}
+              >
+                <div>
+                  <div className="text-[13px] font-semibold">
+                    Revision {rev.revision}{" "}
+                    {rev.current && (
+                      <span className="text-[11px] font-normal text-accent-text">
+                        · current
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 font-mono text-[11px] text-text-faint">
+                    {rev.image} · {rev.age}
+                  </div>
                 </div>
-                <div className="mt-0.5 font-mono text-[11px] text-text-faint">
-                  {rev.image} · {rev.age}
-                </div>
+                {!rev.current && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPending({ kind: "rollback", revision: rev.revision })
+                    }
+                    className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs"
+                  >
+                    Rollback
+                  </button>
+                )}
               </div>
-              {!rev.current && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPending({ kind: "rollback", revision: rev.revision })
-                  }
-                  className="rounded-md border border-border bg-surface-2 px-3 py-1.5 text-xs"
-                >
-                  Rollback
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tab === "metrics" && (
-        <MetricsPanel
-          resourceType="deployments"
-          namespace={deploymentNamespace}
-          name={deploymentName}
-        />
+            ))}
+          </div>
+        </FillHeight>
       )}
 
       {tab === "yaml" && (
