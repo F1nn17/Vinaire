@@ -2,14 +2,24 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
-import { installChart, type InstallResult } from "@/lib/api/catalog";
+import { Suspense, useEffect, useState } from "react";
+import useSWR from "swr";
+import {
+  cancelInstallJob,
+  getInstallJob,
+  preflightInstall,
+  startInstallJob,
+  type InstallRequest,
+} from "@/lib/api/catalog";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { useChart } from "@/lib/hooks/useCatalog";
 import { useNamespaces } from "@/lib/hooks/useNamespaces";
 import { useNodes } from "@/lib/hooks/useWorkloads";
 import { applyErrorMessage } from "@/components/editor/useYamlApply";
 import { YamlEditor } from "@/components/editor/YamlEditor";
+import { ChartIcon } from "@/components/marketplace/ChartIcon";
+import { InstallProgress } from "@/components/marketplace/InstallProgress";
+import { PermissionsCheck } from "@/components/marketplace/PermissionsCheck";
 import { PillTabs } from "@/components/ui/Tabs";
 
 const inputClass =
@@ -17,6 +27,17 @@ const inputClass =
 
 const valuesHint =
   '# Only what you want to change — everything else keeps the chart\'s default.\n# The "Chart defaults" tab lists every available value.\n';
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
+const ended = ["done", "failed", "cancelled"];
 
 export default function InstallPage() {
   return (
@@ -38,6 +59,7 @@ function InstallInner() {
     data: chart,
     error,
     isLoading,
+    mutate: reloadChart,
   } = useChart(repo, chartName, version || undefined);
   const { data: namespaces } = useNamespaces();
   const { data: nodes } = useNodes();
@@ -48,35 +70,78 @@ function InstallInner() {
   const [values, setValues] = useState(valuesHint);
   const [valuesTab, setValuesTab] = useState<"mine" | "defaults">("mine");
   const [wait, setWait] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [installError, setInstallError] = useState<string | null>(null);
-  const [result, setResult] = useState<InstallResult | null>(null);
+  const [allowDeprecated, setAllowDeprecated] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
 
   const existing = new Set(namespaces?.map((n) => n.name));
   const newNamespace = !!namespaces && !!namespace && !existing.has(namespace);
 
+  const request: InstallRequest = {
+    repo,
+    chart: chartName,
+    version: version || undefined,
+    namespace: namespace.trim(),
+    release: release.trim(),
+    values,
+    nodeName: nodeName || undefined,
+    createNamespace: newNamespace,
+    wait,
+    allowDeprecated,
+  };
+
+  // Ask, as the user, whether the cluster lets them install this — before they
+  // press Install, so a missing permission shows up as a list rather than as a
+  // failure halfway through. Debounced: the backend renders the chart each time.
+  const checked = useDebounced(JSON.stringify(request), 900);
+  const formReady = !!chart && !!release.trim() && !!namespace.trim();
+  const { data: preflight, isLoading: checking } = useSWR(
+    formReady && !jobId ? ["install-preflight", checked] : null,
+    () => preflightInstall(JSON.parse(checked) as InstallRequest),
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+      keepPreviousData: true,
+    },
+  );
+  const missing = preflight?.missing ?? [];
+
+  // Once started the install runs in the background; poll how far it is.
+  const { data: progress } = useSWR(
+    jobId ? ["install-job", jobId] : null,
+    () => getInstallJob(jobId as string),
+    {
+      refreshInterval: (d) => (d && ended.includes(d.job.stage) ? 0 : 700),
+      revalidateOnFocus: false,
+    },
+  );
+  const job = progress?.job;
+
   async function install() {
-    setBusy(true);
-    setInstallError(null);
+    setStarting(true);
+    setStartError(null);
     try {
-      setResult(
-        await installChart({
-          repo,
-          chart: chartName,
-          version: version || undefined,
-          namespace: namespace.trim(),
-          release: release.trim(),
-          values,
-          nodeName: nodeName || undefined,
-          createNamespace: newNamespace,
-          wait,
-        }),
-      );
+      setJobId(await startInstallJob(request));
     } catch (err) {
-      setInstallError(applyErrorMessage(err));
+      setStartError(applyErrorMessage(err));
     } finally {
-      setBusy(false);
+      setStarting(false);
     }
+  }
+
+  async function cancel() {
+    if (!jobId) return;
+    try {
+      await cancelInstallJob(jobId);
+    } catch (err) {
+      setStartError(applyErrorMessage(err));
+    }
+  }
+
+  function backToForm() {
+    setJobId(null);
+    setStartError(null);
   }
 
   if (!repo || !chartName) {
@@ -104,36 +169,53 @@ function InstallInner() {
       </div>
 
       {error ? (
-        <div className="text-sm text-err">
-          Couldn&apos;t load the chart: {friendlyErrorMessage(error)}
+        <div className="flex flex-col items-start gap-3 text-sm">
+          <div className="text-err">
+            Couldn&apos;t load the chart: {friendlyErrorMessage(error)}
+          </div>
+          <button
+            type="button"
+            onClick={() => void reloadChart()}
+            className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
+          >
+            Try again
+          </button>
         </div>
       ) : isLoading && !chart ? (
         <div className="text-sm text-text-muted">Downloading the chart…</div>
       ) : chart ? (
         <div className="grid gap-6 lg:grid-cols-[1fr_1.3fr]">
           <div className="flex flex-col gap-4">
-            <div>
-              <div className="text-[15px] font-semibold">{chart.name}</div>
-              <div className="mt-1 text-xs text-text-muted">
-                {chart.description}
+            <div className="flex items-start gap-3">
+              <ChartIcon
+                repo={chart.repo}
+                chart={chart.name}
+                hasIcon={chart.hasIcon}
+                size={48}
+              />
+              <div className="min-w-0">
+                <div className="text-[15px] font-semibold">{chart.name}</div>
+                <div className="mt-1 text-xs text-text-muted">
+                  {chart.description}
+                </div>
+                <div className="mt-1 text-[11px] text-text-faint">
+                  {chart.version}
+                  {chart.appVersion ? ` · app ${chart.appVersion}` : ""}
+                  {chart.hasSchema
+                    ? " · values are validated against a schema"
+                    : ""}
+                </div>
+                {chart.home && (
+                  <a
+                    href={chart.home}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="mt-1 inline-block text-[11px] text-accent-text underline"
+                  >
+                    Project home
+                  </a>
+                )}
               </div>
-              <div className="mt-1 text-[11px] text-text-faint">
-                {chart.version}
-                {chart.appVersion ? ` · app ${chart.appVersion}` : ""}
-                {chart.hasSchema
-                  ? " · values are validated against a schema"
-                  : ""}
-              </div>
-              {chart.home && (
-                <a
-                  href={chart.home}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="mt-1 inline-block text-[11px] text-accent-text underline"
-                >
-                  Project home
-                </a>
-              )}
             </div>
 
             <label className="flex flex-col gap-1.5 text-xs text-text-muted">
@@ -142,6 +224,7 @@ function InstallInner() {
                 aria-label="Chart version"
                 value={version}
                 onChange={(e) => setVersion(e.target.value)}
+                disabled={!!jobId}
                 className={inputClass}
               >
                 <option value="">Latest ({chart.versions[0]?.version})</option>
@@ -160,6 +243,7 @@ function InstallInner() {
                 aria-label="Release name"
                 value={release}
                 onChange={(e) => setRelease(e.target.value)}
+                disabled={!!jobId}
                 className={`${inputClass} font-mono`}
               />
             </label>
@@ -171,6 +255,7 @@ function InstallInner() {
                 list="marketplace-namespaces"
                 value={namespace}
                 onChange={(e) => setNamespace(e.target.value)}
+                disabled={!!jobId}
                 className={`${inputClass} font-mono`}
               />
               <datalist id="marketplace-namespaces">
@@ -192,6 +277,7 @@ function InstallInner() {
                   aria-label="Run on node"
                   value={nodeName}
                   onChange={(e) => setNodeName(e.target.value)}
+                  disabled={!!jobId}
                   className={inputClass}
                 >
                   <option value="">Any node</option>
@@ -224,9 +310,29 @@ function InstallInner() {
                 type="checkbox"
                 checked={wait}
                 onChange={(e) => setWait(e.target.checked)}
+                disabled={!!jobId}
               />
               Wait until the resources are ready (up to 5 minutes)
             </label>
+
+            {chart.deprecated && (
+              <label className="flex flex-col gap-1.5 rounded-lg border border-warn/40 bg-surface-2 p-3 text-xs text-warn">
+                <span className="font-semibold">This chart is deprecated.</span>
+                <span className="text-text-muted">
+                  Its maintainers no longer update it, so it can carry known
+                  vulnerabilities. Prefer a maintained alternative.
+                </span>
+                <span className="flex items-center gap-2 text-text-muted">
+                  <input
+                    type="checkbox"
+                    checked={allowDeprecated}
+                    onChange={(e) => setAllowDeprecated(e.target.checked)}
+                    disabled={!!jobId}
+                  />
+                  Install it anyway
+                </span>
+              </label>
+            )}
 
             {chart.readme && (
               <details className="rounded-lg border border-border bg-surface p-3 text-xs">
@@ -257,42 +363,102 @@ function InstallInner() {
               )}
             </div>
 
-            {installError && (
+            {startError && (
               <div className="whitespace-pre-wrap rounded-lg border border-err/30 bg-surface-2 p-3 text-xs text-err">
-                {installError}
+                {startError}
               </div>
             )}
 
-            {result ? (
-              <div className="rounded-lg border border-ok/30 bg-surface-2 p-3 text-xs">
-                <div className="text-ok">
-                  Installed {result.release.name} ({result.release.chart}-
-                  {result.release.chartVersion}) in {result.release.namespace} —{" "}
-                  {result.release.status}.
-                </div>
-                {result.notes && (
-                  <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-text-muted">
-                    {result.notes}
-                  </pre>
+            {job ? (
+              <>
+                <InstallProgress
+                  job={job}
+                  pods={progress?.pods}
+                  onCancel={() => void cancel()}
+                />
+                {job.stage === "failed" && (
+                  <div className="flex flex-col gap-3">
+                    {job.missing && job.missing.length > 0 ? (
+                      <PermissionsCheck
+                        checking={false}
+                        missing={job.missing}
+                        unchecked={job.unchecked}
+                      />
+                    ) : (
+                      <div className="whitespace-pre-wrap rounded-lg border border-err/30 bg-surface-2 p-3 text-xs text-err">
+                        {job.error}
+                      </div>
+                    )}
+                    <div>
+                      <button
+                        type="button"
+                        onClick={backToForm}
+                        className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
+                      >
+                        Back to the form
+                      </button>
+                    </div>
+                  </div>
                 )}
-                <Link
-                  href="/marketplace"
-                  className="mt-2 inline-block text-accent-text underline"
-                >
-                  Back to the Marketplace
-                </Link>
-              </div>
+                {job.stage === "cancelled" && (
+                  <div className="flex items-center gap-3 text-xs text-text-muted">
+                    Cancelled — nothing was installed.
+                    <button
+                      type="button"
+                      onClick={backToForm}
+                      className="rounded-lg border border-border px-3 py-1.5 hover:bg-surface-2"
+                    >
+                      Back to the form
+                    </button>
+                  </div>
+                )}
+                {job.stage === "done" && job.result && (
+                  <div className="rounded-lg border border-ok/30 bg-surface-2 p-3 text-xs">
+                    <div className="text-ok">
+                      Installed {job.result.release.name} (
+                      {job.result.release.chart}-
+                      {job.result.release.chartVersion}) in{" "}
+                      {job.result.release.namespace} —{" "}
+                      {job.result.release.status}.
+                    </div>
+                    {job.result.notes && (
+                      <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-text-muted">
+                        {job.result.notes}
+                      </pre>
+                    )}
+                    <Link
+                      href="/marketplace"
+                      className="mt-2 inline-block text-accent-text underline"
+                    >
+                      Back to the Marketplace
+                    </Link>
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => void install()}
-                  disabled={busy || !release.trim() || !namespace.trim()}
-                  className="rounded-lg bg-accent px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-60"
-                >
-                  {busy ? "Installing…" : "Install"}
-                </button>
-              </div>
+              <>
+                <PermissionsCheck
+                  checking={checking}
+                  missing={missing}
+                  unchecked={preflight?.unchecked}
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void install()}
+                    disabled={
+                      starting ||
+                      (chart.deprecated && !allowDeprecated) ||
+                      !release.trim() ||
+                      !namespace.trim() ||
+                      missing.length > 0
+                    }
+                    className="rounded-lg bg-accent px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-60"
+                  >
+                    {starting ? "Starting…" : "Install"}
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>

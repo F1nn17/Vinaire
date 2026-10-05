@@ -22,6 +22,8 @@ export type ChartSummary = {
   keywords?: string[];
   deprecated?: boolean;
   category?: string;
+  // an icon the backend serves (see components/marketplace/ChartIcon)
+  hasIcon?: boolean;
 };
 
 export type CatalogSearch = {
@@ -32,6 +34,8 @@ export type CatalogSearch = {
   pending?: string[];
   // repositories that couldn't be reached — one broken repo doesn't blank the page
   errors?: Record<string, string>;
+  // matches left out because the chart is deprecated (unmaintained, maybe unsafe)
+  hiddenDeprecated?: number;
 };
 
 export type ChartVersionInfo = {
@@ -75,8 +79,10 @@ export function searchCatalog(
   search: string,
   repo: string,
   category = "",
+  includeDeprecated = false,
 ): Promise<CatalogSearch> {
   const p = new URLSearchParams();
+  if (includeDeprecated) p.set("deprecated", "true");
   if (search) p.set("search", search);
   if (repo) p.set("repo", repo);
   if (category) p.set("category", category);
@@ -136,6 +142,8 @@ export type InstallRequest = {
   nodeName?: string;
   createNamespace?: boolean;
   wait?: boolean;
+  // the explicit "install this deprecated chart anyway"
+  allowDeprecated?: boolean;
 };
 
 export function installChart(req: InstallRequest): Promise<InstallResult> {
@@ -190,4 +198,93 @@ export async function uninstallRelease(
       body: JSON.stringify({ confirmName: name }),
     },
   );
+}
+
+// What an install would need that the caller lacks (nothing is created by asking).
+export type MissingPermission = {
+  group: string;
+  resource: string;
+  namespace?: string;
+  verbs: string[];
+};
+
+export type Preflight = {
+  objects: number;
+  missing: MissingPermission[];
+  // kinds that couldn't be checked (typically CRDs the chart installs itself)
+  unchecked?: string[];
+};
+
+export function preflightInstall(req: InstallRequest): Promise<Preflight> {
+  return apiFetch("/api/v1/catalog/install/preflight", {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify(req),
+  });
+}
+
+// "get/create networkpolicies.networking.k8s.io in db" — one line per gap.
+export function describeMissing(m: MissingPermission): string {
+  const res = m.group ? `${m.resource}.${m.group}` : m.resource;
+  return `${m.verbs.join("/")} ${res} ${m.namespace ? `in namespace ${m.namespace}` : "(cluster-wide)"}`;
+}
+
+// Missing permissions carried by a refused install (HTTP 403), if any.
+export function missingFromError(err: unknown): MissingPermission[] {
+  const data = (err as { data?: { missing?: unknown } } | null)?.data;
+  return Array.isArray(data?.missing)
+    ? (data.missing as MissingPermission[])
+    : [];
+}
+
+export type InstallJobStage =
+  "downloading" | "checking" | "installing" | "done" | "failed" | "cancelled";
+
+export type InstallJob = {
+  id: string;
+  stage: InstallJobStage;
+  // the stage that was running when the job failed or was cancelled
+  failedStage?: InstallJobStage;
+  chart: string;
+  release: string;
+  namespace: string;
+  bytesDone: number;
+  bytesTotal: number; // -1 = the server didn't say
+  bytesPerSec: number;
+  elapsedSec: number;
+  error?: string;
+  forbidden?: boolean;
+  missing?: MissingPermission[];
+  unchecked?: string[];
+  result?: InstallResult;
+};
+
+export type InstallPod = {
+  name: string;
+  phase: string;
+  ready: number;
+  total: number;
+  reason?: string;
+};
+
+export async function startInstallJob(req: InstallRequest): Promise<string> {
+  const res = await apiFetch<{ id: string }>("/api/v1/catalog/install-jobs", {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify(req),
+  });
+  return res.id;
+}
+
+export function getInstallJob(
+  id: string,
+): Promise<{ job: InstallJob; pods?: InstallPod[] }> {
+  return apiFetch(`/api/v1/catalog/install-jobs/${encodeURIComponent(id)}`);
+}
+
+export async function cancelInstallJob(id: string): Promise<void> {
+  await apiFetch(`/api/v1/catalog/install-jobs/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: json,
+  });
 }

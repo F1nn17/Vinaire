@@ -121,7 +121,29 @@ flow.
   release's values (`GET .../values`, needed to pre-fill an upgrade) is audited as
   `helm-reveal-values`, the same way a Secret reveal is. The release list never
   carries values or the manifest. Helm keeps a release as a Secret in its
-  namespace, so the caller needs Secret access there.
+  namespace, so the caller needs Secret access there. Around the install:
+  - `POST /api/v1/catalog/install/preflight` renders the chart **client-side**
+    and asks the cluster, with a `SelfSubjectAccessReview` **as the caller**,
+    whether they may `get`/`create` every kind it contains — nothing is written.
+    Every install path (direct and background) runs it first and refuses to start
+    when something is missing (audited `helm-install-refused`); a failure of the
+    check itself doesn't block, the cluster's RBAC still decides.
+  - `POST /api/v1/catalog/install-jobs`, `GET`/`DELETE .../install-jobs/{id}` run
+    the *same* install in the background as the same caller, so the UI can show
+    progress (download bytes/speed, checks, install, pods). A job is visible only
+    to the identity that started it (`Session.OwnerKey`), capped per identity,
+    forgotten 15 minutes after it ends; the outcome is audited exactly like a
+    direct install (`helm-install`/`-failed`, `-refused`, `-cancelled`), and a job
+    can only be cancelled before Helm starts creating objects. Pod rows are read
+    as the caller.
+  - A **deprecated** chart is hidden from search and refused on install unless the
+    request carries `allowDeprecated` (the UI's explicit "install anyway").
+  - `GET /api/v1/catalog/icons/{repo}/{chart}` serves a chart's icon so the browser
+    never contacts the icon's host (the CSP allows images from Vinaire's own origin
+    only). The URL is the one the repository's index names — a request can name a
+    repository and a chart, never a URL — fetched through `netguard` (https only,
+    guarded addresses), capped at 256 KiB, content-sniffed (a script-free SVG or a
+    raster image, never the Content-Type header), served `nosniff` + sandboxed.
 - GitOps (Roadmap Phase 29) — `PUT /api/v1/gitops/mode`, `POST
   /api/v1/gitops/sources`, `DELETE /api/v1/gitops/sources/{id}`, `POST
   /api/v1/gitops/sources/{id}/sync` and `POST
@@ -438,6 +460,8 @@ rules:
         "secrets",
         "services",
         "ingresses",
+        "networkpolicies",
+        "cronjobs",
         "events",
         "replicasets",
         "serviceaccounts",
@@ -531,7 +555,9 @@ rules:
   # Phase 36: permission to change Vinaire ITSELF. These resources don't exist in
   # the cluster — they are names for the permission, asked with a
   # SelfSubjectAccessReview as the caller. The chart creates this role unbound
-  # (<fullname>-admin); bind it to whoever administers Vinaire.
+  # (<fullname>-admin); bind it to whoever administers Vinaire. It is NOT cluster
+  # admin and grants nothing inside Kubernetes: bind it IN ADDITION to the viewer
+  # role (and to <fullname>-installer to install charts), never instead of them.
   - apiGroups: ["vinaire.io"]
     resources: ["clusters", "gitops"]
     verbs: ["create", "update", "delete"]

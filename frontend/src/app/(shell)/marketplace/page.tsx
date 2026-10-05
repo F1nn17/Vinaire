@@ -1,5 +1,6 @@
 "use client";
 
+import { ChartIcon } from "@/components/marketplace/ChartIcon";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
@@ -59,7 +60,13 @@ function CatalogTab() {
   const [repo, setRepo] = useState("");
   const [category, setCategory] = useState("");
   const { data: repos } = useCatalogRepos();
-  const { data, error, isLoading } = useCatalogSearch(search, repo, category);
+  const [showDeprecated, setShowDeprecated] = useState(false);
+  const { data, error, isLoading } = useCatalogSearch(
+    search,
+    repo,
+    category,
+    showDeprecated,
+  );
   const categories = Array.from(
     new Set(
       repos?.repos.map((r) => r.category).filter((c): c is string => !!c),
@@ -104,6 +111,20 @@ function CatalogTab() {
             ))}
         </select>
       </div>
+
+      {(showDeprecated || !!data?.hiddenDeprecated) && (
+        <label className="flex items-center gap-2 text-xs text-text-muted">
+          <input
+            type="checkbox"
+            checked={showDeprecated}
+            onChange={(e) => setShowDeprecated(e.target.checked)}
+          />
+          Show deprecated charts
+          {!showDeprecated && data?.hiddenDeprecated
+            ? ` (${data.hiddenDeprecated} hidden — no longer maintained, may be unsafe)`
+            : ""}
+        </label>
+      )}
 
       {categories.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -176,8 +197,9 @@ function CatalogTab() {
                 href={`/marketplace/install?repo=${encodeURIComponent(c.repo)}&chart=${encodeURIComponent(c.name)}`}
                 className="flex flex-col gap-2 rounded-[10px] border border-border bg-surface p-4 hover:border-accent"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="truncate font-mono text-[13px] font-semibold">
+                <div className="flex items-center gap-2.5">
+                  <ChartIcon repo={c.repo} chart={c.name} hasIcon={c.hasIcon} />
+                  <span className="min-w-0 flex-1 truncate font-mono text-[13px] font-semibold">
                     {c.name}
                   </span>
                   <span className="shrink-0 font-mono text-[11px] text-text-muted">

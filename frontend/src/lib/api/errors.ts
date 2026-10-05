@@ -6,6 +6,15 @@ import { ApiError } from "./http";
 // kind of short, human copy instead of a raw backend error string (which,
 // for a 403, is a full Kubernetes RBAC sentence — still included, just
 // under a clear headline rather than as the whole message).
+// A proxy's HTML error page or a very long dump isn't worth showing.
+function isReadable(message: string): boolean {
+  return (
+    message.length > 0 &&
+    message.length <= 400 &&
+    !message.trimStart().startsWith("<")
+  );
+}
+
 export function friendlyErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.status) {
@@ -14,6 +23,12 @@ export function friendlyErrorMessage(error: unknown): string {
       case 404:
         return "Not found.";
       case 502:
+        // The backend is up but couldn't get what it needed from somewhere else
+        // (a chart repository, the cluster). Its message says what — show it
+        // rather than a claim that the backend itself is down.
+        return isReadable(error.message)
+          ? `The backend couldn't complete this: ${error.message}`
+          : "The backend couldn't complete this request.";
       case 503:
         return "The backend is unavailable right now.";
       default:

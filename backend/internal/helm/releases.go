@@ -221,6 +221,17 @@ type InstallRequest struct {
 	NodeName             string // optional: pin to this node
 	CreateNamespace      bool
 	Wait                 bool // wait for the resources to be ready
+	// AllowDeprecated permits installing a chart its maintainers have deprecated
+	// (no more fixes — security ones included); off, such an install is refused.
+	AllowDeprecated bool
+}
+
+// refuseDeprecated is the check every install path runs on a loaded chart.
+func refuseDeprecated(ch *chart.Chart, allow bool) error {
+	if ch.Metadata != nil && ch.Metadata.Deprecated && !allow {
+		return fmt.Errorf("%w: the chart %q is deprecated — it is no longer maintained and may be unsafe; tick \"install anyway\" if you really mean to use it", ErrInvalid, ch.Metadata.Name)
+	}
+	return nil
 }
 
 // InstallResult is the outcome of an install or upgrade.
@@ -251,6 +262,9 @@ func (rl *Releases) Install(ctx context.Context, cfg *rest.Config, req InstallRe
 	}
 	ch, err := rl.Catalog.LoadChart(ctx, req.Repo, req.Chart, req.Version)
 	if err != nil {
+		return nil, err
+	}
+	if err := refuseDeprecated(ch, req.AllowDeprecated); err != nil {
 		return nil, err
 	}
 	if req.NodeName != "" {

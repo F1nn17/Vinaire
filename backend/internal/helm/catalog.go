@@ -57,6 +57,7 @@ type Catalog struct {
 	// loads its own copy.
 	charts map[string][]byte
 	order  []string // insertion order, for eviction
+	icons  iconCache
 }
 
 type indexEntry struct {
@@ -113,7 +114,8 @@ func (c *Catalog) fetchLimited(ctx context.Context, rawURL string, max int64) ([
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("fetching %s: HTTP %d", redactURL(rawURL), resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, max+1))
+	reportProgress(ctx, 0, resp.ContentLength)
+	body, err := io.ReadAll(&countingReader{ctx: ctx, r: io.LimitReader(resp.Body, max+1), total: resp.ContentLength})
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", redactURL(rawURL), err)
 	}
@@ -231,13 +233,16 @@ type ChartSummary struct {
 	Keywords    []string `json:"keywords,omitempty"`
 	Deprecated  bool     `json:"deprecated,omitempty"`
 	Category    string   `json:"category,omitempty"`
+	// HasIcon: the chart names an icon, served by the backend at
+	// /api/v1/catalog/icons/{repo}/{chart} (never fetched by the browser).
+	HasIcon bool `json:"hasIcon,omitempty"`
 }
 
 func summarize(r Repo, name string, cv *repo.ChartVersion) ChartSummary {
 	return ChartSummary{
 		Repo: r.Name, Name: name, Version: cv.Version, AppVersion: cv.AppVersion,
 		Description: cv.Description, Keywords: cv.Keywords, Deprecated: cv.Deprecated,
-		Category: r.Category,
+		Category: r.Category, HasIcon: iconURL(r, cv.Icon) != "",
 	}
 }
 
@@ -249,12 +254,22 @@ type SearchResult struct {
 	Total   int               `json:"total"` // matches, before the list is cut at maxSearchRows
 	Errors  map[string]string `json:"errors,omitempty"`
 	Pending []string          `json:"pending,omitempty"`
+	// HiddenDeprecated counts matches left out because the chart is deprecated
+	// (unmaintained, and possibly unsafe); ask again with includeDeprecated to see them.
+	HiddenDeprecated int `json:"hiddenDeprecated,omitempty"`
 }
 
 // Search lists charts across the configured repositories whose name,
 // description, keywords or repository tags contain query (case-insensitive),
 // optionally limited to one repository and/or category.
+// Deprecated charts are left out.
 func (c *Catalog) Search(ctx context.Context, query, repoName, category string) SearchResult {
+	return c.SearchWith(ctx, query, repoName, category, false)
+}
+
+// SearchWith is Search with a choice about deprecated charts, which are
+// unmaintained and so hidden unless includeDeprecated is set.
+func (c *Catalog) SearchWith(ctx context.Context, query, repoName, category string, includeDeprecated bool) SearchResult {
 	query = strings.ToLower(strings.TrimSpace(query))
 	res := SearchResult{Charts: []ChartSummary{}}
 
@@ -303,6 +318,10 @@ collect:
 					if sc = score(query, name, cv, g.r); sc == 0 {
 						continue
 					}
+				}
+				if cv.Deprecated && !includeDeprecated {
+					res.HiddenDeprecated++
+					continue
 				}
 				res.Charts = append(res.Charts, summarize(g.r, name, cv))
 				scores[g.r.Name+"/"+name] = sc

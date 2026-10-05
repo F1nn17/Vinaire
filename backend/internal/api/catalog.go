@@ -10,6 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/shiraku/vinaire/backend/internal/helm"
 )
@@ -84,7 +87,8 @@ func (h *Handler) CatalogSearch(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "search is too long")
 		return
 	}
-	respondJSON(w, h.Catalog.Search(r.Context(), q, r.URL.Query().Get("repo"), r.URL.Query().Get("category")))
+	respondJSON(w, h.Catalog.SearchWith(r.Context(), q, r.URL.Query().Get("repo"), r.URL.Query().Get("category"),
+		r.URL.Query().Get("deprecated") == "true"))
 }
 
 // CatalogChart handles GET /api/v1/catalog/charts/{repo}/{chart}?version=.
@@ -98,6 +102,29 @@ func (h *Handler) CatalogChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, d)
+}
+
+// CatalogIcon handles GET /api/v1/catalog/icons/{repo}/{chart}: a chart's icon,
+// fetched and checked by the backend (see internal/helm/icons.go) so the browser
+// never contacts the host that serves it.
+func (h *Handler) CatalogIcon(w http.ResponseWriter, r *http.Request) {
+	if !h.catalogAvailable(w) {
+		return
+	}
+	icon, err := h.Catalog.Icon(r.Context(), chi.URLParam(r, "repo"), chi.URLParam(r, "chart"))
+	if err != nil {
+		if errors.Is(err, helm.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		respondHelmError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", icon.ContentType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	_, _ = w.Write(icon.Data)
 }
 
 // ---- releases (read) ----------------------------------------------------------
@@ -170,6 +197,8 @@ type installBody struct {
 	NodeName        string `json:"nodeName"`
 	CreateNamespace bool   `json:"createNamespace"`
 	Wait            bool   `json:"wait"`
+	// AllowDeprecated is the explicit "yes, install this unmaintained chart".
+	AllowDeprecated bool `json:"allowDeprecated"`
 }
 
 func decodeCatalogBody(w http.ResponseWriter, r *http.Request, v any) bool {
@@ -210,10 +239,22 @@ func (h *Handler) CatalogInstall(w http.ResponseWriter, r *http.Request) {
 	if !decodeCatalogBody(w, r, &b) {
 		return
 	}
-	res, err := h.Releases.Install(r.Context(), cfg, helm.InstallRequest{
+	req := helm.InstallRequest{
 		Repo: b.Repo, Chart: b.Chart, Version: b.Version, Namespace: b.Namespace, Release: b.Release,
-		ValuesYAML: b.Values, NodeName: b.NodeName, CreateNamespace: b.CreateNamespace, Wait: b.Wait,
-	})
+		ValuesYAML: b.Values, NodeName: b.NodeName, CreateNamespace: b.CreateNamespace, Wait: b.Wait, AllowDeprecated: b.AllowDeprecated,
+	}
+	// Refuse to start an install the caller's rights can't finish: it would fail
+	// halfway, with some objects already created. (A failure of the check itself
+	// doesn't block — the cluster's RBAC still decides during the install.)
+	if pf, perr := h.Releases.Preflight(r.Context(), cfg, req); perr == nil && !pf.OK() {
+		h.auditLog(r, "helm-install-refused", b.Namespace, b.Release, "repo", b.Repo, "chart", b.Chart)
+		respondInstallForbidden(w, pf)
+		return
+	} else if perr != nil && errors.Is(perr, helm.ErrInvalid) {
+		respondHelmError(w, perr)
+		return
+	}
+	res, err := h.Releases.Install(r.Context(), cfg, req)
 	if err != nil {
 		if !errors.Is(err, helm.ErrInvalid) { // a rejected request touched nothing
 			h.auditHelm(r, "helm-install", b.Namespace, b.Release, err, "repo", b.Repo, "chart", b.Chart, "version", b.Version)
@@ -324,4 +365,188 @@ func (h *Handler) CatalogUninstall(w http.ResponseWriter, r *http.Request) {
 	}
 	h.auditHelm(r, "helm-uninstall", ns, name, nil)
 	respondJSON(w, map[string]string{"status": "ok"})
+}
+
+// respondInstallForbidden answers an install the caller lacks rights for: the
+// usual {"error"} plus the structured list the UI turns into a checklist.
+func respondInstallForbidden(w http.ResponseWriter, pf *helm.PreflightResult) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"error":   "you don't have the permissions this chart needs: " + pf.String(),
+		"missing": pf.Missing,
+	})
+}
+
+// CatalogInstallPreflight handles POST /api/v1/catalog/install/preflight: what
+// installing this chart with these values would need, and what the caller lacks.
+// Nothing is created — the chart is rendered locally and the cluster is only
+// asked access questions, as the caller.
+func (h *Handler) CatalogInstallPreflight(w http.ResponseWriter, r *http.Request) {
+	if !h.catalogAvailable(w) {
+		return
+	}
+	_, cfg, ok := h.resolveRESTConfig(w, r)
+	if !ok {
+		return
+	}
+	var b installBody
+	if !decodeCatalogBody(w, r, &b) {
+		return
+	}
+	pf, err := h.Releases.Preflight(r.Context(), cfg, helm.InstallRequest{
+		Repo: b.Repo, Chart: b.Chart, Version: b.Version, Namespace: b.Namespace, Release: b.Release,
+		ValuesYAML: b.Values, NodeName: b.NodeName, CreateNamespace: b.CreateNamespace, AllowDeprecated: b.AllowDeprecated,
+	})
+	if err != nil {
+		respondHelmError(w, err)
+		return
+	}
+	respondJSON(w, pf)
+}
+
+// ---- install jobs (progress) ----------------------------------------------------
+
+func (h *Handler) installJobsAvailable(w http.ResponseWriter) bool {
+	if !h.catalogAvailable(w) {
+		return false
+	}
+	if h.InstallJobs == nil {
+		respondError(w, http.StatusServiceUnavailable, "background installs are not configured")
+		return false
+	}
+	return true
+}
+
+// CatalogStartInstallJob handles POST /api/v1/catalog/install-jobs: the same
+// install as POST /catalog/install, run in the background as the caller so the
+// UI can poll its progress. Audited exactly like a direct install (the outcome,
+// when it ends), and a request that is refused or invalid touches nothing.
+func (h *Handler) CatalogStartInstallJob(w http.ResponseWriter, r *http.Request) {
+	if !h.installJobsAvailable(w) {
+		return
+	}
+	_, cfg, ok := h.resolveRESTConfig(w, r)
+	if !ok {
+		return
+	}
+	var b installBody
+	if !decodeCatalogBody(w, r, &b) {
+		return
+	}
+	req := helm.InstallRequest{
+		Repo: b.Repo, Chart: b.Chart, Version: b.Version, Namespace: b.Namespace, Release: b.Release,
+		ValuesYAML: b.Values, NodeName: b.NodeName, CreateNamespace: b.CreateNamespace, Wait: b.Wait, AllowDeprecated: b.AllowDeprecated,
+	}
+	// The job outlives this request, but it must keep the caller's identity for
+	// the audit line it writes when it ends.
+	detached := r.Clone(context.WithoutCancel(r.Context()))
+	job, err := h.InstallJobs.StartInstall(h.Releases, cfg, ownerKey(r), req, func(res *helm.InstallResult, err error) {
+		switch {
+		case err == nil:
+			h.auditHelm(detached, "helm-install", b.Namespace, b.Release, nil,
+				"repo", b.Repo, "chart", b.Chart, "version", res.Release.ChartVersion, "node", b.NodeName, "createNamespace", b.CreateNamespace)
+		case errors.Is(err, helm.ErrForbidden) && strings.Contains(err.Error(), "permissions this chart needs"):
+			h.auditLog(detached, "helm-install-refused", b.Namespace, b.Release, "repo", b.Repo, "chart", b.Chart)
+		case errors.Is(err, context.Canceled):
+			h.auditLog(detached, "helm-install-cancelled", b.Namespace, b.Release, "repo", b.Repo, "chart", b.Chart)
+		case errors.Is(err, helm.ErrInvalid):
+			// a rejected request touched nothing
+		default:
+			h.auditHelm(detached, "helm-install", b.Namespace, b.Release, err, "repo", b.Repo, "chart", b.Chart, "version", b.Version)
+		}
+	})
+	if err != nil {
+		if errors.Is(err, helm.ErrTooManyJobs) {
+			respondError(w, http.StatusTooManyRequests, err.Error())
+			return
+		}
+		respondHelmError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	respondJSON(w, map[string]string{"id": job.ID})
+}
+
+type installPod struct {
+	Name   string `json:"name"`
+	Phase  string `json:"phase"`
+	Ready  int    `json:"ready"`
+	Total  int    `json:"total"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// CatalogInstallJob handles GET /api/v1/catalog/install-jobs/{id}: where the
+// install is, and — once objects exist — how its pods are coming up (found by the
+// standard app.kubernetes.io/instance label, read as the caller).
+func (h *Handler) CatalogInstallJob(w http.ResponseWriter, r *http.Request) {
+	if !h.installJobsAvailable(w) {
+		return
+	}
+	job, ok := h.InstallJobs.Get(chi.URLParam(r, "id"), ownerKey(r))
+	if !ok {
+		respondError(w, http.StatusNotFound, "no such install")
+		return
+	}
+	snap := job.Snapshot()
+	out := map[string]any{"job": snap}
+	if snap.Stage == helm.StageInstalling || snap.Stage == helm.StageDone {
+		if _, cfg, ok := h.resolveRESTConfig(w, r); ok {
+			out["pods"] = installPods(r.Context(), cfg, snap.Namespace, snap.Release)
+		} else {
+			return
+		}
+	}
+	respondJSON(w, out)
+}
+
+func installPods(ctx context.Context, cfg *rest.Config, namespace, release string) []installPod {
+	cs, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil
+	}
+	list, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: "app.kubernetes.io/instance=" + release, Limit: 30,
+	})
+	if err != nil {
+		return nil // can't list pods (RBAC, not created yet) — the progress just has no pod rows
+	}
+	pods := make([]installPod, 0, len(list.Items))
+	for _, p := range list.Items {
+		ip := installPod{Name: p.Name, Phase: string(p.Status.Phase), Total: len(p.Spec.Containers)}
+		for _, st := range p.Status.ContainerStatuses {
+			if st.Ready {
+				ip.Ready++
+			}
+			if st.State.Waiting != nil && ip.Reason == "" {
+				ip.Reason = st.State.Waiting.Reason // ContainerCreating, ImagePullBackOff, …
+			}
+		}
+		for _, st := range p.Status.InitContainerStatuses {
+			if st.State.Waiting != nil && ip.Reason == "" {
+				ip.Reason = "init: " + st.State.Waiting.Reason
+			}
+		}
+		pods = append(pods, ip)
+	}
+	return pods
+}
+
+// CatalogCancelInstallJob handles DELETE /api/v1/catalog/install-jobs/{id}:
+// stops an install that is still downloading or checking. Once Helm has started
+// creating objects it can't be stopped without leaving a partial release.
+func (h *Handler) CatalogCancelInstallJob(w http.ResponseWriter, r *http.Request) {
+	if !h.installJobsAvailable(w) {
+		return
+	}
+	job, ok := h.InstallJobs.Get(chi.URLParam(r, "id"), ownerKey(r))
+	if !ok {
+		respondError(w, http.StatusNotFound, "no such install")
+		return
+	}
+	if !job.Cancel() {
+		respondError(w, http.StatusConflict, "the install has already started creating objects and can't be cancelled")
+		return
+	}
+	respondJSON(w, map[string]bool{"cancelled": true})
 }

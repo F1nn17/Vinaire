@@ -54,18 +54,72 @@ rules:
   {{- end }}
 ---
 {{- end }}
+{{- if .Values.rbac.installer.create }}
+# What installing from the Marketplace (Roadmap Phase 28) and applying YAML
+# (Phase 25) need on top of -viewer: create/update/delete for the namespaced kinds
+# charts most often contain, plus Helm's release Secrets. It is the caller's own
+# RBAC that Helm runs under, so this is what the cluster lets that person do — it
+# is NOT bound to anyone by default. A chart that creates something outside this
+# list (a ClusterRole, a CRD, an unusual group) fails the install's access check
+# with the exact kinds missing; add them with rbac.installer.extraRules, or bind
+# a broader role for a throwaway dev cluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "vinaire.fullname" . }}-installer
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+  annotations:
+    description: "Create/update/delete the namespaced kinds Helm charts usually contain, plus release Secrets. Bind together with the -viewer role."
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, secrets, services, serviceaccounts, persistentvolumeclaims, pods, resourcequotas, limitranges]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: [deployments, statefulsets, daemonsets, replicasets]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: [jobs, cronjobs]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: [ingresses, networkpolicies]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["policy", "autoscaling"]
+    resources: [poddisruptionbudgets, horizontalpodautoscalers]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Charts that ship their own Role/RoleBinding. Kubernetes' escalation check
+  # still stops anyone granting more than they themselves hold.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: [roles, rolebindings]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Installing into a new namespace ("Create namespace" in the install dialog).
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: ["create"]
+  {{- with .Values.rbac.installer.extraRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+---
+{{- end }}
 {{- if .Values.rbac.adminRole.create }}
 # Permission to change Vinaire ITSELF (Roadmap Phase 36): add/remove clusters in
 # its registry, change a cluster's type, GitOps mode and sources. These resources
 # don't exist in the cluster — they are only names for the permission, which
 # Vinaire checks with a SelfSubjectAccessReview as the caller. Bind this to
 # whoever administers Vinaire; ordinary users who can browse can't change it.
+#
+# NOT "cluster admin": this role grants NOTHING inside Kubernetes — not reading
+# a Pod, not installing a chart. Whoever logs in needs it IN ADDITION to
+# <fullname>-viewer (browse) and, to install from the Marketplace,
+# <fullname>-installer.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: {{ include "vinaire.fullname" . }}-admin
   labels:
     {{- include "vinaire.labels" . | nindent 4 }}
+  annotations:
+    description: "Permission to change Vinaire's own settings (clusters, GitOps). Grants no access to anything in Kubernetes — bind it together with the -viewer role."
 rules:
   - apiGroups: ["vinaire.io"]
     resources: ["clusters", "gitops"]

@@ -103,9 +103,18 @@ rbac:
   # (see NOTES.txt). It still can't change Vinaire itself; that needs adminRole.
   viewer:
     create: true
+  # A role for installing Helm charts and applying YAML: create/update/delete on the
+  # namespaced kinds charts usually contain, plus release Secrets. Created unbound;
+  # bind it IN ADDITION to the viewer role to whoever may install from the
+  # Marketplace. Charts creating other kinds (ClusterRoles, CRDs) need extraRules.
+  installer:
+    create: true
+    extraRules: []
   # Permission to change Vinaire ITSELF (add/remove clusters, GitOps mode and
   # sources): resources clusters.vinaire.io and gitops.vinaire.io, which exist
-  # only as names for this permission. subjects, if given, are bound to it:
+  # only as names for this permission. IT IS NOT "CLUSTER ADMIN" — it grants nothing
+  # inside Kubernetes, so whoever has it also needs the viewer role (and the
+  # installer role to install charts). subjects, if given, are bound to it:
   #   subjects:
   #     - {kind: User, name: alice, apiGroup: rbac.authorization.k8s.io}
   adminRole:

@@ -68,6 +68,10 @@ ClusterRole a person is bound to, and — only when rbac.broad or authMode
     - secrets
     - services
     - ingresses
+    # What charts commonly create beside workloads — readable so those pages (and
+    # an install's own existence checks) don't 403 on a plain browse.
+    - networkpolicies
+    - cronjobs
     - events
     - replicasets
     - serviceaccounts
@@ -98,6 +102,9 @@ ClusterRole a person is bound to, and — only when rbac.broad or authMode
 - apiGroups: [""]
   resources: ["pods/portforward"]
   verbs: ["create"]
+- apiGroups: ["policy", "autoscaling"]
+  resources: ["poddisruptionbudgets", "horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: ["storage.k8s.io"]
   resources: ["storageclasses"]
   verbs: ["get", "list", "watch"]

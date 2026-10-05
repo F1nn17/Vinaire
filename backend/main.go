@@ -172,6 +172,7 @@ func main() {
 	// Load every repository's index in the background so the first search is quick.
 	workloadsHandler.Catalog.Warm()
 	workloadsHandler.Releases = &helm.Releases{Catalog: workloadsHandler.Catalog}
+	workloadsHandler.InstallJobs = helm.NewJobs()
 	provisionStream := stream.ServeProvision(workloadsHandler.Provisions, auth, cfg.CORSAllowedOrigins)
 
 	streamHandler := unavailableWSHandler
@@ -234,6 +235,8 @@ func main() {
 		protected.Get("/catalog/charts", workloadsHandler.CatalogSearch)
 		protected.Get("/catalog/charts/{repo}/{chart}", workloadsHandler.CatalogChart)
 		protected.Get("/catalog/releases", workloadsHandler.CatalogReleases)
+		protected.Get("/catalog/install-jobs/{id}", workloadsHandler.CatalogInstallJob)
+		protected.Get("/catalog/icons/{repo}/{chart}", workloadsHandler.CatalogIcon)
 		protected.Get("/catalog/releases/{namespace}/{name}/history", workloadsHandler.CatalogReleaseHistory)
 		protected.Get("/catalog/releases/{namespace}/{name}/values", workloadsHandler.CatalogReleaseValues)
 		// Roadmap Phase 29: GitOps reads; the writes are in the writeLimiter group.
@@ -338,6 +341,9 @@ func main() {
 			w.Post("/gitops/argocd/applications/{namespace}/{name}/sync", workloadsHandler.GitOpsArgoSync)
 			// Roadmap Phase 28: Helm releases — see internal/api/catalog.go and AGENTS.md.
 			w.Post("/catalog/install", workloadsHandler.CatalogInstall)
+			w.Post("/catalog/install/preflight", workloadsHandler.CatalogInstallPreflight)
+			w.Post("/catalog/install-jobs", workloadsHandler.CatalogStartInstallJob)
+			w.Delete("/catalog/install-jobs/{id}", workloadsHandler.CatalogCancelInstallJob)
 			w.Post("/catalog/releases/{namespace}/{name}/upgrade", workloadsHandler.CatalogUpgrade)
 			w.Post("/catalog/releases/{namespace}/{name}/rollback", workloadsHandler.CatalogRollback)
 			w.Delete("/catalog/releases/{namespace}/{name}", workloadsHandler.CatalogUninstall)

@@ -204,7 +204,15 @@ func (c *Catalog) fetchOCIChart(ctx context.Context, r Repo, name, version strin
 	if ok {
 		return data, key, nil
 	}
-	data, err = content.FetchAll(ctx, repository, layer)
+	// The same checks content.FetchAll makes (size and digest, verified as the
+	// bytes are read), with a counter in between so the UI can show progress.
+	rc, err := repository.Fetch(ctx, layer)
+	if err != nil {
+		return nil, "", fmt.Errorf("downloading %s %s: %w", name, version, err)
+	}
+	defer rc.Close()
+	reportProgress(ctx, 0, layer.Size)
+	data, err = content.ReadAll(&countingReader{ctx: ctx, r: rc, total: layer.Size}, layer)
 	if err != nil {
 		return nil, "", fmt.Errorf("downloading %s %s: %w", name, version, err)
 	}

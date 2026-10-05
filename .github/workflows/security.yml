@@ -94,7 +94,8 @@ jobs:
       # Fixable HIGH/CRITICAL vulnerabilities in the OS layer or in Go/npm
       # libraries baked into the image fail the build; ones with no fix yet don't.
       - name: trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        # Pinned by commit (v0.36.0): a tag can be moved, a commit can't. Dependabot bumps it.
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: vinaire:ci
           severity: HIGH,CRITICAL

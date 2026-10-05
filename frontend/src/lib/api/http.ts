@@ -3,11 +3,15 @@ import { API_BASE } from "./config";
 
 export class ApiError extends Error {
   status: number;
+  // the rest of the backend's JSON error body, when it had more than a message
+  // (e.g. the install's list of missing permissions)
+  data?: Record<string, unknown>;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, data?: Record<string, unknown>) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -49,10 +53,26 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new ApiError(res.status, extractErrorMessage(body, res.status, path));
+    throw new ApiError(
+      res.status,
+      extractErrorMessage(body, res.status, path),
+      extractErrorData(body),
+    );
   }
 
   return res.json() as Promise<T>;
+}
+
+function extractErrorData(body: string): Record<string, unknown> | undefined {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // not JSON
+  }
+  return undefined;
 }
 
 // Every backend error response is `{"error": "<message>"}` (see

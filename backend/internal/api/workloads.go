@@ -84,6 +84,8 @@ type Handler struct {
 	// nil means "not configured" and the endpoints answer 503.
 	Catalog  *helm.Catalog
 	Releases *helm.Releases
+	// InstallJobs runs Marketplace installs in the background so the UI can show progress.
+	InstallJobs *helm.Jobs
 
 	// Roadmap Phase 29: per-cluster GitOps mode and native sources. nil = off.
 	GitOps *gitops.Manager
