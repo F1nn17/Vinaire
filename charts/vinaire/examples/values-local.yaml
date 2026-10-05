@@ -1,0 +1,36 @@
+# A local, plain-HTTP trial on k3s / k3d / a homelab server.
+#
+#   helm upgrade --install vinaire ./charts/vinaire \
+#     --namespace vinaire --create-namespace \
+#     -f ./charts/vinaire/examples/values-local.yaml
+#
+# !! NOT FOR A REAL INSTALL. cookie.secure=false lets the browser keep the session
+# !! cookie over plain HTTP, which also lets anyone on the network path read or
+# !! steal it. Use examples/values-production.yaml (HTTPS) for anything shared.
+
+# The image was built and imported into the node by hand (docker build, then
+# `k3d image import` or `k3s ctr images import`) — it is not in any registry, so
+# the node must never try to pull it.
+image:
+  repository: vinaire
+  tag: latest
+  pullPolicy: IfNotPresent
+
+clusterName: home_cluster
+
+# Log in by pasting a ServiceAccount token (see the install notes for the command).
+authMode: token
+
+cookie:
+  secure: false
+
+# k3s ships Traefik. Add `192.168.x.y vinaire.k3s.home` to your hosts file (or DNS)
+# so the name resolves, then browse to http://vinaire.k3s.home
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
+    - host: vinaire.k3s.home
+      paths:
+        - path: /
+          pathType: Prefix

@@ -1,0 +1,203 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Vinaire chart values",
+  "description": "Validated by Helm on install, upgrade, lint and template. Unknown top-level keys are allowed on purpose, so values files from other versions of the chart still load.",
+  "type": "object",
+  "properties": {
+    "replicaCount": { "type": "integer", "minimum": 0 },
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where the Vinaire image lives, e.g. 'vinaire' (a locally imported image) or 'ghcr.io/<owner>/vinaire'."
+        },
+        "tag": {
+          "type": "string",
+          "description": "Image tag; empty uses the chart's appVersion."
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"],
+          "description": "IfNotPresent (or Never) for an image imported into the node by hand; Always only for a mutable tag in a registry."
+        }
+      }
+    },
+    "imagePullSecrets": { "type": "array" },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+        },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "clusterName": { "type": "string" },
+    "authMode": {
+      "type": "string",
+      "enum": ["token", "oidc", "disabled"],
+      "description": "token (default): paste a ServiceAccount token. oidc: log in through Keycloak/another OIDC provider. disabled: no login at all — local development only."
+    },
+    "oidc": {
+      "type": "object",
+      "properties": {
+        "issuerURL": { "type": "string" },
+        "clientID": { "type": "string" },
+        "clientSecret": { "type": "string" },
+        "existingSecret": { "type": "string" },
+        "existingSecretKey": { "type": "string" },
+        "redirectURL": { "type": "string" }
+      }
+    },
+    "frontendURL": { "type": "string" },
+    "cookie": {
+      "type": "object",
+      "properties": {
+        "secure": { "type": "boolean" },
+        "sameSite": {
+          "type": "string",
+          "enum": ["strict", "lax", "none"]
+        }
+      }
+    },
+    "sessionMaxTTL": {
+      "type": "string",
+      "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+      "description": "A Go duration, e.g. 12h or 90m."
+    },
+    "trustForwardedFor": { "type": "boolean" },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "className": { "type": "string" },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["host"],
+            "properties": {
+              "host": { "type": "string", "minLength": 1 },
+              "paths": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": { "type": "string", "pattern": "^/" },
+                    "pathType": {
+                      "type": "string",
+                      "enum": ["Prefix", "Exact", "ImplementationSpecific"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "secretName": { "type": "string" },
+              "hosts": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "properties": {
+        "prometheusURL": { "type": "string" },
+        "lokiURL": { "type": "string" },
+        "alertmanagerURL": { "type": "string" }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create": { "type": "boolean" },
+        "name": { "type": "string" }
+      }
+    },
+    "rbac": {
+      "type": "object",
+      "properties": {
+        "create": { "type": "boolean" },
+        "broad": { "type": "boolean" },
+        "viewer": {
+          "type": "object",
+          "properties": { "create": { "type": "boolean" } }
+        },
+        "installer": {
+          "type": "object",
+          "properties": {
+            "create": { "type": "boolean" },
+            "extraRules": { "type": "array" }
+          }
+        },
+        "adminRole": {
+          "type": "object",
+          "properties": {
+            "create": { "type": "boolean" },
+            "subjects": { "type": "array" }
+          }
+        },
+        "extraRules": { "type": "array" },
+        "clusterManagement": {
+          "type": "object",
+          "properties": { "create": { "type": "boolean" } }
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "ingressFrom": { "type": "array" },
+        "allowSSH": { "type": "boolean" },
+        "extraEgress": { "type": "array" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "authMode": { "const": "oidc" } },
+        "required": ["authMode"]
+      },
+      "then": {
+        "properties": {
+          "oidc": {
+            "type": "object",
+            "required": ["issuerURL", "clientID", "redirectURL"],
+            "properties": {
+              "issuerURL": { "minLength": 1 },
+              "clientID": { "minLength": 1 },
+              "redirectURL": { "minLength": 1 }
+            },
+            "anyOf": [
+              {
+                "required": ["clientSecret"],
+                "properties": { "clientSecret": { "minLength": 1 } }
+              },
+              {
+                "required": ["existingSecret"],
+                "properties": { "existingSecret": { "minLength": 1 } }
+              }
+            ]
+          }
+        },
+        "required": ["oidc"]
+      }
+    }
+  ]
+}

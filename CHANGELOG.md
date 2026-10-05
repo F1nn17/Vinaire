@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Marketplace installs run in the background with live progress** (download bytes,
+  speed and time left, permission check, install, pods coming up) and can be cancelled before
+  objects are created. `POST /api/v1/catalog/install/preflight` renders the chart and checks
+  the caller's rights on every kind it creates; an install they can't finish is refused up
+  front with the list of what is missing. Chart icons are served by the backend, deprecated
+  charts are hidden and need an explicit "install anyway".
+- **Helm chart 0.3.0:** an Ingress, `values.schema.json`, `examples/values-local.yaml` and
+  `values-production.yaml`, a new `<fullname>-installer` ClusterRole, a clearer `NOTES.txt`; a
+  `chart` CI job. README: three install scenarios, K3s, importing a local image.
+- **Requests & Limits page** (cluster, nodes, namespaces) with donut charts and progress bars;
+  `GET /api/v1/requests-limits`.
+- UI: one fill-the-window scrolling pattern, metrics dashboards on the Deployment and Pod
+  Overview, live log search, tooltips on action buttons, "+ Create" forms for Service and
+  Ingress, a grape favicon, a wider and more complete Settings -> Справка.
+- Licence changed to Apache License 2.0 (`LICENSE`, `NOTICE`).
+
+### Fixed
+
+- CI: the Trivy step referenced a non-existent `trivy-action` tag; it is now pinned to a release commit.
+- Marketplace: a 502 from the backend showed "backend is unavailable"; the real reason is shown.
+- The `-admin` role is documented as not granting any Kubernetes access (it only permits changes to
+  Vinaire's own settings), and `-viewer` now also reads NetworkPolicies, CronJobs, PDBs and HPAs.
+
+### Added (earlier)
+
 - Initial monorepo scaffold: `/frontend` (Next.js + TypeScript + Tailwind) and
   `/backend` (Go + client-go) with a placeholder dashboard page and a
   `/healthz` endpoint.

@@ -179,3 +179,40 @@ jobs:
       - name: Delete k3d cluster
         if: always()
         run: k3d cluster delete vinaire-ci
+
+  chart:
+    name: Helm chart (lint + render)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: helm lint (defaults and both example value files)
+        run: |
+          helm lint charts/vinaire
+          helm lint charts/vinaire -f charts/vinaire/examples/values-local.yaml
+          helm lint charts/vinaire -f charts/vinaire/examples/values-production.yaml
+
+      - name: helm template (the install variants the README documents)
+        run: |
+          t() { helm template vinaire charts/vinaire -n vinaire "$@" > /dev/null; }
+          t
+          t --set authMode=disabled
+          t --set ingress.enabled=true --set ingress.className=traefik --set 'ingress.hosts[0].host=vinaire.k3s.home'
+          t --set ingress.enabled=true --set cookie.secure=false
+          t -f charts/vinaire/examples/values-local.yaml
+          t -f charts/vinaire/examples/values-production.yaml
+          t --set authMode=oidc --set oidc.issuerURL=https://kc/realms/x --set oidc.clientID=vinaire             --set oidc.redirectURL=https://vinaire/api/v1/auth/oidc/callback --set oidc.existingSecret=vinaire-oidc
+
+      - name: values.schema.json rejects what it should
+        run: |
+          bad() {
+            if helm template vinaire charts/vinaire -n vinaire "$@" > /dev/null 2>&1; then
+              echo "::error::accepted values that must be rejected: $*"; exit 1
+            fi
+          }
+          bad --set authMode=tokens
+          bad --set image.pullPolicy=Sometimes
+          bad --set service.port=70000
+          bad --set cookie.sameSite=maybe
+          bad --set authMode=oidc
+          bad --set ingress.enabled=true --set 'ingress.hosts=null'

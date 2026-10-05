@@ -1,54 +1,90 @@
-Vinaire is installing into namespace "{{ .Release.Namespace }}".
+{{- $fullname := include "vinaire.fullname" . -}}
+{{- $ns := .Release.Namespace -}}
+Vinaire {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installing.
+
+  Release:    {{ .Release.Name }}
+  Namespace:  {{ $ns }}
+  Service:    {{ $fullname }}  (port {{ .Values.service.port }})
+  Sign-in:    authMode = {{ .Values.authMode }}
+  Roles:      {{ $fullname }}-viewer   {{ $fullname }}-installer   {{ $fullname }}-admin
 
 1. Wait for the pod to come up:
 
-   kubectl rollout status deployment/{{ include "vinaire.fullname" . }} -n {{ .Release.Namespace }}
+   kubectl rollout status deployment/{{ $fullname }} -n {{ $ns }}
+   kubectl get pods,svc -n {{ $ns }}
 
-2. Reach it (adjust if you set service.type to something other than ClusterIP):
+2. Open it:
+{{- if and .Values.ingress.enabled .Values.ingress.hosts }}
+{{- $scheme := "http" }}
+{{- if .Values.ingress.tls }}{{ $scheme = "https" }}{{ end }}
 
-   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "vinaire.fullname" . }} 8080:{{ .Values.service.port }}
-   open http://localhost:8080
+   {{ $scheme }}://{{ (index .Values.ingress.hosts 0).host }}
 
+   (the name must resolve to your ingress controller — add it to your hosts file
+   or DNS if this is a trial name)
+{{- else }}
+
+   kubectl port-forward -n {{ $ns }} svc/{{ $fullname }} 8080:{{ .Values.service.port }}
+
+   then http://localhost:8080
+{{- end }}
+{{- if and .Values.cookie.secure .Values.ingress.enabled (not .Values.ingress.tls) }}
+
+   !! cookie.secure is true but the ingress has no TLS. Over plain HTTP the browser
+   !! drops the session cookie, and you will land back on the login screen right
+   !! after entering a token. Either serve it over HTTPS (ingress.tls), or — for a
+   !! local trial only — install with --set cookie.secure=false.
+{{- end }}
+{{- if not .Values.cookie.secure }}
+
+   !! cookie.secure is false: the session cookie also travels over plain HTTP.
+   !! Fine for a local trial; do not run it like this on a shared or real cluster.
+{{- end }}
 {{- if eq .Values.authMode "token" }}
 
-3. Log in with a bounded-duration token of a ServiceAccount (or user) that
-   is allowed to browse. This chart's own ServiceAccount is deliberately
-   minimal — it only feeds the live-update watchers and can neither read
-   Secrets nor change anything — so don't log in as it. Create one for
-   yourself and bind it to the "viewer" role this chart provides:
+3. Log in. Paste a bounded-duration token of a ServiceAccount (or user) that is
+   allowed to browse. Do NOT use the ServiceAccount this chart created for
+   Vinaire itself ("{{ include "vinaire.serviceAccountName" . }}") — it is deliberately minimal
+   and only feeds the live-update watchers. Create your own, and bind it to the
+   roles this chart provides:
 
-   kubectl create serviceaccount me -n {{ .Release.Namespace }}
-   kubectl create clusterrolebinding me-vinaire-viewer      --clusterrole={{ include "vinaire.fullname" . }}-viewer --serviceaccount={{ .Release.Namespace }}:me
-   kubectl create token me -n {{ .Release.Namespace }} --duration=1h
+   kubectl create serviceaccount me -n {{ $ns }}
+
+   # browse and use the fixed actions (restart, scale, logs, terminal, ...)
+   kubectl create clusterrolebinding me-vinaire-viewer \
+     --clusterrole={{ $fullname }}-viewer --serviceaccount={{ $ns }}:me
+
+   # optional: install apps from the Marketplace / apply YAML (on top of viewer)
+   kubectl create clusterrolebinding me-vinaire-installer \
+     --clusterrole={{ $fullname }}-installer --serviceaccount={{ $ns }}:me
+
+   # optional: change Vinaire's own settings — clusters, GitOps. NOT cluster admin:
+   # it grants nothing inside Kubernetes, so it is always IN ADDITION to the viewer.
+   kubectl create clusterrolebinding me-vinaire-admin \
+     --clusterrole={{ $fullname }}-admin --serviceaccount={{ $ns }}:me
+
+   kubectl create token me -n {{ $ns }} --duration=1h
 
    Paste that token into Vinaire's login screen. A session never outlives
    {{ .Values.sessionMaxTTL }} whatever the token's own lifetime.
 
-   To install charts from the Marketplace (or apply YAML) the same account also needs
-   the "installer" role — viewer alone only reads:
+   Check what it can do:
 
-   kubectl create clusterrolebinding me-vinaire-installer  --clusterrole={{ include "vinaire.fullname" . }}-installer --serviceaccount={{ .Release.Namespace }}:me
-
-   Changing Vinaire ITSELF — adding or removing clusters, GitOps modes and
-   sources — needs one more permission. NOTE: "{{ include "vinaire.fullname" . }}-admin" is NOT cluster
-   admin; it grants nothing inside Kubernetes, so it goes IN ADDITION to the
-   viewer role, never instead of it:
-
-   kubectl create clusterrolebinding me-vinaire-admin      --clusterrole={{ include "vinaire.fullname" . }}-admin --serviceaccount={{ .Release.Namespace }}:me
-
-   A chart that creates ClusterRoles or CRDs needs rights beyond the installer
-   role — Vinaire lists exactly which are missing before it starts an install.
+   kubectl auth can-i list pods --as=system:serviceaccount:{{ $ns }}:me --all-namespaces
 {{- else if eq .Values.authMode "oidc" }}
 
-3. AUTH_MODE is "oidc" — Vinaire will redirect to your configured OIDC
-   provider for login. If `frontendURL` wasn't set to this install's real
-   public URL, the post-login redirect may bounce somewhere unexpected —
-   see the chart README and Vinaire's own Settings -> Справка -> "Вход по
-   логину и паролю" for the full walkthrough and an important caveat about
-   the target cluster's API server needing to trust this OIDC issuer too.
+3. Log in through your OIDC provider. Vinaire redirects there; if frontendURL
+   isn't this install's real public URL, the post-login redirect may bounce
+   somewhere unexpected. The cluster's API server must ALSO trust the same OIDC
+   issuer, or sign-in works but every cluster call returns 401 — see Vinaire's
+   Settings -> Справка -> "Вход по логину и паролю".
 {{- else }}
 
-3. AUTH_MODE is "disabled" — no login screen at all; every request uses
-   this chart's own ServiceAccount directly. Fine for a disposable local
-   cluster, not recommended for anything shared.
+3. authMode is "disabled": there is no login screen, and every request runs with
+   this chart's own ServiceAccount, which has been given the broad browse-and-act
+   permissions for that reason. Fine for a disposable local cluster; anyone who can
+   reach the URL can use it. Not for anything shared.
 {{- end }}
+
+Troubleshooting (ImagePullBackOff, a login loop, "forbidden"): see the README's
+Troubleshooting section.

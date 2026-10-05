@@ -3474,7 +3474,39 @@ risks.
 
 ---
 
-## Phase 38 — Простая и понятная установка Vinaire в Kubernetes/K3s
+## Phase 38 — Простая и понятная установка Vinaire в Kubernetes/K3s ✅ done
+
+> **Итог:** сделано всё, кроме публикации образов в GHCR (см. ниже). Chart стал **0.3.0**:
+> `templates/ingress.yaml` + блок `ingress` (по умолчанию выключен; ошибка рендера, если
+> включён без хостов), `values.schema.json` (`authMode` — только `token`/`oidc`/`disabled`;
+> `image.pullPolicy`, `service.port`, `cookie.sameSite`, `pathType`; для `oidc` обязательны
+> issuer/clientID/redirectURL и секрет — `authMode: tokens` останавливается понятным
+> сообщением), `examples/values-local.yaml` и `examples/values-production.yaml`, переписанный
+> `NOTES.txt` (вычисленные имена, URL Ingress или `port-forward`, предупреждение про
+> `cookie.secure` без TLS, команды для ServiceAccount/viewer/installer/admin/токена). README:
+> три сценария, K3s (kubeconfig, Helm не входит в комплект), локальный образ
+> (`k3d image import` / `docker save` → `scp` → `k3s ctr images import`), `cookie.secure`, два
+> ServiceAccount, проверки `kubectl auth can-i`, таблица `authMode`, troubleshooting.
+> **Проверено на живом `k3d-vinaire-dev`** отдельным релизом (рабочий `vinaire` не трогался):
+> установка с `values-local.yaml`; вход токеном ServiceAccount, привязанного к `-viewer`, через
+> Ingress; воспроизведён цикл «вернуло на логин» (cookie `Secure` по HTTP не сохраняется) и
+> предупреждение NOTES; `authMode=disabled` без Ingress; отказ схемы на реальном
+> `helm upgrade`; ImagePullBackOff из-за пустого `image.tag` (→ `appVersion`, образа `0.1.0`
+> нет) — это отражено в troubleshooting. В CI добавлен job `chart` (lint, шаблоны вариантов,
+> отрицательные проверки схемы).
+>
+> **Что отличается от первоначального текста фазы.** (1) Пример RBAC-проверки `list secrets →
+> no` из промпта **не сделан**: `<fullname>-viewer` по модели Phase 36 читает Secret'ы (UI
+> показывает только метаданные до явного аудируемого reveal; Helm-релизы — тоже Secret'ы), и
+> README говорит это прямо; аккаунту без чтения Secret'ов нужна своя роль. (2) Появилась роль
+> `<fullname>-installer` (установка из Marketplace) — её не было в промпте; и `-admin`
+> теперь везде подписана как **не** «администратор кластера». (3) **GHCR не реализован**: владелец
+> реестра не определён (в `go.mod` — `shiraku`, в промпте — другое имя), а в CI нет сборки/подписи
+> образа; основной путь — локальный импорт, в `examples/values-production.yaml` — плейсхолдер
+> `<registry>/<owner>/vinaire`. **Ломающих изменений нет:** имена ролей не менялись, все новые
+> значения имеют прежнее поведение по умолчанию; единственное, что может отвергнуть
+> схема — неверные значения, которые и раньше не работали.
+
 
 **Зависимости:** Phase 21 (Helm chart), Phase 10 (режимы входа), Phase 36
 (RBAC chart'а, `<fullname>-viewer`/`-admin`). Ничего из уже работающей модели

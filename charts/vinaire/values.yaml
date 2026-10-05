@@ -17,6 +17,25 @@ service:
   type: ClusterIP
   port: 8080
 
+# Publish Vinaire through an Ingress. Off by default (reach it with
+# `kubectl port-forward` — see NOTES.txt). Terminate TLS here: with cookie.secure
+# left at its default (true) the browser only keeps the session cookie over HTTPS,
+# so a plain-HTTP ingress sends you back to the login screen after you enter a token.
+ingress:
+  enabled: false
+  # e.g. traefik (k3s ships it), nginx. Empty = the cluster's default class.
+  className: ""
+  annotations: {}
+  hosts:
+    - host: vinaire.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # tls:
+  #   - secretName: vinaire-tls
+  #     hosts: [vinaire.example.com]
+  tls: []
+
 # What the cluster picker in Vinaire's own UI shows for this install.
 # Kubernetes has no self-reported cluster name the API exposes, and
 # running in-cluster (this chart's whole point) means there's no
@@ -58,6 +77,10 @@ oidc:
 frontendURL: ""
 
 cookie:
+  # true (the default) is right for HTTPS: the browser only keeps a Secure cookie
+  # set over an https:// page. Over plain HTTP it drops the cookie and you land
+  # back on the login screen after entering a token — set false ONLY for a
+  # local, HTTP-only trial (see examples/values-local.yaml), never on a real install.
   secure: true
   # strict: the session cookie is never sent on a cross-site request. Use "lax"
   # only if something legitimately links into Vinaire from another site, and
