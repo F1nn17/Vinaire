@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/chartutil"
 	authzv1 "k8s.io/api/authorization/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -33,6 +35,12 @@ import (
 // It is advisory in the "pass" direction: the cluster's real RBAC still decides
 // during the install. A kind it can't map (a CRD the chart itself installs) is
 // reported as unchecked rather than blocking.
+
+// ErrRender marks a preflight that could not render the chart. The install itself
+// then runs without a preflight (it renders with the cluster's exact capabilities
+// and fails with the real cause if the chart really is broken), instead of the
+// check blocking an install it merely failed to emulate.
+var ErrRender = errors.New("the chart could not be rendered for the check")
 
 // maxPreflightChecks bounds the access reviews one preflight may issue.
 const maxPreflightChecks = 80
@@ -115,9 +123,24 @@ func renderObjects(ctx context.Context, cfg *rest.Config, req InstallRequest, rl
 	in.ClientOnly = true
 	in.DisableHooks = false
 	in.Timeout = opTimeout
+	// A client-side render assumes an old Kubernetes with few APIs, so a chart that
+	// needs `kubeVersion: >=1.25` or checks `.Capabilities.APIVersions.Has` would
+	// fail or render differently. Tell it what the real cluster serves.
+	if dc, derr := discovery.NewDiscoveryClientForConfig(rest.CopyConfig(cfg)); derr == nil {
+		if v, verr := dc.ServerVersion(); verr == nil {
+			in.KubeVersion = &chartutil.KubeVersion{Version: v.GitVersion, Major: v.Major, Minor: v.Minor}
+		}
+		if groups, gerr := dc.ServerGroups(); gerr == nil {
+			for _, g := range groups.Groups {
+				for _, gv := range g.Versions {
+					in.APIVersions = append(in.APIVersions, gv.GroupVersion)
+				}
+			}
+		}
+	}
 	rel, err := in.RunWithContext(ctx, ch, vals)
 	if err != nil {
-		return nil, fmt.Errorf("%w: the chart doesn't render with these values: %v", ErrInvalid, err)
+		return nil, fmt.Errorf("%w: %w: the chart doesn't render with these values: %v", ErrInvalid, ErrRender, err)
 	}
 	docs := rel.Manifest
 	for _, h := range rel.Hooks {

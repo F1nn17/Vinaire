@@ -250,6 +250,9 @@ func (js *Jobs) run(ctx context.Context, rl *Releases, cfg *rest.Config, j *Inst
 	// 2. may the caller do what this chart needs?
 	j.setStage(StageChecking)
 	pf, err := rl.Preflight(ctx, cfg, req)
+	if errors.Is(err, ErrRender) {
+		pf, err = &PreflightResult{Missing: []Needed{}}, nil // let the install itself judge the chart
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -250,7 +250,7 @@ func (h *Handler) CatalogInstall(w http.ResponseWriter, r *http.Request) {
 		h.auditLog(r, "helm-install-refused", b.Namespace, b.Release, "repo", b.Repo, "chart", b.Chart)
 		respondInstallForbidden(w, pf)
 		return
-	} else if perr != nil && errors.Is(perr, helm.ErrInvalid) {
+	} else if perr != nil && errors.Is(perr, helm.ErrInvalid) && !errors.Is(perr, helm.ErrRender) {
 		respondHelmError(w, perr)
 		return
 	}
