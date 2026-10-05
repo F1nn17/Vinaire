@@ -493,3 +493,20 @@ export function StoreIcon({ size = 16, className }: IconProps) {
     </svg>
   );
 }
+
+export function GaugeIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <path d="M4 17a8 8 0 1116 0" />
+      <path d="M12 17l4-6" />
+      <circle cx="12" cy="17" r="1" />
+    </svg>
+  );
+}

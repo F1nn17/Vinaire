@@ -226,6 +226,7 @@ func main() {
 
 		protected.Get("/search", workloadsHandler.Search)
 		protected.Get("/capacity", workloadsHandler.Capacity)
+		protected.Get("/requests-limits", workloadsHandler.RequestsLimits)
 		protected.Get("/forms/{resourceType}", workloadsHandler.FormSchemaByType)
 		protected.Get("/namespaces", workloadsHandler.Namespaces)
 		protected.Get("/namespaces/{name}", workloadsHandler.NamespaceDetail)

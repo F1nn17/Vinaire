@@ -5,6 +5,13 @@ import { useState } from "react";
 import { useCRDs } from "@/lib/hooks/useCRDs";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { PuzzleIcon } from "@/components/icons";
+import {
+  AboutHelp,
+  OverviewHelp,
+  RolesHelp,
+  StartHelp,
+  TroubleshootingHelp,
+} from "./HelpGuides";
 
 type SettingsTab = "crds" | "help";
 
@@ -14,22 +21,32 @@ const tabs: { id: SettingsTab; label: string }[] = [
 ];
 
 type HelpSection =
+  | "overview"
+  | "start"
+  | "roles"
   | "cluster"
   | "node"
   | "marketplace"
   | "gitops"
   | "crds"
   | "keycloak"
-  | "observability";
+  | "observability"
+  | "troubleshooting"
+  | "about";
 
-const helpSections: { id: HelpSection; label: string }[] = [
-  { id: "cluster", label: "Подключение кластера" },
+const helpSections: { id: HelpSection; label: string; group?: string }[] = [
+  { id: "overview", label: "Что умеет Vinaire", group: "Начало" },
+  { id: "start", label: "С чего начать" },
+  { id: "roles", label: "Права и роли" },
+  { id: "cluster", label: "Подключение кластера", group: "Инструкции" },
   { id: "node", label: "Добавление ноды" },
   { id: "marketplace", label: "Marketplace (Helm)" },
   { id: "gitops", label: "GitOps" },
   { id: "crds", label: "Кастомные ресурсы" },
   { id: "keycloak", label: "Вход по логину и паролю" },
   { id: "observability", label: "Метрики, логи, алерты" },
+  { id: "troubleshooting", label: "Частые проблемы", group: "Справочное" },
+  { id: "about", label: "О проекте и лицензия" },
 ];
 
 const fullClusterRoleYaml = `apiVersion: rbac.authorization.k8s.io/v1
@@ -80,7 +97,7 @@ rules:
 // same way any other "unavailable" state is in this app.
 export default function SettingsPage() {
   const [tab, setTab] = useState<SettingsTab>("help");
-  const [helpSection, setHelpSection] = useState<HelpSection>("cluster");
+  const [helpSection, setHelpSection] = useState<HelpSection>("overview");
   const { data: crds, error: crdsError, isLoading: crdsLoading } = useCRDs();
 
   return (
@@ -146,25 +163,37 @@ export default function SettingsPage() {
       )}
 
       {tab === "help" && (
-        <div className="flex max-w-4xl gap-5">
-          <div className="flex w-52 shrink-0 flex-col gap-1">
+        <div className="flex gap-6">
+          <nav
+            aria-label="Разделы справки"
+            className="sticky top-0 flex max-h-[calc(100vh-12rem)] w-56 shrink-0 flex-col gap-1 self-start overflow-auto"
+          >
             {helpSections.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setHelpSection(s.id)}
-                className={`rounded-md px-3 py-2 text-left text-[12.5px] ${
-                  helpSection === s.id
-                    ? "bg-surface-2 font-semibold text-accent-text"
-                    : "text-text-muted"
-                }`}
-              >
-                {s.label}
-              </button>
+              <div key={s.id} className="flex flex-col gap-1">
+                {s.group && (
+                  <div className="mt-3 px-3 pb-0.5 text-[10.5px] uppercase tracking-wider text-text-faint first:mt-0">
+                    {s.group}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setHelpSection(s.id)}
+                  className={`rounded-md px-3 py-2 text-left text-[13px] ${
+                    helpSection === s.id
+                      ? "bg-surface-2 font-semibold text-accent-text"
+                      : "text-text-muted hover:bg-surface-2"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              </div>
             ))}
-          </div>
+          </nav>
 
-          <div className="min-w-0 flex-1 rounded-[10px] border border-border bg-surface p-5 text-sm">
+          <div className="help-prose min-w-0 max-w-5xl flex-1 rounded-[10px] border border-border bg-surface p-7 text-[14px] leading-relaxed">
+            {helpSection === "overview" && <OverviewHelp />}
+            {helpSection === "start" && <StartHelp />}
+            {helpSection === "roles" && <RolesHelp />}
             {helpSection === "cluster" && <ClusterHelp />}
             {helpSection === "node" && <NodeHelp />}
             {helpSection === "marketplace" && <MarketplaceHelp />}
@@ -172,6 +201,8 @@ export default function SettingsPage() {
             {helpSection === "crds" && <CustomResourcesHelp />}
             {helpSection === "keycloak" && <KeycloakHelp />}
             {helpSection === "observability" && <ObservabilityHelp />}
+            {helpSection === "troubleshooting" && <TroubleshootingHelp />}
+            {helpSection === "about" && <AboutHelp />}
           </div>
         </div>
       )}
@@ -1170,6 +1201,42 @@ function KeycloakHelp() {
         </div>
       </div>
 
+      <div>
+        <div className="font-semibold text-foreground">Способы входа</div>
+        <div className="mt-1.5 overflow-hidden rounded-md border border-border">
+          {[
+            [
+              "token",
+              "по умолчанию",
+              "Вставляете токен ServiceAccount. Просто и работает везде; токен нужно получить командой kubectl create token (см. «Права и роли»).",
+            ],
+            [
+              "oidc",
+              "для боевого использования",
+              "Логин и пароль через Keycloak, Dex (а через него — Google, GitHub и др.) или другой OIDC-провайдер. API-сервер кластера должен доверять тому же провайдеру (см. ниже).",
+            ],
+            [
+              "disabled",
+              "только для локальной разработки",
+              "Входа нет, все запросы идут с правами самого Vinaire. Это не «права по умолчанию», а полный доступ для любого, кто откроет адрес — на общих кластерах не включать.",
+            ],
+          ].map(([mode, when, what], i) => (
+            <div
+              key={mode}
+              className={`grid grid-cols-[7rem_1fr] gap-3 px-3 py-2.5 ${
+                i > 0 ? "border-t border-border" : ""
+              }`}
+            >
+              <div>
+                <div className="font-mono text-foreground">{mode}</div>
+                <div className="text-[11px] text-text-faint">{when}</div>
+              </div>
+              <div className="text-text-muted">{what}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="rounded-md border border-warn/60 bg-surface-2 p-3 text-text-muted">
         <span className="font-semibold text-foreground">Важно понимать: </span>
         вход через Keycloak — это только про то,{" "}
@@ -1202,6 +1269,48 @@ docker compose up -d`}</Code>
           Тестовые пользователи: <span className="font-mono">alice/alice</span>{" "}
           и <span className="font-mono">bob/bob</span>. Подробности — в{" "}
           <span className="font-mono">keycloak/README.md</span> репозитория.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Поставить Keycloak прямо из Vinaire (Marketplace)
+        </div>
+        <ol className="mt-1 list-decimal pl-5 text-text-muted">
+          <li>
+            Откройте{" "}
+            <Link
+              href="/marketplace/install?repo=keycloak&chart=keycloakx"
+              className="text-accent-text"
+            >
+              Marketplace → keycloak/keycloakx
+            </Link>{" "}
+            (в каталоге есть и Bitnami-версия{" "}
+            <span className="font-mono">keycloak</span>). Для установки нужны
+            права из раздела «Права и роли» — viewer и installer.
+          </li>
+          <li className="mt-1.5">
+            Укажите namespace (например{" "}
+            <span className="font-mono">keycloak</span>) и задайте в values
+            логин и пароль администратора — как именно, написано в README чарта
+            (раскрывается прямо на странице установки). Пароль не оставляйте по
+            умолчанию.
+          </li>
+          <li className="mt-1.5">
+            Дождитесь, пока поды станут Ready (прогресс виден на странице
+            установки), откройте админ-консоль Keycloak и создайте realm,
+            confidential client (redirect URI — как ниже) и пользователей.
+          </li>
+          <li className="mt-1.5">
+            Пропишите OIDC-переменные для Vinaire (ниже) — и перезапустите её.
+          </li>
+        </ol>
+        <div className="mt-1.5 text-xs text-text-faint">
+          Vinaire не настраивает realm и клиент сама: это делается в
+          админ-консоли Keycloak. Тестовый вариант из репозитория (
+          <span className="font-mono">/keycloak</span>) уже содержит готовый
+          realm с пользователями <span className="font-mono">alice</span> и{" "}
+          <span className="font-mono">bob</span>.
         </div>
       </div>
 

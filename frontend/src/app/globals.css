@@ -67,3 +67,22 @@ input::placeholder {
   background: var(--accent);
   color: var(--bg);
 }
+
+/* Settings -> Справка: the help sections are written with small utility sizes
+   (text-xs, text-[11px]); inside the reading column lift them to a comfortable
+   size and give code blocks the full width. */
+.help-prose .text-xs {
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+.help-prose .text-\[11px\] {
+  font-size: 12.5px;
+}
+.help-prose .text-\[12\.5px\],
+.help-prose .text-\[13px\] {
+  font-size: 14px;
+}
+.help-prose pre {
+  font-size: 12.5px;
+  line-height: 1.55;
+}
