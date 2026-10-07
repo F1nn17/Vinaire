@@ -80,9 +80,10 @@ function InstallInner() {
   const [jobId, setJobId] = useState<string | null>(null);
 
   // the form is offered only when the chart ships a schema that yields settings
+  const schemaText = chart?.schema;
   const hasForm = useMemo(
-    () => !!chart?.schema && buildSections(chart.schema).length > 0,
-    [chart?.schema],
+    () => !!schemaText && buildSections(schemaText).length > 0,
+    [schemaText],
   );
 
   const existing = new Set(namespaces?.map((n) => n.name));
