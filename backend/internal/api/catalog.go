@@ -124,6 +124,7 @@ func (h *Handler) CatalogIcon(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
 	w.Header().Set("Cache-Control", "private, max-age=86400")
+	// #nosec G705 -- not HTML: the bytes were content-sniffed to a raster image or a script-free SVG (internal/helm/icons.go), and are served nosniff under a sandboxing CSP
 	_, _ = w.Write(icon.Data)
 }
 

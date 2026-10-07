@@ -130,9 +130,13 @@ jobs:
           [ "$(kubectl auth can-i get secrets -A --as="$sa")" = "no" ]
           [ "$(kubectl auth can-i delete deployments -A --as="$sa")" = "no" ]
       - name: Expose it
+        # A bare `kubectl port-forward &` ends when the pod connection drops (the
+        # browser checks below open many), leaving the ZAP scan "connection refused".
+        # Re-establish it whenever it exits.
         run: |
-          kubectl -n vinaire port-forward svc/vinaire 8080:8080 &
+          nohup bash -c 'while true; do kubectl -n vinaire port-forward svc/vinaire 8080:8080; sleep 1; done' > /tmp/port-forward.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:8080/healthz && break; sleep 1; done
+          curl -sf http://localhost:8080/healthz
 
       # The CSP, headers and CSRF guard checked in a real browser: no violations on
       # the main pages, an injected inline script is blocked, a cross-site POST is refused.
@@ -149,6 +153,10 @@ jobs:
       # Passive baseline against the running instance. .zap/rules.tsv turns the
       # checks for what Phase 36 hardened (CSP, cookie flags, framing, sniffing)
       # into failures.
+      - name: Wait until the instance answers again
+        run: |
+          for i in $(seq 1 60); do curl -sf http://localhost:8080/healthz && exit 0; sleep 1; done
+          cat /tmp/port-forward.log; kubectl -n vinaire get pods; exit 1
       - name: OWASP ZAP baseline
         uses: zaproxy/action-baseline@v0.14.0
         with:
