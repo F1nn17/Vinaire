@@ -69,7 +69,7 @@
 5. **Phase E — Управление доступом из UI (P2, M).** Role/RoleBinding/ClusterRoleBinding: создать,
    привязать пользователя/ServiceAccount, «что может X» (через SelfSubjectAccessReview/
    SubjectAccessReview). Тоже новая запись — отдельное решение.
-6. **Phase F — Формы значений Helm (P2, M).** Форма по `values.schema.json` чарта (где он есть)
+6. **Phase F — Формы значений Helm (P2, M) — ✅ сделано (ROADMAP Phase 43).** Форма по `values.schema.json` чарта (где он есть)
    вместе с YAML-режимом, как у Create (Phase 31).
 7. **Phase G — Стек логов одной кнопкой (P2, M).** По образцу Phase 37 (Loki + сборщик).
 8. **Phase H — Язык интерфейса (P2, S–M).** Выбрать один язык по умолчанию и перевод/переключатель;

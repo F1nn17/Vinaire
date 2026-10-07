@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import {
   cancelInstallJob,
@@ -20,6 +20,8 @@ import { YamlEditor } from "@/components/editor/YamlEditor";
 import { ChartIcon } from "@/components/marketplace/ChartIcon";
 import { InstallProgress } from "@/components/marketplace/InstallProgress";
 import { PermissionsCheck } from "@/components/marketplace/PermissionsCheck";
+import { ValuesForm } from "@/components/marketplace/ValuesForm";
+import { buildSections } from "@/lib/values/schemaForm";
 import { PillTabs } from "@/components/ui/Tabs";
 
 const inputClass =
@@ -68,12 +70,20 @@ function InstallInner() {
   const [namespace, setNamespace] = useState(chartName);
   const [nodeName, setNodeName] = useState("");
   const [values, setValues] = useState(valuesHint);
-  const [valuesTab, setValuesTab] = useState<"mine" | "defaults">("mine");
+  const [valuesTab, setValuesTab] = useState<"mine" | "defaults" | "form">(
+    "mine",
+  );
   const [wait, setWait] = useState(false);
   const [allowDeprecated, setAllowDeprecated] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
+
+  // the form is offered only when the chart ships a schema that yields settings
+  const hasForm = useMemo(
+    () => !!chart?.schema && buildSections(chart.schema).length > 0,
+    [chart?.schema],
+  );
 
   const existing = new Set(namespaces?.map((n) => n.name));
   const newNamespace = !!namespaces && !!namespace && !existing.has(namespace);
@@ -349,17 +359,32 @@ function InstallInner() {
           <div className="flex flex-col gap-3">
             <PillTabs
               items={[
-                { key: "mine", label: "Your values" },
-                { key: "defaults", label: "Chart defaults (read-only)" },
+                ...(hasForm
+                  ? [{ key: "form" as const, label: "Settings form" }]
+                  : []),
+                { key: "mine" as const, label: "Your values (YAML)" },
+                {
+                  key: "defaults" as const,
+                  label: "Chart defaults (read-only)",
+                },
               ]}
-              active={valuesTab}
+              active={valuesTab === "form" && !hasForm ? "mine" : valuesTab}
               onChange={setValuesTab}
             />
             <div className="h-[420px] overflow-hidden rounded-lg border border-border">
-              {valuesTab === "mine" ? (
-                <YamlEditor value={values} onChange={setValues} height="100%" />
+              {valuesTab === "form" && hasForm && chart ? (
+                <div className="h-full p-3">
+                  <ValuesForm
+                    schemaText={chart.schema as string}
+                    defaultsText={chart.values}
+                    valuesText={values}
+                    onChange={setValues}
+                  />
+                </div>
+              ) : valuesTab === "defaults" ? (
+                <YamlEditor value={chart!.values} readOnly height="100%" />
               ) : (
-                <YamlEditor value={chart.values} readOnly height="100%" />
+                <YamlEditor value={values} onChange={setValues} height="100%" />
               )}
             </div>
 

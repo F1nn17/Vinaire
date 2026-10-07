@@ -37,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Audit log page:** searchable view of the records Vinaire writes for every change (filter by action, user,
   namespace, object, text, period); gated by `get` on `audit.vinaire.io` (chart `-admin` role).
 
+- **Marketplace settings form:** a chart's `values.schema.json` becomes a searchable form next to the YAML
+  editor; both edit the same text, comments are kept and only changed settings are written.
+
 ### Fixed
 
 - CI: the Trivy step referenced a non-existent `trivy-action` tag; it is now pinned to a release commit.

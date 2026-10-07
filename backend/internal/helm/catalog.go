@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -23,14 +24,17 @@ import (
 )
 
 const (
-	maxIndexBytes = 48 << 20 // a repository index (bitnami's is ~20 MiB)
-	maxChartBytes = 32 << 20 // a packaged chart
-	maxReadme     = 96 << 10 // README shown in the UI
-	indexTTL      = 15 * time.Minute
-	indexErrTTL   = time.Minute // a failing repository isn't retried on every keystroke
-	fetchTimeout  = 30 * time.Second
-	maxChartCache = 8
-	maxSearchRows = 600
+	// A values.schema.json bigger than this is not sent to the browser; the form is
+	// then simply not offered and the YAML editor stays.
+	maxSchemaBytes = 512 << 10
+	maxIndexBytes  = 48 << 20 // a repository index (bitnami's is ~20 MiB)
+	maxChartBytes  = 32 << 20 // a packaged chart
+	maxReadme      = 96 << 10 // README shown in the UI
+	indexTTL       = 15 * time.Minute
+	indexErrTTL    = time.Minute // a failing repository isn't retried on every keystroke
+	fetchTimeout   = 30 * time.Second
+	maxChartCache  = 8
+	maxSearchRows  = 600
 	// A search waits this long for slow repositories, then answers with what it
 	// has and lists the rest as still loading — they keep loading in the background.
 	searchWait = 12 * time.Second
@@ -409,6 +413,9 @@ type ChartDetails struct {
 	// values.schema.json (Helm validates the values against it on install).
 	Values    string `json:"values"`
 	HasSchema bool   `json:"hasSchema"`
+	// Schema is the chart's values.schema.json, verbatim (capped), for the install
+	// form. Empty when the chart has none or it is too large to be worth sending.
+	Schema string `json:"schema,omitempty"`
 	// SupportsNodeSelector: the chart has a top-level `nodeSelector` value, the
 	// convention the install page's "run on node" picker relies on.
 	SupportsNodeSelector bool `json:"supportsNodeSelector"`
@@ -466,6 +473,9 @@ func (c *Catalog) Details(ctx context.Context, repoName, name, version string) (
 		}
 	}
 	d.HasSchema = len(ch.Schema) > 0
+	if len(ch.Schema) > 0 && len(ch.Schema) <= maxSchemaBytes && json.Valid(ch.Schema) {
+		d.Schema = string(ch.Schema)
+	}
 	_, d.SupportsNodeSelector = ch.Values["nodeSelector"]
 	return d, nil
 }

@@ -51,6 +51,8 @@ export type ChartDetails = ChartSummary & {
   readme?: string;
   values: string; // the chart's default values.yaml
   hasSchema: boolean;
+  // the chart's values.schema.json, for the settings form (absent if none / too big)
+  schema?: string;
   // has a top-level `nodeSelector` value, so "run on node" can work
   supportsNodeSelector: boolean;
 };

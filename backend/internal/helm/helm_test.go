@@ -188,6 +188,9 @@ func TestSearchAndDetails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if d.Schema != `{"type":"object"}` {
+		t.Errorf("the chart's values.schema.json wasn't returned for the form: %q", d.Schema)
+	}
 	if d.Version != "1.2.3" || len(d.Versions) != 2 || d.Readme != "# readme" || !d.HasSchema || !d.SupportsNodeSelector {
 		t.Errorf("details = %+v", d)
 	}
