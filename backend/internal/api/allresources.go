@@ -13,6 +13,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -173,7 +174,7 @@ func listPath(gvr schema.GroupVersionResource, namespaced bool, namespace string
 	return b.String()
 }
 
-// ResourceObjects handles GET /api/v1/api-resources/{group}/{version}/{resource}/objects?namespace=.
+// ResourceObjects handles GET /api/v1/api-resources/{group}/{version}/{resource}/objects?namespace=&labelSelector=.
 func (h *Handler) ResourceObjects(w http.ResponseWriter, r *http.Request) {
 	_, disc, ok := h.resolveApplyClients(w, r)
 	if !ok {
@@ -188,10 +189,22 @@ func (h *Handler) ResourceObjects(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid namespace")
 		return
 	}
-	raw, err := disc.RESTClient().Get().AbsPath(listPath(gvr, namespaced, namespace)).
+	selector := strings.TrimSpace(r.URL.Query().Get("labelSelector"))
+	if len(selector) > 512 {
+		respondError(w, http.StatusBadRequest, "label selector is too long")
+		return
+	}
+	if _, err := labels.Parse(selector); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid label selector: "+err.Error())
+		return
+	}
+	req := disc.RESTClient().Get().AbsPath(listPath(gvr, namespaced, namespace)).
 		SetHeader("Accept", "application/json;as=Table;v=v1;g=meta.k8s.io").
-		Param("limit", fmt.Sprint(maxTableRows)).
-		Do(r.Context()).Raw()
+		Param("limit", fmt.Sprint(maxTableRows))
+	if selector != "" {
+		req = req.Param("labelSelector", selector)
+	}
+	raw, err := req.Do(r.Context()).Raw()
 	if err != nil {
 		respondK8sError(w, statusFromBody(raw, err))
 		return

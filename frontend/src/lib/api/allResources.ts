@@ -67,14 +67,23 @@ export function useAPIResources() {
   );
 }
 
-export function useResourceTable(key: string | null, namespace: string) {
+export function useResourceTable(
+  key: string | null,
+  namespace: string,
+  labelSelector = "",
+) {
   const cluster = useCurrentCluster();
   return useSWR(
-    key ? ["resource-table", key, namespace, cluster] : null,
-    () =>
-      apiFetch<ResourceTable>(
-        `${base(key as string)}${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ""}`,
-      ),
+    key ? ["resource-table", key, namespace, labelSelector, cluster] : null,
+    () => {
+      const q = new URLSearchParams();
+      if (namespace) q.set("namespace", namespace);
+      if (labelSelector) q.set("labelSelector", labelSelector);
+      const qs = q.toString();
+      return apiFetch<ResourceTable>(
+        `${base(key as string)}${qs ? `?${qs}` : ""}`,
+      );
+    },
     { refreshInterval: 15000, keepPreviousData: false },
   );
 }

@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   consent for pods without a controller or with emptyDir), labels, taints and deleting a Node object;
   all audited; chart role `<fullname>-node-admin`.
 
+- **Tables:** every list sorts by header, filters across columns and hides columns, and keeps the view in the
+  URL; "All resources" also filters by label selector.
+
 ### Fixed
 
 - CI: the Trivy step referenced a non-existent `trivy-action` tag; it is now pinned to a release commit.

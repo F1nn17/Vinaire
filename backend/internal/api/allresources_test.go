@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"strings"
 	"testing"
 
@@ -104,5 +105,18 @@ func TestStatusFromBodyKeepsTheServersForbiddenSentence(t *testing.T) {
 	}
 	if got := statusFromBody([]byte("<html>"), errors.New("boom")); got.Error() != "boom" {
 		t.Errorf("a non-Status body replaced the error: %v", got)
+	}
+}
+
+func TestLabelSelectorSyntaxIsValidatedBeforeItIsSent(t *testing.T) {
+	for _, ok := range []string{"", "app=web", "app in (a,b),tier!=db", "!canary", "env"} {
+		if _, err := labels.Parse(ok); err != nil {
+			t.Errorf("%q refused: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"a b", "x in (", "=y", "app=a=b"} {
+		if _, err := labels.Parse(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
 	}
 }

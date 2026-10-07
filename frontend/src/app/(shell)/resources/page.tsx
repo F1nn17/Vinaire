@@ -11,6 +11,7 @@ import {
   useResourceTable,
   type APIResource,
 } from "@/lib/api/allResources";
+import { compareCells } from "@/components/ui/DataTable";
 import { FillHeight } from "@/components/ui/FillHeight";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 
@@ -43,8 +44,10 @@ function AllResources() {
     ? params.get("r")
     : null;
   const namespaceParam = params.get("ns") ?? "";
+  const selectorParam = params.get("l") ?? "";
   const [filter, setFilter] = useState("");
   const [nsInput, setNsInput] = useState(namespaceParam);
+  const [selInput, setSelInput] = useState(selectorParam);
 
   const { data: resources, error, isLoading } = useAPIResources();
   const selected = useMemo(
@@ -52,11 +55,18 @@ function AllResources() {
     [resources, selectedKey],
   );
 
-  function select(key: string, ns = "") {
-    setNsInput(ns);
-    router.replace(
-      `/resources?r=${encodeURIComponent(key)}${ns ? `&ns=${encodeURIComponent(ns)}` : ""}`,
-    );
+  function go(key: string, ns: string, selector: string) {
+    const q = new URLSearchParams({ r: key });
+    if (ns) q.set("ns", ns);
+    if (selector) q.set("l", selector);
+    router.replace(`/resources?${q.toString()}`);
+  }
+
+  // picking another kind starts from a clean namespace and selector
+  function select(key: string) {
+    setNsInput("");
+    setSelInput("");
+    go(key, "", "");
   }
 
   const groups = useMemo(() => {
@@ -174,7 +184,10 @@ function AllResources() {
                 namespace={namespaceParam}
                 nsInput={nsInput}
                 setNsInput={setNsInput}
-                onNamespace={(ns) => select(selectedKey, ns)}
+                selector={selectorParam}
+                selInput={selInput}
+                setSelInput={setSelInput}
+                onFilters={(ns, sel) => go(selectedKey, ns, sel)}
               />
             ) : (
               <div className="rounded-[10px] border border-border bg-surface p-6 text-sm text-text-muted">
@@ -194,29 +207,53 @@ function KindTable({
   namespace,
   nsInput,
   setNsInput,
-  onNamespace,
+  selector,
+  selInput,
+  setSelInput,
+  onFilters,
 }: {
   resource: APIResource;
   resourceKeyValue: string;
   namespace: string;
   nsInput: string;
   setNsInput: (v: string) => void;
-  onNamespace: (ns: string) => void;
+  selector: string;
+  selInput: string;
+  setSelInput: (v: string) => void;
+  onFilters: (ns: string, selector: string) => void;
 }) {
   const { data, error, isLoading } = useResourceTable(
     resourceKeyValue,
     resource.namespaced ? namespace : "",
+    selector,
   );
+  const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const [rowFilter, setRowFilter] = useState("");
   const f = rowFilter.trim().toLowerCase();
   // a table of one namespace needs no Namespace column; a cluster-wide one does
   const showNamespace = resource.namespaced && !namespace;
-  const rows = (data?.rows ?? []).filter(
+  const filtered = (data?.rows ?? []).filter(
     (r) =>
       !f ||
       r.cells.some((c) => c.toLowerCase().includes(f)) ||
       r.name.toLowerCase().includes(f),
   );
+  const rows = sort
+    ? [...filtered].sort(
+        (a, b) =>
+          sort.dir *
+          compareCells(a.cells[sort.col] ?? "", b.cells[sort.col] ?? ""),
+      )
+    : filtered;
+  function onSort(col: number) {
+    setSort(
+      sort?.col !== col
+        ? { col, dir: 1 }
+        : sort.dir === 1
+          ? { col, dir: -1 }
+          : null,
+    );
+  }
 
   return (
     <>
@@ -228,26 +265,41 @@ function KindTable({
             {resource.version} · {resource.resource}
           </span>
         </div>
-        {resource.namespaced && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              onNamespace(nsInput.trim());
-            }}
-          >
+        <form
+          className="flex flex-wrap items-center gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onFilters(
+              resource.namespaced ? nsInput.trim() : "",
+              selInput.trim(),
+            );
+          }}
+        >
+          {resource.namespaced && (
             <input
               type="text"
               aria-label="Namespace"
               value={nsInput}
               onChange={(e) => setNsInput(e.target.value)}
-              onBlur={() =>
-                nsInput.trim() !== namespace && onNamespace(nsInput.trim())
-              }
               placeholder="All namespaces"
               className="rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint"
             />
-          </form>
-        )}
+          )}
+          <input
+            type="text"
+            aria-label="Label selector"
+            value={selInput}
+            onChange={(e) => setSelInput(e.target.value)}
+            placeholder="Label selector — app=web,tier!=db"
+            className="w-64 rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint"
+          />
+          <button
+            type="submit"
+            className="rounded-lg border border-border bg-surface px-3 py-1.75 text-xs text-text-muted hover:border-accent"
+          >
+            Apply
+          </button>
+        </form>
         <input
           type="text"
           aria-label="Filter rows"
@@ -285,9 +337,27 @@ function KindTable({
                       <Fragment key={c.name}>
                         <th
                           title={c.description}
+                          aria-sort={
+                            sort?.col === i
+                              ? sort.dir === 1
+                                ? "ascending"
+                                : "descending"
+                              : "none"
+                          }
                           className="whitespace-nowrap px-3 py-2 font-medium"
                         >
-                          {c.name}
+                          <button
+                            type="button"
+                            onClick={() => onSort(i)}
+                            className={`uppercase tracking-wider hover:text-text ${sort?.col === i ? "text-accent-text" : ""}`}
+                          >
+                            {c.name}
+                            {sort?.col === i
+                              ? sort.dir === 1
+                                ? " ▲"
+                                : " ▼"
+                              : ""}
+                          </button>
                         </th>
                         {i === 0 && showNamespace && (
                           <th className="whitespace-nowrap px-3 py-2 font-medium">
