@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n/translate";
 import { ChartIcon } from "@/components/marketplace/ChartIcon";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -121,7 +122,9 @@ function CatalogTab() {
           />
           Show deprecated charts
           {!showDeprecated && data?.hiddenDeprecated
-            ? ` (${data.hiddenDeprecated} hidden — no longer maintained, may be unsafe)`
+            ? t(" ({n} hidden — no longer maintained, may be unsafe)", {
+                n: data.hiddenDeprecated,
+              })
             : ""}
         </label>
       )}
@@ -397,8 +400,11 @@ function InstalledTab() {
       )}
       {removing && (
         <TypeToConfirmModal
-          title={`Uninstall ${removing.name}`}
-          message={`Removes release ${removing.name} and the resources its chart created in namespace ${removing.namespace}. Data in persistent volumes the chart created may be deleted with it. This can't be undone.`}
+          title={t("Uninstall {name}", { name: removing.name })}
+          message={t(
+            "Removes release {name} and the resources its chart created in namespace {ns}. Data in persistent volumes the chart created may be deleted with it. This can't be undone.",
+            { name: removing.name, ns: removing.namespace },
+          )}
           expected={removing.name}
           confirmLabel="Uninstall"
           busy={busy}

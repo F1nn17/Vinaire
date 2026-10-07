@@ -1,4 +1,5 @@
 import { getCurrentCluster } from "@/lib/clusterStore";
+import { tm } from "@/lib/i18n/messages";
 import { API_BASE } from "./config";
 
 export class ApiError extends Error {
@@ -8,7 +9,7 @@ export class ApiError extends Error {
   data?: Record<string, unknown>;
 
   constructor(status: number, message: string, data?: Record<string, unknown>) {
-    super(message);
+    super(tm(message));
     this.name = "ApiError";
     this.status = status;
     this.data = data;

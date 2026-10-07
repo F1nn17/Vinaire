@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n/translate";
 import Link from "next/link";
 import { useState } from "react";
 import { friendlyErrorMessage } from "@/lib/api/errors";
@@ -85,7 +86,7 @@ function ResourceCard({
         <span className="text-[13px] font-semibold">{title}</span>
         <span className="font-mono text-[11px] text-text-faint">
           {base !== undefined
-            ? `${formatValue(base, unit)} allocatable`
+            ? t("{v} allocatable", { v: formatValue(base, unit) })
             : "capacity unknown"}
         </span>
       </div>
@@ -93,7 +94,7 @@ function ResourceCard({
         <Donut
           pct={reqPct}
           level={levelFor(reqPct)}
-          label={`${title} requested`}
+          label={t("{title} requested", { title })}
           sublabel="requested"
         />
         <div className="min-w-0 flex-1">
@@ -152,7 +153,7 @@ function ClusterView({ data }: { data: ResourceOverview }) {
             </div>
             <div className="mt-1">
               {c.podsAllocatable !== undefined
-                ? `of ${c.podsAllocatable} the nodes allow`
+                ? t("of {n} the nodes allow", { n: c.podsAllocatable })
                 : ""}
             </div>
             <div className="mt-1">{c.containers} containers in total</div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n/translate";
 import {
   formatValue,
   levelFor,
@@ -84,10 +85,25 @@ export function FigureBars({
 }) {
   const reqLevel = levelFor(pctOf(figure.requests, base));
   const lowerBoundReq = figure.containersWithoutRequests
-    ? `${figure.containersWithoutRequests} container${figure.containersWithoutRequests === 1 ? " sets" : "s set"} no ${resourceLabel} request — the real reservation may be higher.`
+    ? figure.containersWithoutRequests === 1
+      ? t(
+          "1 container sets no {res} request — the real reservation may be higher.",
+          { res: resourceLabel },
+        )
+      : t(
+          "{n} containers set no {res} request — the real reservation may be higher.",
+          { n: figure.containersWithoutRequests, res: resourceLabel },
+        )
     : undefined;
   const lowerBoundLim = figure.containersWithoutLimits
-    ? `${figure.containersWithoutLimits} container${figure.containersWithoutLimits === 1 ? " has" : "s have"} no ${resourceLabel} limit — they can use more than shown.`
+    ? figure.containersWithoutLimits === 1
+      ? t("1 container has no {res} limit — it can use more than shown.", {
+          res: resourceLabel,
+        })
+      : t(
+          "{n} containers have no {res} limit — they can use more than shown.",
+          { n: figure.containersWithoutLimits, res: resourceLabel },
+        )
     : undefined;
   return (
     <div className="flex flex-col gap-3">

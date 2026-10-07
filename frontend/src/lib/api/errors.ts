@@ -1,3 +1,4 @@
+import { tr } from "@/lib/i18n/translate";
 import { ApiError } from "./http";
 
 // A shared, consistent error-state message — the error-display equivalent
@@ -19,18 +20,18 @@ export function friendlyErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.status) {
       case 403:
-        return `You don't have permission for this — ${error.message}`;
+        return `${tr("You don't have permission for this —")} ${error.message}`;
       case 404:
-        return "Not found.";
+        return tr("Not found.");
       case 502:
         // The backend is up but couldn't get what it needed from somewhere else
         // (a chart repository, the cluster). Its message says what — show it
         // rather than a claim that the backend itself is down.
         return isReadable(error.message)
-          ? `The backend couldn't complete this: ${error.message}`
-          : "The backend couldn't complete this request.";
+          ? `${tr("The backend couldn't complete this:")} ${error.message}`
+          : tr("The backend couldn't complete this request.");
       case 503:
-        return "The backend is unavailable right now.";
+        return tr("The backend is unavailable right now.");
       default:
         return error.message;
     }
@@ -38,5 +39,5 @@ export function friendlyErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  return "Something went wrong.";
+  return tr("Something went wrong.");
 }

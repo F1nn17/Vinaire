@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n/translate";
 import { useMemo, useState } from "react";
 import { parse } from "yaml";
 import {
@@ -81,7 +82,7 @@ export function ValuesForm({
           aria-label="Find a setting"
           value={find}
           onChange={(e) => setFind(e.target.value)}
-          placeholder={`Find among ${total} settings…`}
+          placeholder={t("Find among {n} settings…", { n: total })}
           className="w-72 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs outline-none placeholder:text-text-faint"
         />
         <span className="text-xs text-text-faint">

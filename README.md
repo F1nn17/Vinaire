@@ -1,5 +1,7 @@
 # Vinaire
 
+**English** · [Русский](./README.ru.md)
+
 Vinaire is a custom web UI for managing Kubernetes clusters — a friendlier,
 more opinionated alternative to Rancher/Headlamp, targeting **k3s** clusters.
 
@@ -324,7 +326,7 @@ has (Custom Resources; see Vinaire's Settings → Справка once logged in)
 
 ## Security
 
-Read [docs/security.md](./docs/security.md) before putting Vinaire anywhere real: a short
+Read [docs/security.md](./docs/security.md) ([по-русски](./docs/security.ru.md)) before putting Vinaire anywhere real: a short
 threat model, the properties that were verified (and how to verify them again), and the risks
 that remain. In short:
 
@@ -352,4 +354,4 @@ that remain. In short:
 
 ## License
 
-Licensed under the [Apache License 2.0](./LICENSE). See [NOTICE](./NOTICE) for third-party components (including the bundled fonts, under the SIL Open Font License).
+Licensed under the [Apache License 2.0](./LICENSE) ([unofficial Russian translation](./LICENSE.ru.md), for reference only). See [NOTICE](./NOTICE) for third-party components (including the bundled fonts, under the SIL Open Font License).

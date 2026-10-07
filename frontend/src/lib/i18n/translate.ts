@@ -22,8 +22,9 @@ export function tr(text: string): string {
   if (lang === "ru" && CYRILLIC.test(text)) return text;
   const [pre, core, post] = split(text);
   if (core === "") return text;
-  const key = core.replace(/\s+/g, " ");
-  const hit = (lang === "ru" ? ru : en)[key];
+  const dict = lang === "ru" ? ru : en;
+  // multi-line text (code blocks) is stored as written, newlines included
+  const hit = dict[core] ?? dict[core.replace(/\s+/g, " ")];
   return hit === undefined ? text : pre + hit + post;
 }
 

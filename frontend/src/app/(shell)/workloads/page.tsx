@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n/translate";
 import { useState } from "react";
 import { useWorkloads } from "@/lib/hooks/useWorkloads";
 import { useWorkloadsStream } from "@/lib/hooks/useWorkloadsStream";
@@ -106,7 +107,11 @@ export default function WorkloadsPage() {
           rowKey={(r) => `${r.namespace}/${r.name}`}
           rowHref={(r) => r.href}
           isLoading={isLoading || !data}
-          emptyLabel={`No ${tab} found${namespace ? ` in namespace "${namespace}"` : ""}.`}
+          emptyLabel={
+            namespace
+              ? t('No {tab} found in namespace "{ns}".', { tab, ns: namespace })
+              : t("No {tab} found.", { tab })
+          }
         />
       )}
 

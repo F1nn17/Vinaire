@@ -32,10 +32,6 @@ const decode = (s) =>
   s.replace(/&(#\d+|[a-z]+);/gi, (m, e) =>
     e[0] === "#" ? String.fromCharCode(Number(e.slice(1))) : (ENT[e] ?? m),
   );
-// shell/YAML snippets with a Russian comment stay as written
-const codeLike = (t) =>
-  /^(#|kubectl |sudo |apiVersion:|https?:\/\/)/.test(t) || /\ [A-Z_]+=/.test(t);
-
 const walk = (d, out = []) => {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) {
     const p = path.join(d, e.name);
@@ -59,7 +55,7 @@ for (const file of walk(root)) {
   );
   const add = (raw) => {
     const t = decode(raw).replace(/\s+/g, " ").trim();
-    if (CYR.test(t) && !codeLike(t) && !(t in en)) missing.add(t);
+    if (CYR.test(t) && !(t in en) && !(decode(raw).trim() in en)) missing.add(t);
   };
   const visit = (n) => {
     if (ts.isJsxText(n)) add(n.getText());

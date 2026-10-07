@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n/translate";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -66,7 +67,10 @@ function StatefulSetDetailPage() {
       await scaleStatefulSet(namespace, name, replicas);
       setToast({
         type: "success",
-        message: `Scaled to ${replicas} replica${replicas === 1 ? "" : "s"}.`,
+        message:
+          replicas === 1
+            ? t("Scaled to 1 replica.")
+            : t("Scaled to {n} replicas.", { n: replicas }),
       });
       setScaleOpen(false);
       await mutate();

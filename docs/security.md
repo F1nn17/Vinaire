@@ -1,5 +1,7 @@
 # Vinaire — security
 
+**English** · [Русский](./security.ru.md)
+
 This is the outcome of the Phase 36 audit: a short threat model, the properties that were
 **checked** (and how, so you can check them again), and the risks that remain. It is a
 set of claims that can be verified, not a guarantee that there are no vulnerabilities —

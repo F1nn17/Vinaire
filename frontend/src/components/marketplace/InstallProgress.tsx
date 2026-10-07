@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n/translate";
 import type { InstallJob, InstallPod } from "@/lib/api/catalog";
 
 // Live progress of a Marketplace install (an install job): downloading the chart
@@ -14,9 +15,12 @@ export function formatBytes(n: number): string {
 
 function formatSeconds(s: number): string {
   if (!isFinite(s) || s < 0) return "—";
-  if (s < 1) return "<1 s";
-  if (s < 60) return `${Math.round(s)} s`;
-  return `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`;
+  if (s < 1) return t("<1 s");
+  if (s < 60) return t("{n} s", { n: Math.round(s) });
+  return t("{m} min {s} s", {
+    m: Math.floor(s / 60),
+    s: Math.round(s % 60),
+  });
 }
 
 type Step = "downloading" | "checking" | "installing";
@@ -121,7 +125,9 @@ export function InstallProgress({
                     ? ` · ${formatBytes(job.bytesPerSec)}/s`
                     : ""}
                   {known
-                    ? ` · ${formatBytes(job.bytesTotal - job.bytesDone)} left`
+                    ? t(" · {b} left", {
+                        b: formatBytes(job.bytesTotal - job.bytesDone),
+                      })
                     : ""}
                   {isFinite(left) ? ` · ~${formatSeconds(left)}` : ""}
                 </div>

@@ -10,8 +10,8 @@ import {
 } from "@/lib/i18n/state";
 
 const options: { lang: Lang; label: string }[] = [
-  { lang: "en", label: "EN" },
-  { lang: "ru", label: "RU" },
+  { lang: "en", label: "English" },
+  { lang: "ru", label: "Русский" },
 ];
 
 // EN | RU. The choice is kept in a cookie and applies to the whole interface.
@@ -20,8 +20,9 @@ export function LanguageSwitch() {
   return (
     <div
       role="group"
-      aria-label="Language"
-      className="flex overflow-hidden rounded-lg border border-border text-[11px]"
+      aria-label="Interface language"
+      title="Interface language"
+      className="flex overflow-hidden rounded-lg border border-border text-xs"
     >
       {options.map((o) => (
         <button
@@ -29,12 +30,13 @@ export function LanguageSwitch() {
           type="button"
           aria-pressed={lang === o.lang}
           onClick={() => setLang(o.lang)}
-          className={`px-2 py-1 font-mono ${
+          className={`px-2.5 py-1 font-medium ${
             lang === o.lang
-              ? "bg-surface-2 text-accent-text"
+              ? "bg-accent text-white"
               : "text-text-faint hover:text-text"
           }`}
         >
+          {lang === o.lang ? "✓ " : ""}
           {o.label}
         </button>
       ))}
