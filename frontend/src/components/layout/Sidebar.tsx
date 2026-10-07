@@ -114,6 +114,12 @@ const groups: NavGroup[] = [
         isActive: (p) => p.startsWith("/logging"),
       },
       {
+        href: "/metrics-stack",
+        label: "Metrics stack",
+        icon: <ListIcon />,
+        isActive: (p) => p.startsWith("/metrics-stack"),
+      },
+      {
         href: "/gitops",
         label: "GitOps",
         icon: <GitOpsIcon />,

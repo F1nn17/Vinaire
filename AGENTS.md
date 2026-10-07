@@ -550,6 +550,12 @@ rules:
     resources: ["services/proxy"]
     resourceNames: ["loki", "loki-gateway", "loki-read", "loki-query-frontend"]
     verbs: ["get"]
+  # Phase 37: metrics are read from the Prometheus found in the cluster the same
+  # way — as the caller, through the service proxy, for Prometheus's own names only.
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    resourceNames: ["prometheus-server", "prometheus", "prometheus-operated", "kube-prometheus-stack-prometheus", "vmsingle"]
+    verbs: ["get"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]

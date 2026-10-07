@@ -162,14 +162,14 @@ type promMatrix struct {
 	} `json:"data"`
 }
 
-func runRangeQuery(ctx context.Context, baseURL string, q metricQuery, start, end time.Time, step int) ([]MetricsSeries, error) {
+func runRangeQuery(ctx context.Context, fetch promFetch, q metricQuery, start, end time.Time, step int) ([]MetricsSeries, error) {
 	params := url.Values{}
 	params.Set("query", q.promql)
 	params.Set("start", strconv.FormatInt(start.Unix(), 10))
 	params.Set("end", strconv.FormatInt(end.Unix(), 10))
 	params.Set("step", strconv.Itoa(step))
 
-	body, err := fetchUpstream(ctx, baseURL, "/api/v1/query_range", params)
+	body, err := fetch(ctx, "/api/v1/query_range", params)
 	if err != nil {
 		return nil, err
 	}
@@ -247,8 +247,13 @@ func (h *Handler) serveResourceMetrics(w http.ResponseWriter, r *http.Request, k
 		Start: start.Unix(), End: end.Unix(), Series: []MetricsSeries{},
 	}
 
-	if h.PrometheusURL == "" {
-		resp.Reason = "PROMETHEUS_URL is not configured"
+	entry, cs, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	fetch, reason := h.prometheusFetcher(r.Context(), entry.Name, cs)
+	if fetch == nil {
+		resp.Reason = reason
 		respondJSON(w, resp)
 		return
 	}
@@ -261,7 +266,7 @@ func (h *Handler) serveResourceMetrics(w http.ResponseWriter, r *http.Request, k
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i], errs[i] = runRangeQuery(r.Context(), h.PrometheusURL, mq, start, end, step)
+			results[i], errs[i] = runRangeQuery(r.Context(), fetch, mq, start, end, step)
 		}()
 	}
 	wg.Wait()

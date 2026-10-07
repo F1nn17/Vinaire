@@ -30,6 +30,40 @@ const patterns: [RegExp, (m: RegExpMatchArray) => string][] = [
     (m) => `время ожидания операции вышло: ${m[1]}`,
   ],
   [
+    /^A Prometheus is already running \((.+?)\)\. Installing a second one would split your metrics — use it instead\.$/,
+    (m) =>
+      `Prometheus уже работает (${m[1]}). Второй разделит ваши метрики — используйте существующий.`,
+  ],
+  [
+    /^A Loki is already running \((.+?)\)\. Installing a second one would split your logs — use it instead\.$/,
+    (m) =>
+      `Loki уже работает (${m[1]}). Второй разделит ваши логи — используйте существующий.`,
+  ],
+  [
+    /^Storage class "(.+?)" doesn't exist in this cluster\.$/,
+    (m) => `Storage class «${m[1]}» в этом кластере не существует.`,
+  ],
+  [
+    /^Needs about 0\.2 CPU and 0\.5–1\.5 GiB of memory in total .*? The cluster has (\d+) CPU\(s\) and (\d+) GiB allocatable\.$/,
+    (m) =>
+      `Нужно примерно 0,2 CPU и 0,5–1,5 ГиБ памяти суммарно (Prometheus ≈ 0,1 CPU / 256 МиБ–1 ГиБ, kube-state-metrics и node-exporter ≈ 20m / 32 МиБ на каждой ноде). В кластере доступно CPU: ${m[1]}, памяти: ${m[2]} ГиБ.`,
+  ],
+  [
+    /^Needs about 0\.5 CPU and 1 GiB of memory in total .*? The cluster has (\d+) CPU\(s\) and (\d+) GiB allocatable\.$/,
+    (m) =>
+      `Нужно примерно 0,5 CPU и 1 ГиБ памяти суммарно (Loki ≈ 0,1 CPU / 256 МиБ–1 ГиБ, плюс Alloy ≈ 50m / 128 МиБ на каждой ноде). В кластере доступно CPU: ${m[1]}, памяти: ${m[2]} ГиБ.`,
+  ],
+  [
+    /^Metrics are kept for (\d+) days\. .*$/,
+    (m) =>
+      `Метрики хранятся дней: ${m[1]}. Ставятся Prometheus, kube-state-metrics и node-exporter — без Grafana и Alertmanager. Для них установите kube-prometheus-stack из Marketplace.`,
+  ],
+  [
+    /^Logs are kept for (\d+) days; .*$/,
+    (m) =>
+      `Логи хранятся дней: ${m[1]}; это Loki в одном поде для небольших кластеров, а не распределённый.`,
+  ],
+  [
     /^a cluster named (.+) already exists$/,
     (m) => `кластер с именем ${m[1]} уже есть`,
   ],

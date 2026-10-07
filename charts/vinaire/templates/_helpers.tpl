@@ -111,6 +111,12 @@ ClusterRole a person is bound to, and — only when rbac.broad or authMode
   resources: ["services/proxy"]
   resourceNames: ["loki", "loki-gateway", "loki-read", "loki-query-frontend"]
   verbs: ["get"]
+# Phase 37: metrics are read from the Prometheus found in the cluster the same way —
+# the community chart's server, kube-prometheus-stack's, an operator's, VictoriaMetrics.
+- apiGroups: [""]
+  resources: ["services/proxy"]
+  resourceNames: ["prometheus-server", "prometheus", "prometheus-operated", "kube-prometheus-stack-prometheus", "vmsingle"]
+  verbs: ["get"]
 - apiGroups: ["storage.k8s.io"]
   resources: ["storageclasses"]
   verbs: ["get", "list", "watch"]

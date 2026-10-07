@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import {
   CartesianGrid,
@@ -175,7 +176,10 @@ export function MetricsPanel({
         ) : !data.available ? (
           <Message>
             Metrics unavailable
-            {data.reason ? ` — ${data.reason}` : ""}.
+            {data.reason ? ` — ${data.reason}` : ""}.{" "}
+            <Link href="/metrics-stack" className="text-accent-text underline">
+              Set up the metrics stack →
+            </Link>
           </Message>
         ) : data.noData ? (
           <Message>

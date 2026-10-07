@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import useSWR from "swr";
 import { friendlyErrorMessage } from "@/lib/api/errors";
+import { tm } from "@/lib/i18n/messages";
 import {
   cancelInstallJob,
   getInstallJob,
@@ -138,7 +139,7 @@ export default function LoggingPage() {
               </div>
             )}
             {status.detail && (
-              <div className="mt-2 text-xs text-warn">{status.detail}</div>
+              <div className="mt-2 text-xs text-warn">{tm(status.detail)}</div>
             )}
             {status.managedByVinaire && (
               <div className="mt-4">
@@ -403,12 +404,12 @@ function Installer({
               key={w}
               className="rounded-lg border border-warn/40 bg-surface-2 p-3 text-xs text-warn"
             >
-              {w}
+              {tm(w)}
             </div>
           ))}
           {plan.notes.map((n) => (
             <div key={n} className="text-[11px] text-text-faint">
-              {n}
+              {tm(n)}
             </div>
           ))}
         </>

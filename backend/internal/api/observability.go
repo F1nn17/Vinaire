@@ -85,12 +85,17 @@ func (h *Handler) MetricsQueryRange(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) proxyPrometheus(w http.ResponseWriter, r *http.Request, promPath string) {
-	if h.PrometheusURL == "" {
-		respondJSON(w, metricsQueryResponse{Available: false, Reason: "PROMETHEUS_URL is not configured"})
+	entry, cs, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	fetch, reason := h.prometheusFetcher(r.Context(), entry.Name, cs)
+	if fetch == nil {
+		respondJSON(w, metricsQueryResponse{Available: false, Reason: reason})
 		return
 	}
 
-	body, err := fetchUpstream(r.Context(), h.PrometheusURL, promPath, r.URL.Query())
+	body, err := fetch(r.Context(), promPath, r.URL.Query())
 	if err != nil {
 		respondJSON(w, metricsQueryResponse{Available: false, Reason: err.Error()})
 		return

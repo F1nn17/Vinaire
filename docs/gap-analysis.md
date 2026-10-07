@@ -22,7 +22,7 @@
 | Редактор YAML | Monaco, редактирование, создание | Monaco + dry-run + diff + оптимистичная блокировка (сильнее) | — |
 | Логи | Потоковые, мульти-контейнер, скачивание, фильтр | Live + поиск + история (Loki) | Скачать лог файлом; логи сразу всех подов Deployment/StatefulSet; «предыдущий контейнер» (`--previous`) — **проверить** |
 | Терминал | exec в под | Есть (Phase 5) | Терминал на ноду (debug-под / `kubectl debug`) |
-| Метрики | Через metrics-server и плагин Prometheus | Metrics-панель (Phase 32) + Requests & Limits | Установка стека одной кнопкой — Phase 37 (запланирована) |
+| Метрики | Через metrics-server и плагин Prometheus | Metrics-панель (Phase 32) + Requests & Limits | Установка стека одной кнопкой — Phase 37 ✅ |
 | Плагины / расширяемость | Плагины на JS, каталог плагинов, смена тем | Нет | **P3**: публичного API расширений нет и в ближайшее время не нужен |
 | Темы | Светлая и тёмная | Только тёмная (по решению проекта) | P3; светлая тема — только если попросят (AGENTS.md) |
 | Десктоп-приложение | Есть (Electron) | Нет — веб/Helm | P3 |
@@ -43,7 +43,7 @@
 | Apps / Marketplace | Каталог Helm (Rancher Charts, Partners, свои репозитории), UI значений, обновление | Marketplace (Phase 28): много репозиториев, OCI, прогресс, предпроверка прав | Формы значений по `values.schema.json` вместо сырого YAML — **P2** (M); добавление **своего репозитория из UI** (сейчас только конфиг оператора — осознанное решение безопасности, пересмотреть) — P3 |
 | RBAC и пользователи | Глобальные роли, проекты, роли кластера, внешние провайдеры (AD/LDAP/GitHub/Keycloak/Okta/SAML), привязка пользователей и групп через UI | RBAC только для просмотра; вход токеном/OIDC; роли выдаёт администратор через kubectl | **Управление RBAC из UI** (создать Role/RoleBinding, привязать пользователя/группу) — **P1/P2** (M), по правилам AGENTS.md — отдельное решение, т. к. новая запись; «Что может пользователь X» (can-i-аудит) — P2 |
 | Проекты / мультиарендность | Project = группа namespace с квотами и ролями | Namespaces с квотами (Phase 27) | Группировка namespace в «проекты» — P3 |
-| Мониторинг | Встроенный Prometheus/Grafana (rancher-monitoring), алерты, дашборды | Интеграция с Prometheus/Loki/Alertmanager (Phase 16/32), метрики одной кнопкой — Phase 37 | Дашборды-конструктор — P3; в Phase 37 нужно проверить права и ресурсы |
+| Мониторинг | Встроенный Prometheus/Grafana (rancher-monitoring), алерты, дашборды | Интеграция с Prometheus/Loki/Alertmanager (Phase 16/32), метрики одной кнопкой — Phase 37 ✅ | Дашборды-конструктор — P3; права и ресурсы проверяются в Phase 37 (preflight) |
 | Логирование | Banzai/Logging Operator | Loki-поиск | Установка стека логов одной кнопкой (аналог Phase 37 для Loki) — **P2** (M) |
 | Безопасность и политики | CIS-сканы, Kubewarden/OPA Gatekeeper, NetworkPolicy-редактор, Pod Security Admission | NetworkPolicy — только через YAML, сканов нет | **NetworkPolicy: список и форма** — **P2** (S/M); PSA-метки на namespace в форме — P2; CIS-скан (kube-bench) — P3 |
 | Резервные копии | Backup Operator, etcd snapshots | Нет | Установка Velero через Marketplace есть (чарт), UI для расписаний/восстановления — **P3**; etcd snapshot для k3s/kubeadm — P2 |

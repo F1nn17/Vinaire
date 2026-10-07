@@ -302,6 +302,8 @@ func main() {
 		protected.Get("/crds", workloadsHandler.CRDs)
 		protected.Get("/crds/{crdName}/instances", workloadsHandler.CRDInstances)
 		protected.Get("/crds/{crdName}/instances/{name}", workloadsHandler.CRDInstanceDetail)
+		protected.Get("/metrics/status", workloadsHandler.MetricsStatus)
+		protected.Get("/metrics/plan", workloadsHandler.MetricsPlan)
 		protected.Get("/metrics/query", workloadsHandler.MetricsQuery)
 		protected.Get("/metrics/query_range", workloadsHandler.MetricsQueryRange)
 		// Roadmap Phase 32: per-resource metric series for the Metrics tab.

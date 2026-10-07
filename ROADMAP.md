@@ -3364,7 +3364,26 @@ risks.
 
 ---
 
-## Phase 37 — Установка и подключение стека метрик одной кнопкой
+## Phase 37 — Установка и подключение стека метрик одной кнопкой ✅ done
+
+> **Сделано (в объёме, описанном ниже, по образцу Phase 45).** Страница **Metrics stack** (`/metrics-stack`,
+> раздел Apps): состояние — «Not installed», «metrics-server only», «Prometheus found, exporters missing»,
+> «Ready» (с отметкой «metrics are arriving», проверяется запросом `container_cpu_usage_seconds_total`),
+> «Using PROMETHEUS_URL»; кто где стоит (Prometheus, metrics-server, kube-state-metrics, node-exporter, CRD
+> prometheus-operator). Если ничего нет — форма (namespace, срок хранения, размер тома, storage class или «без
+> тома») и кнопка **Install**: чарт `prometheus-community/prometheus` **29.36.0** (версия закреплена в
+> `internal/metricsstack`) — Prometheus server со стандартными job'ами kubelet/cAdvisor, kube-state-metrics,
+> node-exporter, без Alertmanager и Pushgateway; requests/limits заданы. Установка идёт тем же путём, что
+> Marketplace: **от имени пользователя**, с preflight прав и живым прогрессом; есть **Remove**. Перед установкой —
+> план с предупреждениями (уже есть Prometheus; CRD оператора; нет default storage class; нет тома).
+> **Prometheus находится сам и читается через service proxy API-сервера от имени вызывающего**
+> (`GET /api/v1/metrics/status`, `/metrics/plan`; `/metrics/query`, `/metrics/query_range` и вкладки Metrics
+> подов/deployment/нод теперь ходят этим путём, если не задан `PROMETHEUS_URL`, который по-прежнему главнее).
+> Роль `-viewer` получила `get services/proxy` только для имён Prometheus. Это закрывает и прежнюю особенность:
+> метрики через `PROMETHEUS_URL` не проверялись по правам вызывающего, а через service proxy проверяются.
+> Не вошло: профиль `lite` (metrics-server уже встроен в k3s и ставится на managed-кластерах провайдером),
+> профиль `full` (для него — kube-prometheus-stack из Marketplace), выбор ноды (`nodeSelector`), смена срока
+> хранения у установленного стека. Новых записей в кластер нет.
 
 **Зависимости:** Phase 28 (Helm SDK); расширяет Phase 16, 18 и 32.
 

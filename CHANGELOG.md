@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Metrics stack in one click (Roadmap Phase 37).** A *Metrics stack* page detects what the cluster has
+  (metrics-server, Prometheus, kube-state-metrics, node-exporter, the operator's CRDs) and installs
+  `prometheus-community/prometheus` (version pinned) as the signed-in user, with the Marketplace's permission
+  preflight and live progress. Prometheus is found automatically and read through the API server's service
+  proxy as the caller, so metric charts need no `PROMETHEUS_URL` and respect the cluster's RBAC (`-viewer` gets
+  `get services/proxy` for Prometheus's own names). `GET /api/v1/metrics/status` and `/metrics/plan`.
+- **Translations everywhere:** code blocks in the help, backend and Kubernetes error messages, and counted/plural
+  messages are translated; the language switch now says *English* / *Русский* with a check mark. Russian README
+  (`README.ru.md`), security notes (`docs/security.ru.md`) and a reference translation of the license
+  (`LICENSE.ru.md`).
 - **Interface language switch (RU / EN)** in the top bar. The language follows the browser by default and
   the choice is kept in a `vinaire_lang` cookie. UI text is translated as React elements are created (a
   custom `jsxImportSource` runtime), from `src/lib/i18n/dict/{ru,en}.json`; the Russian help in Settings
