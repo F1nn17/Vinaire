@@ -137,6 +137,10 @@
           "type": "object",
           "properties": { "create": { "type": "boolean" } }
         },
+        "rbacAdmin": {
+          "type": "object",
+          "properties": { "create": { "type": "boolean" } }
+        },
         "nodeAdmin": {
           "type": "object",
           "properties": { "create": { "type": "boolean" } }

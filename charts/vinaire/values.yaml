@@ -137,6 +137,11 @@ rbac:
   # deleting a Node object. Created unbound; bind it IN ADDITION to the viewer role.
   nodeAdmin:
     create: true
+  # A role for managing access: create/delete RoleBindings and ClusterRoleBindings and
+  # ask "what can X do?". It may bind this chart's own roles (the `bind` verb) but not
+  # arbitrary ones: Kubernetes' escalation check still applies. Created unbound.
+  rbacAdmin:
+    create: true
   # Permission to change Vinaire ITSELF (add/remove clusters, GitOps mode and
   # sources): resources clusters.vinaire.io and gitops.vinaire.io, which exist
   # only as names for this permission. IT IS NOT "CLUSTER ADMIN" — it grants nothing

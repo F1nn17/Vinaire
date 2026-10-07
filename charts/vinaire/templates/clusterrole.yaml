@@ -128,6 +128,43 @@ rules:
     verbs: ["create"]
 ---
 {{- end }}
+{{- if .Values.rbac.rbacAdmin.create }}
+# Managing who may do what (Roadmap Phase 44): create and delete RoleBindings and
+# ClusterRoleBindings, and ask "may X do Y?" (SubjectAccessReview). Vinaire never
+# creates or edits Roles/ClusterRoles — it only hands out ones that exist. Even with
+# this role Kubernetes' escalation check applies: you can bind a role only if you
+# hold everything it grants OR have `bind` on it; this role grants `bind` for exactly
+# this chart's own roles, so an administrator can hand those out without being
+# cluster-admin. Bind it IN ADDITION to -viewer. Not bound to anyone by default.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "vinaire.fullname" . }}-rbac-admin
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+  annotations:
+    description: "Create/delete RoleBindings and ClusterRoleBindings and check what a subject may do. May bind this chart's own roles."
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: [rolebindings, clusterrolebindings]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: [roles, clusterroles]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: [clusterroles]
+    verbs: ["bind"]
+    resourceNames:
+      - {{ include "vinaire.fullname" . }}-viewer
+      - {{ include "vinaire.fullname" . }}-installer
+      - {{ include "vinaire.fullname" . }}-node-admin
+      - {{ include "vinaire.fullname" . }}-rbac-admin
+      - {{ include "vinaire.fullname" . }}-admin
+  - apiGroups: ["authorization.k8s.io"]
+    resources: [subjectaccessreviews]
+    verbs: ["create"]
+---
+{{- end }}
 {{- if .Values.rbac.adminRole.create }}
 # Permission to change Vinaire ITSELF (Roadmap Phase 36): add/remove clusters in
 # its registry, change a cluster's type, GitOps mode and sources. These resources

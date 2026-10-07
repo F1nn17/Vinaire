@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Marketplace settings form:** a chart's `values.schema.json` becomes a searchable form next to the YAML
   editor; both edit the same text, comments are kept and only changed settings are written.
 
+- **RBAC management:** bind an existing role to a user, group or ServiceAccount (RoleBinding /
+  ClusterRoleBinding), remove bindings, and ask the cluster "what can X do?" (SubjectAccessReview). Vinaire never
+  creates roles, and Kubernetes' escalation check applies; chart role `<fullname>-rbac-admin`.
+
 ### Fixed
 
 - CI: the Trivy step referenced a non-existent `trivy-action` tag; it is now pinned to a release commit.

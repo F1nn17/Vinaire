@@ -294,6 +294,8 @@ func main() {
 		protected.Get("/clusterrolebindings", workloadsHandler.ClusterRoleBindings)
 		protected.Get("/serviceaccounts", workloadsHandler.ServiceAccounts)
 		protected.Get("/rbac/summary", workloadsHandler.RBACSummary)
+		protected.Get("/rbac/subject", workloadsHandler.SubjectBindings)
+		protected.Post("/rbac/check", workloadsHandler.CheckAccess)
 		protected.Get("/crds", workloadsHandler.CRDs)
 		protected.Get("/crds/{crdName}/instances", workloadsHandler.CRDInstances)
 		protected.Get("/crds/{crdName}/instances/{name}", workloadsHandler.CRDInstanceDetail)
@@ -318,6 +320,10 @@ func main() {
 		protected.Group(func(w chi.Router) {
 			w.Use(writeLimiter.Middleware)
 			// Roadmap Phase 40: node lifecycle - see internal/api/node_actions.go and AGENTS.md.
+			// Roadmap Phase 44: RoleBindings / ClusterRoleBindings - see internal/api/rbac_actions.go and AGENTS.md.
+			w.Post("/rbac/bindings", workloadsHandler.CreateBinding)
+			w.Delete("/rbac/rolebindings/{namespace}/{name}", workloadsHandler.DeleteRoleBinding)
+			w.Delete("/rbac/clusterrolebindings/{name}", workloadsHandler.DeleteClusterRoleBinding)
 			w.Post("/nodes/{name}/cordon", workloadsHandler.CordonNode)
 			w.Post("/nodes/{name}/uncordon", workloadsHandler.UncordonNode)
 			w.Post("/nodes/{name}/drain", workloadsHandler.DrainNode)

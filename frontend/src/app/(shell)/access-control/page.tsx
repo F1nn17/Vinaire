@@ -20,6 +20,16 @@ import type {
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { PillTabs } from "@/components/ui/Tabs";
+import { BindingModal } from "@/components/rbac/BindingModal";
+import { AccessCheck } from "@/components/rbac/AccessCheck";
+import { TypeToConfirmModal } from "@/components/ui/TypeToConfirmModal";
+import { Toast, type ToastState } from "@/components/ui/Toast";
+import { PlusIcon } from "@/components/icons";
+import {
+  deleteClusterRoleBinding,
+  deleteRoleBinding,
+  isProtectedBinding,
+} from "@/lib/api/rbacActions";
 
 type AccessControlTab =
   | "roles"
@@ -27,7 +37,8 @@ type AccessControlTab =
   | "rolebindings"
   | "clusterrolebindings"
   | "serviceaccounts"
-  | "summary";
+  | "summary"
+  | "check";
 
 const tabs: { key: AccessControlTab; label: string }[] = [
   { key: "roles", label: "Roles" },
@@ -36,6 +47,7 @@ const tabs: { key: AccessControlTab; label: string }[] = [
   { key: "clusterrolebindings", label: "ClusterRoleBindings" },
   { key: "serviceaccounts", label: "ServiceAccounts" },
   { key: "summary", label: "Who can do what" },
+  { key: "check", label: "Can they…?" },
 ];
 
 // These tabs show namespaced resources — the namespace filter only makes
@@ -204,9 +216,55 @@ const serviceAccountColumns: DataTableColumn<ServiceAccountRow>[] = [
   },
 ];
 
+type PendingDelete = {
+  kind: "role" | "cluster";
+  namespace: string;
+  name: string;
+};
+
+// A "Remove" button for a binding row; the cluster's own bindings can't be removed
+// from here.
+function removeColumn<T extends { name: string }>(
+  onRemove: (row: T) => void,
+): DataTableColumn<T> {
+  return {
+    header: "Remove",
+    width: ".7fr",
+    sortValue: () => "",
+    render: (r) =>
+      isProtectedBinding(r.name) ? (
+        <span
+          className="text-[11px] text-text-faint"
+          title="Part of the cluster's own setup"
+        >
+          —
+        </span>
+      ) : (
+        <button
+          type="button"
+          aria-label={`Remove binding ${r.name}`}
+          onClick={(e) => {
+            e.preventDefault();
+            onRemove(r);
+          }}
+          className="rounded-md border border-border px-2 py-1 text-[11px] text-err hover:border-err hover:bg-err/10"
+        >
+          Remove
+        </button>
+      ),
+  };
+}
+
 export default function AccessControlPage() {
   const [tab, setTab] = useState<AccessControlTab>("roles");
   const [namespace, setNamespace] = useState("");
+  const [bindOpen, setBindOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(
+    null,
+  );
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
 
   const roles = useRoles(namespace, tab === "roles");
   const clusterRoles = useClusterRoles(tab === "clusterroles");
@@ -219,6 +277,40 @@ export default function AccessControlPage() {
     tab === "serviceaccounts",
   );
   const summary = useRBACSummary(namespace, tab === "summary");
+
+  const roleBindingCols = [
+    ...roleBindingColumns,
+    removeColumn<RoleBindingRow>((r) =>
+      setPendingDelete({ kind: "role", namespace: r.namespace, name: r.name }),
+    ),
+  ];
+  const clusterRoleBindingCols = [
+    ...clusterRoleBindingColumns,
+    removeColumn<ClusterRoleBindingRow>((r) =>
+      setPendingDelete({ kind: "cluster", namespace: "", name: r.name }),
+    ),
+  ];
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      if (pendingDelete.kind === "role") {
+        await deleteRoleBinding(pendingDelete.namespace, pendingDelete.name);
+        await roleBindings.mutate();
+      } else {
+        await deleteClusterRoleBinding(pendingDelete.name);
+        await clusterRoleBindings.mutate();
+      }
+      setToast({ type: "success", message: `Removed ${pendingDelete.name}.` });
+      setPendingDelete(null);
+    } catch (err) {
+      setDeleteError(friendlyErrorMessage(err));
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
 
   const active =
     tab === "roles"
@@ -240,6 +332,17 @@ export default function AccessControlPage() {
       <div className="flex items-center justify-between gap-3">
         <PillTabs items={tabs} active={tab} onChange={setTab} />
 
+        {(tab === "rolebindings" || tab === "clusterrolebindings") && (
+          <button
+            type="button"
+            onClick={() => setBindOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
+          >
+            <PlusIcon />
+            Bind a role
+          </button>
+        )}
+
         {namespacedTabs.includes(tab) && (
           <label className="flex items-center gap-2">
             <span className="sr-only">Filter by namespace</span>
@@ -254,7 +357,9 @@ export default function AccessControlPage() {
         )}
       </div>
 
-      {active.error ? (
+      {tab === "check" ? (
+        <AccessCheck />
+      ) : active.error ? (
         <div className="text-sm text-err">
           Failed to load {tab}: {friendlyErrorMessage(active.error)}
         </div>
@@ -276,7 +381,7 @@ export default function AccessControlPage() {
         />
       ) : tab === "rolebindings" ? (
         <DataTable
-          columns={roleBindingColumns}
+          columns={roleBindingCols}
           rows={roleBindings.data ?? []}
           rowKey={(r) => `${r.namespace}/${r.name}`}
           isLoading={roleBindings.isLoading || !roleBindings.data}
@@ -284,7 +389,7 @@ export default function AccessControlPage() {
         />
       ) : tab === "clusterrolebindings" ? (
         <DataTable
-          columns={clusterRoleBindingColumns}
+          columns={clusterRoleBindingCols}
           rows={clusterRoleBindings.data ?? []}
           rowKey={(r) => r.name}
           isLoading={clusterRoleBindings.isLoading || !clusterRoleBindings.data}
@@ -304,6 +409,32 @@ export default function AccessControlPage() {
           isLoading={summary.isLoading || !summary.data}
         />
       )}
+
+      {bindOpen && (
+        <BindingModal
+          defaultScope={tab === "clusterrolebindings" ? "cluster" : "namespace"}
+          defaultNamespace={namespace}
+          onClose={() => setBindOpen(false)}
+          onCreated={() => {
+            setToast({ type: "success", message: "Bound." });
+            void roleBindings.mutate();
+            void clusterRoleBindings.mutate();
+          }}
+        />
+      )}
+      {pendingDelete && (
+        <TypeToConfirmModal
+          title="Remove this binding?"
+          message={`Whoever "${pendingDelete.name}" gave access to loses it${pendingDelete.namespace ? ` in ${pendingDelete.namespace}` : " cluster-wide"}. The role itself is kept.`}
+          expected={pendingDelete.name}
+          confirmLabel="Remove"
+          busy={deleteBusy}
+          error={deleteError}
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

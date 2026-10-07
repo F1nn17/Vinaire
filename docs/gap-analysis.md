@@ -66,7 +66,7 @@
    сортировкой, фильтром по меткам и namespace, выбором колонок, сохранением в URL.
 4. **Phase D — Просмотр аудита в UI (P2, M) — ✅ сделано (ROADMAP Phase 42).** Фильтры по пользователю, действию, времени;
    только для тех, у кого есть право `requireVinaireRight`.
-5. **Phase E — Управление доступом из UI (P2, M).** Role/RoleBinding/ClusterRoleBinding: создать,
+5. **Phase E — Управление доступом из UI (P2, M) — ✅ сделано (ROADMAP Phase 44, без создания ролей).** Role/RoleBinding/ClusterRoleBinding: создать,
    привязать пользователя/ServiceAccount, «что может X» (через SelfSubjectAccessReview/
    SubjectAccessReview). Тоже новая запись — отдельное решение.
 6. **Phase F — Формы значений Helm (P2, M) — ✅ сделано (ROADMAP Phase 43).** Форма по `values.schema.json` чарта (где он есть)

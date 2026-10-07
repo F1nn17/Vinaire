@@ -19,7 +19,7 @@ export function friendlyErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.status) {
       case 403:
-        return `You don't have permission to view this — ${error.message}`;
+        return `You don't have permission for this — ${error.message}`;
       case 404:
         return "Not found.";
       case 502:

@@ -50,6 +50,22 @@ flow.
   `label-node`, `taint-node`, `delete-node`. The chart ships these rights as the
   separate, unbound `<fullname>-node-admin` role (nodes get/list/watch/patch/delete,
   pods get/list, `pods/eviction` create) — not folded into viewer.
+- RBAC bindings (Roadmap Phase 44, `internal/api/rbac_actions.go`,
+  `internal/k8s/rbac_actions.go`) — as the caller, audited: `POST
+  /api/v1/rbac/bindings` creates a **RoleBinding** or **ClusterRoleBinding** to a
+  User, Group or ServiceAccount; `DELETE /api/v1/rbac/rolebindings/{namespace}/{name}`
+  and `.../clusterrolebindings/{name}` remove one. **Vinaire never creates or edits a
+  Role or ClusterRole** — it hands out permissions that already exist, it can't invent
+  new ones. Guard rails: a cluster-wide grant needs the role's name typed
+  (`confirmName`) and may only name a ClusterRole; names, subjects and namespaces are
+  strictly validated; created bindings carry `app.kubernetes.io/managed-by: vinaire`
+  and a `vinaire.io/created-by` annotation; deletes need the binding's name typed and
+  refuse `system:*` and `cluster-admin`; and because every call is the caller's own,
+  **Kubernetes' escalation check applies** (you can't bind a role with rights you lack
+  unless the cluster gave you `bind` on it — the chart's `-rbac-admin` role grants
+  `bind` only for the chart's own roles). `POST /api/v1/rbac/check` (a
+  SubjectAccessReview) and `GET /api/v1/rbac/subject` are reads. Audited
+  `rbac-bind`, `rbac-bind-failed`, `rbac-unbind`.
 - `DELETE /api/v1/pods/{namespace}/{name}` (Phase 33) — a plain `Delete()`
   on the Pod itself (not the Deployment). If the pod has a controller
   (`OwnerReferences` non-empty), the controller recreates it — effectively
@@ -606,6 +622,13 @@ rules:
     verbs: ["patch", "delete"]
   - apiGroups: [""]
     resources: ["pods/eviction"]
+    verbs: ["create"]
+  # Phase 44's RBAC management — the chart ships this as <fullname>-rbac-admin.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings", "clusterrolebindings"]
+    verbs: ["create", "delete"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
     verbs: ["create"]
   # Phase 27's namespace delete — irreversible and cascading; omit unless
   # this identity should be able to remove whole namespaces.
