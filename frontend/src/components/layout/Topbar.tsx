@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { SearchIcon } from "@/components/icons";
 import { AlertsBell } from "@/components/layout/AlertsBell";
 import { BackendStatus } from "@/components/layout/BackendStatus";
+import { LanguageSwitch } from "@/components/layout/LanguageSwitch";
 import { ClusterPicker } from "@/components/layout/ClusterPicker";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { UserMenu } from "@/components/layout/UserMenu";
@@ -49,6 +50,7 @@ export function Topbar() {
 
       <div className="ml-auto flex items-center gap-4">
         <BackendStatus />
+        <LanguageSwitch />
         <AlertsBell />
         <UserMenu />
       </div>

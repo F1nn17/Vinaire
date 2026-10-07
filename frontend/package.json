@@ -10,6 +10,7 @@
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "check:i18n": "node scripts/check-i18n.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {

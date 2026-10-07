@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Interface language switch (RU / EN)** in the top bar. The language follows the browser by default and
+  the choice is kept in a `vinaire_lang` cookie. UI text is translated as React elements are created (a
+  custom `jsxImportSource` runtime), from `src/lib/i18n/dict/{ru,en}.json`; the Russian help in Settings
+  has an English dictionary too. `npm run check:i18n` (CI) fails when a Russian help fragment has no English
+  entry.
 - **Marketplace installs run in the background with live progress** (download bytes,
   speed and time left, permission check, install, pods coming up) and can be cancelled before
   objects are created. `POST /api/v1/catalog/install/preflight` renders the chart and checks

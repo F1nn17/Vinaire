@@ -54,6 +54,9 @@ jobs:
       - name: eslint
         run: npm run lint
 
+      - name: interface-language dictionaries
+        run: npm run check:i18n
+
       - name: npm run build
         run: npm run build
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { AppInit } from "@/components/providers/AppInit";
+import { I18nProvider } from "@/components/providers/I18nProvider";
 import "./globals.css";
 
 // Self-hosted (latin subset, static woff2 files checked into the repo)
@@ -38,7 +39,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${plexSans.variable} ${jetBrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-bg text-text font-sans text-[14px]">
-        <AppInit>{children}</AppInit>
+        <AppInit>
+          <I18nProvider>{children}</I18nProvider>
+        </AppInit>
       </body>
     </html>
   );
