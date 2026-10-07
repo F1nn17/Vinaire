@@ -19,6 +19,10 @@ export type MetricsStatus = {
   kubeStateMetrics: boolean;
   nodeExporter: boolean;
   operatorFound: boolean;
+  alertmanager?: { namespace: string; service: string; port: number };
+  // set when Vinaire installed this Prometheus
+  profile?: "standard" | "full";
+  release?: string;
   missing?: string[];
   // Prometheus answers and holds container metrics
   flowing: boolean;
@@ -45,7 +49,12 @@ export type MetricsPlan = {
   warnings: string[];
 };
 
+export type MetricsProfile = "lite" | "standard" | "full";
+
 export type MetricsOptions = {
+  profile: MetricsProfile;
+  nodeSelector: string; // "key=value", empty = anywhere
+  alertmanager: boolean;
   namespace: string;
   retentionDays: number;
   storageSize: string; // "10Gi", or "none" for no volume
@@ -77,11 +86,14 @@ export function useMetricsPlan(o: MetricsOptions, enabled: boolean) {
     enabled ? ["metrics-plan", cluster, o] : null,
     () => {
       const q = new URLSearchParams({
+        profile: o.profile,
         namespace: o.namespace,
         retentionDays: String(o.retentionDays),
         storageSize: o.storageSize,
       });
       if (o.storageClass) q.set("storageClass", o.storageClass);
+      if (o.nodeSelector) q.set("nodeSelector", o.nodeSelector);
+      if (o.alertmanager) q.set("alertmanager", "true");
       return apiFetch<MetricsPlan>(`/api/v1/metrics/plan?${q.toString()}`);
     },
     {

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Metrics stack: profiles, Alertmanager, node choice and settings (Phase 37, completed).** *Standard*, *Full*
+  (`kube-prometheus-stack`, Grafana off) and *Lite* (metrics-server) profiles; an optional Alertmanager that
+  feeds the alert bell and is found and read through the API-server proxy as the caller; a node selector; and a
+  *Settings* panel that changes retention, node selector and Alertmanager of an installed stack with a Helm
+  upgrade that keeps the release's own values and volume.
 - **Metrics stack in one click (Roadmap Phase 37).** A *Metrics stack* page detects what the cluster has
   (metrics-server, Prometheus, kube-state-metrics, node-exporter, the operator's CRDs) and installs
   `prometheus-community/prometheus` (version pinned) as the signed-in user, with the Marketplace's permission

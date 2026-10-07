@@ -57,3 +57,34 @@ func TestMetricsStatusAndPlan(t *testing.T) {
 		}
 	}
 }
+
+// The alert bell reads Alertmanager the same way: as the caller, through the proxy.
+func TestAlertsAreReachedAsTheCaller(t *testing.T) {
+	hs := newHarness(t, "token")
+	w := hs.get(hs.h.Alerts, "/x", "viewer")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"available":false`) || !strings.Contains(w.Body.String(), "no Alertmanager") {
+		t.Fatalf("no Alertmanager in the cluster: %d %s", w.Code, w.Body)
+	}
+	hs.api.mu.Lock()
+	defer hs.api.mu.Unlock()
+	for _, a := range hs.api.seen {
+		if a != "Bearer viewer" {
+			t.Errorf("a request carried %q instead of the caller's token", a)
+		}
+	}
+}
+
+func TestMetricsPlanProfilesAndSelector(t *testing.T) {
+	hs := newHarness(t, "token")
+	for profile, chart := range map[string]string{"lite": "metrics-server", "standard": `"chart":"prometheus"`, "full": "kube-prometheus-stack"} {
+		w := hs.get(hs.h.MetricsPlan, "/x?profile="+profile+"&nodeSelector=disktype%3Dssd&alertmanager=true", "viewer")
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), chart) {
+			t.Errorf("%s: %d %s", profile, w.Code, w.Body)
+		}
+	}
+	for _, bad := range []string{"profile=huge", "nodeSelector=a%3Db%0Ac:%20d", "nodeSelector=nokey"} {
+		if w := hs.get(hs.h.MetricsPlan, "/x?"+bad, "viewer"); w.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d", bad, w.Code)
+		}
+	}
+}

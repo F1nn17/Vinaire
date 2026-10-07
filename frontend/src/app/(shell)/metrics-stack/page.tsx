@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import useSWR from "swr";
+import { apiFetch } from "@/lib/api/http";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { tm } from "@/lib/i18n/messages";
 import {
   cancelInstallJob,
+  getReleaseValues,
+  upgradeRelease,
   getInstallJob,
   startInstallJob,
   uninstallRelease,
@@ -14,9 +17,17 @@ import {
   type InstallJob,
 } from "@/lib/api/catalog";
 import {
+  applySettings,
+  readSettings,
+  validSelector,
+  type StackProfile,
+  type StackSettings,
+} from "@/lib/metricsSettings";
+import {
   useMetricsPlan,
   useMetricsStatus,
   type MetricsOptions,
+  type MetricsProfile,
   type PlanStep,
 } from "@/lib/api/metricsStack";
 import { InstallProgress } from "@/components/marketplace/InstallProgress";
@@ -163,7 +174,7 @@ export default function MetricsStackPage() {
                   type="button"
                   onClick={() => {
                     setRemoveError(null);
-                    setRemoving(["prometheus"]);
+                    setRemoving([status.release ?? "prometheus"]);
                   }}
                   className="rounded-lg border border-border px-3 py-1.5 text-xs text-err hover:border-err"
                 >
@@ -177,10 +188,24 @@ export default function MetricsStackPage() {
             )}
           </div>
 
+          {status.managedByVinaire &&
+            status.prometheus &&
+            status.release &&
+            status.profile && (
+              <StackSettingsPanel
+                namespace={status.prometheus.namespace}
+                release={status.release}
+                profile={status.profile}
+                hasAlertmanager={!!status.alertmanager}
+                onSaved={() => void mutate()}
+              />
+            )}
+
           {(status.state === "none" ||
             status.state === "metrics-server-only" ||
             session) && (
             <Installer
+              metricsServer={status.metricsServer}
               onRunning={(v) => {
                 if (v) setSession(true);
                 setInstalling(v);
@@ -211,14 +236,46 @@ export default function MetricsStackPage() {
 
 type Run = { step: PlanStep; jobId: string };
 
+const profiles: {
+  id: MetricsProfile;
+  title: string;
+  help: string;
+  needs: string;
+}[] = [
+  {
+    id: "standard",
+    title: "Standard",
+    help: "Prometheus with kube-state-metrics and node-exporter: current values, history, and the network and disk charts. The sensible default.",
+    needs: "about 0.2 CPU and 0.5–1.5 GiB of memory, a 10 Gi volume",
+  },
+  {
+    id: "full",
+    title: "Full",
+    help: "kube-prometheus-stack: the operator, Prometheus, Alertmanager, the exporters and the default alert rules. For clusters that already work with Prometheus rules.",
+    needs:
+      "about 0.5 CPU and 1–3 GiB of memory, a volume, and cluster-wide CRDs",
+  },
+  {
+    id: "lite",
+    title: "Lite",
+    help: "Only metrics-server: the current CPU and memory of nodes and pods. No history, no network or disk charts.",
+    needs: "about 0.05 CPU and 64–200 MiB of memory, no volume",
+  },
+];
+
 function Installer({
+  metricsServer,
   onRunning,
   onFinished,
 }: {
+  metricsServer: boolean;
   onRunning: (v: boolean) => void;
   onFinished: () => void;
 }) {
   const [opts, setOpts] = useState<MetricsOptions>({
+    profile: "standard",
+    nodeSelector: "",
+    alertmanager: false,
     namespace: "monitoring",
     retentionDays: 7,
     storageSize: "10Gi",
@@ -346,6 +403,40 @@ function Installer({
   return (
     <div className="flex max-w-3xl flex-col gap-4 rounded-[10px] border border-border bg-surface p-5">
       <div className="text-[13px] font-semibold">Install the metrics stack</div>
+      <div
+        className="grid grid-cols-3 gap-3"
+        role="radiogroup"
+        aria-label="Profile"
+      >
+        {profiles
+          .filter((p) => p.id !== "lite" || !metricsServer)
+          .map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              role="radio"
+              aria-checked={opts.profile === p.id}
+              onClick={() =>
+                setOpts({
+                  ...opts,
+                  profile: p.id,
+                  namespace: p.id === "lite" ? "kube-system" : "monitoring",
+                })
+              }
+              className={`flex flex-col gap-1 rounded-lg border p-3 text-left ${
+                opts.profile === p.id
+                  ? "border-accent bg-surface-2"
+                  : "border-border hover:border-text-faint"
+              }`}
+            >
+              <span className="text-[12.5px] font-semibold">{p.title}</span>
+              <span className="text-[11px] text-text-muted">{p.help}</span>
+              <span className="text-[11px] text-text-faint">
+                Needs {p.needs}
+              </span>
+            </button>
+          ))}
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1.5 text-xs text-text-muted">
           Namespace
@@ -356,50 +447,84 @@ function Installer({
             className={input}
           />
         </label>
+        {opts.profile !== "lite" && (
+          <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+            Keep metrics for (days)
+            <input
+              aria-label="Retention days"
+              type="number"
+              min={1}
+              max={365}
+              value={opts.retentionDays}
+              onChange={(e) =>
+                setOpts({ ...opts, retentionDays: Number(e.target.value) || 7 })
+              }
+              className={input}
+            />
+          </label>
+        )}
         <label className="flex flex-col gap-1.5 text-xs text-text-muted">
-          Keep metrics for (days)
+          Run only on nodes labelled (key=value, optional)
           <input
-            aria-label="Retention days"
-            type="number"
-            min={1}
-            max={365}
-            value={opts.retentionDays}
-            onChange={(e) =>
-              setOpts({ ...opts, retentionDays: Number(e.target.value) || 7 })
-            }
+            aria-label="Node selector"
+            placeholder="disktype=ssd"
+            value={opts.nodeSelector}
+            onChange={(e) => setOpts({ ...opts, nodeSelector: e.target.value })}
             className={input}
           />
         </label>
-        <label className="flex flex-col gap-1.5 text-xs text-text-muted">
-          Volume size
-          <input
-            aria-label="Volume size"
-            value={opts.storageSize}
-            disabled={noVolume}
-            onChange={(e) => setOpts({ ...opts, storageSize: e.target.value })}
-            className={`${input} disabled:opacity-50`}
-          />
-        </label>
-        <label className="flex flex-col gap-1.5 text-xs text-text-muted">
-          Storage class (empty = the cluster default)
-          <input
-            aria-label="Storage class"
-            value={opts.storageClass}
-            disabled={noVolume}
-            onChange={(e) => setOpts({ ...opts, storageClass: e.target.value })}
-            className={`${input} disabled:opacity-50`}
-          />
-        </label>
+        {opts.profile !== "lite" && (
+          <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+            Volume size
+            <input
+              aria-label="Volume size"
+              value={opts.storageSize}
+              disabled={noVolume}
+              onChange={(e) =>
+                setOpts({ ...opts, storageSize: e.target.value })
+              }
+              className={`${input} disabled:opacity-50`}
+            />
+          </label>
+        )}
+        {opts.profile !== "lite" && (
+          <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+            Storage class (empty = the cluster default)
+            <input
+              aria-label="Storage class"
+              value={opts.storageClass}
+              disabled={noVolume}
+              onChange={(e) =>
+                setOpts({ ...opts, storageClass: e.target.value })
+              }
+              className={`${input} disabled:opacity-50`}
+            />
+          </label>
+        )}
       </div>
-      <label className="flex items-center gap-2 text-xs text-text-muted">
-        <input
-          type="checkbox"
-          checked={noVolume}
-          onChange={(e) => setNoVolume(e.target.checked)}
-        />
-        No volume — metrics history is lost whenever Prometheus&apos;s pod
-        restarts
-      </label>
+      {opts.profile === "standard" && (
+        <label className="flex items-center gap-2 text-xs text-text-muted">
+          <input
+            type="checkbox"
+            checked={opts.alertmanager}
+            onChange={(e) =>
+              setOpts({ ...opts, alertmanager: e.target.checked })
+            }
+          />
+          Also install Alertmanager — its alerts feed the bell in the top bar
+        </label>
+      )}
+      {opts.profile !== "lite" && (
+        <label className="flex items-center gap-2 text-xs text-text-muted">
+          <input
+            type="checkbox"
+            checked={noVolume}
+            onChange={(e) => setNoVolume(e.target.checked)}
+          />
+          No volume — metrics history is lost whenever Prometheus&apos;s pod
+          restarts
+        </label>
+      )}
 
       {planError ? (
         <div className="text-xs text-err">
@@ -412,7 +537,7 @@ function Installer({
           <ul className="list-disc pl-5 text-xs text-text-muted">
             {plan.steps.map((s) => (
               <li key={s.release}>
-                {s.title}{" "}
+                {tm(s.title)}{" "}
                 <span className="font-mono text-text-faint">
                   ({s.chart} {s.version})
                 </span>
@@ -455,7 +580,12 @@ function Installer({
         <button
           type="button"
           disabled={
-            !plan || plan.warnings.some((w) => w.includes("already running"))
+            !plan ||
+            !validSelector(opts.nodeSelector) ||
+            plan.warnings.some(
+              (w) =>
+                w.includes("already running") || w.includes("don't install it"),
+            )
           }
           onClick={() => plan && void begin(plan.steps[0])}
           className="rounded-lg bg-accent px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-50"
@@ -463,6 +593,169 @@ function Installer({
           {failed ? "Try again" : "Install"}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ---- settings of an installed stack ----------------------------------------------
+
+// A Helm upgrade of the release Vinaire installed, with its own values edited in
+// place — so what the user changed by hand and the volume are kept.
+function StackSettingsPanel({
+  namespace,
+  release,
+  profile,
+  hasAlertmanager,
+  onSaved,
+}: {
+  namespace: string;
+  release: string;
+  profile: StackProfile;
+  hasAlertmanager: boolean;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState<string | null>(null);
+  const [form, setForm] = useState<StackSettings | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function begin() {
+    setOpen(true);
+    setError(null);
+    setDone(false);
+    try {
+      const v = await getReleaseValues(namespace, release);
+      setValues(v);
+      setForm(readSettings(v, profile));
+    } catch (err) {
+      setError(friendlyErrorMessage(err));
+    }
+  }
+
+  async function save() {
+    if (!form || values === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = applySettings(values, profile, form);
+      // the chart and its pinned version come from the plan, not from the browser
+      const q = new URLSearchParams({ profile, namespace });
+      const plan = await apiFetch<{ steps: PlanStep[] }>(
+        `/api/v1/metrics/plan?${q.toString()}`,
+      );
+      const step = plan.steps[0];
+      await upgradeRelease(namespace, release, {
+        repo: step.repo,
+        chart: step.chart,
+        version: step.version,
+        values: next,
+        wait: true,
+      });
+      setDone(true);
+      setOpen(false);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : friendlyErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="max-w-3xl rounded-[10px] border border-border bg-surface p-5">
+      <div className="flex items-center justify-between">
+        <div className="text-[13px] font-semibold">Settings</div>
+        {!open && (
+          <button
+            type="button"
+            onClick={() => void begin()}
+            className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-accent"
+          >
+            Change…
+          </button>
+        )}
+      </div>
+      {done && (
+        <div className="mt-2 text-xs text-ok">
+          Saved — the stack is being updated.
+        </div>
+      )}
+      {open && (
+        <div className="mt-3 flex flex-col gap-3">
+          {form ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+                  Keep metrics for (days)
+                  <input
+                    aria-label="Retention days"
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={form.retentionDays}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        retentionDays: Number(e.target.value) || 7,
+                      })
+                    }
+                    className={input}
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+                  Run only on nodes labelled (key=value, optional)
+                  <input
+                    aria-label="Node selector"
+                    value={form.nodeSelector}
+                    onChange={(e) =>
+                      setForm({ ...form, nodeSelector: e.target.value })
+                    }
+                    className={input}
+                  />
+                </label>
+              </div>
+              {profile === "standard" && (
+                <label className="flex items-center gap-2 text-xs text-text-muted">
+                  <input
+                    type="checkbox"
+                    checked={form.alertmanager}
+                    onChange={(e) =>
+                      setForm({ ...form, alertmanager: e.target.checked })
+                    }
+                  />
+                  Alertmanager{hasAlertmanager ? "" : " (not installed yet)"}
+                </label>
+              )}
+              <div className="text-[11px] text-text-faint">
+                This upgrades the Helm release with your own settings kept; the
+                volume isn&apos;t touched. It runs as you.
+              </div>
+            </>
+          ) : (
+            !error && <div className="text-xs text-text-faint">Loading…</div>
+          )}
+          {error && <div className="text-xs text-err">{error}</div>}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!form || busy}
+              onClick={() => void save()}
+              className="rounded-lg bg-accent px-4 py-1.5 text-[12.5px] font-semibold text-white disabled:opacity-50"
+            >
+              {busy ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -54,9 +54,24 @@ const patterns: [RegExp, (m: RegExpMatchArray) => string][] = [
       `Нужно примерно 0,5 CPU и 1 ГиБ памяти суммарно (Loki ≈ 0,1 CPU / 256 МиБ–1 ГиБ, плюс Alloy ≈ 50m / 128 МиБ на каждой ноде). В кластере доступно CPU: ${m[1]}, памяти: ${m[2]} ГиБ.`,
   ],
   [
-    /^Metrics are kept for (\d+) days\. .*$/,
+    /^Metrics are kept for (\d+) days\. Installs the operator.*$/,
     (m) =>
-      `Метрики хранятся дней: ${m[1]}. Ставятся Prometheus, kube-state-metrics и node-exporter — без Grafana и Alertmanager. Для них установите kube-prometheus-stack из Marketplace.`,
+      `Метрики хранятся дней: ${m[1]}. Ставятся оператор, Prometheus, Alertmanager, kube-state-metrics, node-exporter и стандартные правила алертов — без Grafana; мониторы компонентов control-plane (etcd, scheduler, controller-manager, kube-proxy) выключены, потому что k3s и managed-кластеры их не отдают.`,
+  ],
+  [
+    /^Metrics are kept for (\d+) days\. This installs Prometheus, kube-state-metrics and node-exporter, no Alertmanager, and no Grafana\.$/,
+    (m) =>
+      `Метрики хранятся дней: ${m[1]}. Ставятся Prometheus, kube-state-metrics и node-exporter — без Alertmanager и Grafana. Alertmanager можно добавить галочкой выше, а Grafana — из Marketplace.`,
+  ],
+  [
+    /^Metrics are kept for (\d+) days\. This installs Prometheus, kube-state-metrics and node-exporter, with Alertmanager .*$/,
+    (m) =>
+      `Метрики хранятся дней: ${m[1]}. Ставятся Prometheus, kube-state-metrics, node-exporter и Alertmanager (его алерты попадут в колокольчик в верхней панели; правил алертов нет — добавьте свои или выберите «Полный»), без Grafana.`,
+  ],
+  [
+    /^No node carries the label (.+?) — the pods would stay Pending\..*$/,
+    (m) =>
+      `Ни у одной ноды нет метки ${m[1]} — поды останутся в Pending. Сначала поставьте метку на ноду (Nodes → нода → Labels) или очистите селектор.`,
   ],
   [
     /^Logs are kept for (\d+) days; .*$/,

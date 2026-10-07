@@ -115,7 +115,7 @@ ClusterRole a person is bound to, and — only when rbac.broad or authMode
 # the community chart's server, kube-prometheus-stack's, an operator's, VictoriaMetrics.
 - apiGroups: [""]
   resources: ["services/proxy"]
-  resourceNames: ["prometheus-server", "prometheus", "prometheus-operated", "kube-prometheus-stack-prometheus", "vmsingle"]
+  resourceNames: ["prometheus-server", "prometheus", "prometheus-operated", "kube-prometheus-stack-prometheus", "vmsingle", "prometheus-alertmanager", "alertmanager", "kube-prometheus-stack-alertmanager"]
   verbs: ["get"]
 - apiGroups: ["storage.k8s.io"]
   resources: ["storageclasses"]

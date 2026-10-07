@@ -554,7 +554,7 @@ rules:
   # way — as the caller, through the service proxy, for Prometheus's own names only.
   - apiGroups: [""]
     resources: ["services/proxy"]
-    resourceNames: ["prometheus-server", "prometheus", "prometheus-operated", "kube-prometheus-stack-prometheus", "vmsingle"]
+    resourceNames: ["prometheus-server", "prometheus", "prometheus-operated", "kube-prometheus-stack-prometheus", "vmsingle", "prometheus-alertmanager", "alertmanager", "kube-prometheus-stack-alertmanager"]
     verbs: ["get"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]

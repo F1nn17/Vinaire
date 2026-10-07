@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,8 +50,14 @@ type MetricsStatus struct {
 	NodeExporter     bool                `json:"nodeExporter"`
 	// OperatorFound: prometheus-operator's CRDs exist, so a second Prometheus is
 	// probably not wanted.
-	OperatorFound bool     `json:"operatorFound"`
-	Missing       []string `json:"missing,omitempty"`
+	OperatorFound bool `json:"operatorFound"`
+	// Alertmanager: where one was found (the bell in the top bar reads it).
+	Alertmanager *PrometheusLocation `json:"alertmanager,omitempty"`
+	// Profile / Release: set when the Prometheus is one Vinaire installed, so the
+	// page can change its settings (an upgrade of that release).
+	Profile string   `json:"profile,omitempty"`
+	Release string   `json:"release,omitempty"`
+	Missing []string `json:"missing,omitempty"`
 	// Flowing: Prometheus answers and holds container metrics.
 	Flowing          bool   `json:"flowing"`
 	Detail           string `json:"detail,omitempty"`
@@ -59,7 +66,16 @@ type MetricsStatus struct {
 }
 
 func findPrometheus(ctx context.Context, cs kubernetes.Interface) (*PrometheusLocation, error) {
-	// services of every plausible flavour; the label tests are in metricsstack
+	return findService(ctx, cs, metricsstack.IsPrometheusService, metricsstack.ServerService, metricsstack.StackService)
+}
+
+func findAlertmanager(ctx context.Context, cs kubernetes.Interface) (*PrometheusLocation, error) {
+	return findService(ctx, cs, metricsstack.IsAlertmanagerService)
+}
+
+// findService lists the Services the label test accepts and picks one, preferring
+// the names Vinaire's own installs create. The label tests are in metricsstack.
+func findService(ctx context.Context, cs kubernetes.Interface, is func(map[string]string, string, []int32) (int32, bool), prefer ...string) (*PrometheusLocation, error) {
 	list, err := cs.CoreV1().Services("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -70,14 +86,18 @@ func findPrometheus(ctx context.Context, cs kubernetes.Interface) (*PrometheusLo
 		for _, p := range s.Spec.Ports {
 			ports = append(ports, p.Port)
 		}
-		port, ok := metricsstack.IsPrometheusService(s.Labels, s.Spec.ClusterIP, ports)
+		port, ok := is(s.Labels, s.Spec.ClusterIP, ports)
 		if !ok {
 			continue
 		}
 		cand := &PrometheusLocation{Namespace: s.Namespace, Service: s.Name, Port: port}
-		// prefer the one Vinaire's own install creates
-		if best == nil || s.Name == metricsstack.ServerService {
+		if best == nil {
 			best = cand
+		}
+		for _, name := range prefer {
+			if s.Name == name {
+				best = cand
+			}
 		}
 	}
 	return best, nil
@@ -134,6 +154,12 @@ func (h *Handler) prometheusFetcher(ctx context.Context, cluster string, cs kube
 	if loc == nil {
 		return nil, "no Prometheus in this cluster — install the metrics stack (Metrics stack page) or set PROMETHEUS_URL"
 	}
+	return proxyFetch(cs, loc, "Prometheus"), ""
+}
+
+// proxyFetch queries a Service through the API server's service proxy, as whoever
+// the clientset belongs to.
+func proxyFetch(cs kubernetes.Interface, loc *PrometheusLocation, what string) promFetch {
 	return func(ctx context.Context, path string, params url.Values) ([]byte, error) {
 		p := map[string]string{}
 		for k := range params {
@@ -143,19 +169,37 @@ func (h *Handler) prometheusFetcher(ctx context.Context, cluster string, cs kube
 		defer cancel()
 		body, err := cs.CoreV1().Services(loc.Namespace).ProxyGet("http", loc.Service, strconv.Itoa(int(loc.Port)), path, p).DoRaw(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("%s", promErrorReason(err, loc))
+			return nil, fmt.Errorf("%s", promErrorReason(err, loc, what))
 		}
 		return body, nil
-	}, ""
+	}
+}
+
+// alertmanagerFetcher is prometheusFetcher's counterpart for Alertmanager:
+// ALERTMANAGER_URL if the operator set it, else the Alertmanager found in the cluster.
+func (h *Handler) alertmanagerFetcher(ctx context.Context, cs kubernetes.Interface) (promFetch, string) {
+	if h.AlertmanagerURL != "" {
+		return func(ctx context.Context, path string, params url.Values) ([]byte, error) {
+			return fetchUpstream(ctx, h.AlertmanagerURL, path, params)
+		}, ""
+	}
+	loc, err := findAlertmanager(ctx, cs)
+	if err != nil {
+		return nil, "couldn't look for Alertmanager: " + statusMessage(err)
+	}
+	if loc == nil {
+		return nil, "no Alertmanager in this cluster — install the metrics stack with Alertmanager (Metrics stack page) or set ALERTMANAGER_URL"
+	}
+	return proxyFetch(cs, loc, "Alertmanager"), ""
 }
 
 // promErrorReason explains why Prometheus couldn't be reached. The common case is
 // the caller lacking `get` on services/proxy for it.
-func promErrorReason(err error, loc *PrometheusLocation) string {
+func promErrorReason(err error, loc *PrometheusLocation, what string) string {
 	if apierrors.IsForbidden(err) {
-		return fmt.Sprintf("You don't have permission to reach Prometheus through the API server — it needs `get` on services/proxy for %q in namespace %q (the chart's -viewer role grants it for the standard Prometheus names).", loc.Service, loc.Namespace)
+		return fmt.Sprintf("You don't have permission to reach %s through the API server — it needs `get` on services/proxy for %q in namespace %q (the chart's -viewer role grants it for the standard names).", what, loc.Service, loc.Namespace)
 	}
-	return "Prometheus didn't answer: " + statusMessage(err)
+	return what + " didn't answer: " + statusMessage(err)
 }
 
 // MetricsStatus handles GET /api/v1/metrics/status.
@@ -221,7 +265,12 @@ func (h *Handler) MetricsStatus(w http.ResponseWriter, r *http.Request) {
 	case st.MetricsServer:
 		st.State = "metrics-server-only"
 	}
-	st.ManagedByVinaire = loc != nil && loc.Service == metricsstack.ServerService
+	if p := metricsstack.ProfileOf(serviceOf(loc)); p != "" {
+		st.ManagedByVinaire, st.Profile, st.Release = true, string(p), metricsstack.ReleaseOf(p)
+	}
+	if am, err := findAlertmanager(ctx, cs); err == nil {
+		st.Alertmanager = am
+	}
 
 	if loc != nil {
 		fetch, reason := h.prometheusFetcher(ctx, entry.Name, cs)
@@ -271,8 +320,10 @@ func (h *Handler) MetricsPlan(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	days, _ := strconv.Atoi(q.Get("retentionDays"))
 	opts, err := metricsstack.Options{
+		Profile:   metricsstack.Profile(q.Get("profile")),
 		Namespace: q.Get("namespace"), RetentionDay: days,
 		StorageSize: q.Get("storageSize"), StorageClass: q.Get("storageClass"),
+		NodeSelector: q.Get("nodeSelector"), Alertmanager: q.Get("alertmanager") == "true",
 	}.Normalize()
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
@@ -281,12 +332,40 @@ func (h *Handler) MetricsPlan(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	plan := MetricsPlan{Steps: metricsstack.Plan(opts), Notes: []string{}, Warnings: []string{}}
 
-	if loc, _ := findPrometheus(ctx, cs); loc != nil {
+	if opts.Profile == metricsstack.ProfileLite {
+		if _, err := cs.Discovery().ServerResourcesForGroupVersion("metrics.k8s.io/v1beta1"); err == nil {
+			plan.Warnings = append(plan.Warnings, "metrics-server is already running in this cluster (k3s ships it). A second one would fight over the same API — don't install it.")
+		}
+		plan.Notes = append(plan.Notes, "metrics-server gives the current CPU and memory only — no history, no network or disk charts. On clusters whose kubelets use self-signed serving certificates (kubeadm), it needs the kubelets to serve a certificate the cluster trusts; Vinaire doesn't switch certificate checks off for it.")
+	} else if loc, _ := findPrometheus(ctx, cs); loc != nil {
 		plan.Warnings = append(plan.Warnings, fmt.Sprintf(
 			"A Prometheus is already running (%s/%s). Installing a second one would split your metrics — use it instead.", loc.Namespace, loc.Service))
 	}
-	if _, err := cs.Discovery().ServerResourcesForGroupVersion("monitoring.coreos.com/v1"); err == nil {
-		plan.Warnings = append(plan.Warnings, "prometheus-operator's CRDs are installed in this cluster — an operator-managed Prometheus probably exists or is expected. Check before adding a second one.")
+	if opts.Profile == metricsstack.ProfileFull {
+		plan.Warnings = append(plan.Warnings, "kube-prometheus-stack is the heavy option: the operator, Prometheus, Alertmanager, exporters and about 100 alert rules, and it adds cluster-wide CRDs (so it needs rights a plain namespace admin doesn't have). Grafana is left off. Prefer “standard” on a small cluster.")
+	}
+	if opts.NodeSelector != "" {
+		k, v, _ := strings.Cut(opts.NodeSelector, "=")
+		found := false
+		if nodes, err := k8s.ListNodes(ctx, cs); err == nil {
+			for _, n := range nodes {
+				if got, ok := n.Labels[k]; ok && got == v {
+					found = true
+				}
+			}
+			if !found {
+				plan.Warnings = append(plan.Warnings, fmt.Sprintf("No node carries the label %s — the pods would stay Pending. Label a node first (Nodes → a node → Labels), or clear the node selector.", opts.NodeSelector))
+			}
+		}
+	}
+	if opts.Profile == metricsstack.ProfileStandard {
+		if _, err := cs.Discovery().ServerResourcesForGroupVersion("monitoring.coreos.com/v1"); err == nil {
+			plan.Warnings = append(plan.Warnings, "prometheus-operator's CRDs are installed in this cluster — an operator-managed Prometheus probably exists or is expected. Check before adding a second one.")
+		}
+	}
+	if opts.Profile == metricsstack.ProfileLite {
+		respondJSON(w, plan)
+		return
 	}
 	if opts.StorageSize != "none" {
 		scs, err := k8s.ListStorageClasses(ctx, cs)
@@ -311,7 +390,24 @@ func (h *Handler) MetricsPlan(w http.ResponseWriter, r *http.Request) {
 			"Needs about 0.2 CPU and 0.5–1.5 GiB of memory in total (Prometheus ≈ 0.1 CPU / 256 MiB–1 GiB, kube-state-metrics, plus node-exporter ≈ 20m / 32 MiB on every node). The cluster has %d CPU(s) and %d GiB allocatable.",
 			cpu/1000, mem>>30))
 	}
-	plan.Notes = append(plan.Notes,
-		fmt.Sprintf("Metrics are kept for %d days. This installs Prometheus, kube-state-metrics and node-exporter — no Grafana and no Alertmanager. For those, install kube-prometheus-stack from the Marketplace.", opts.RetentionDay))
+	switch opts.Profile {
+	case metricsstack.ProfileFull:
+		plan.Notes = append(plan.Notes,
+			fmt.Sprintf("Metrics are kept for %d days. Installs the operator, Prometheus, Alertmanager, kube-state-metrics, node-exporter and the default alert rules — no Grafana, and the control-plane monitors (etcd, scheduler, controller-manager, kube-proxy) are off because k3s and managed clusters don't expose them.", opts.RetentionDay))
+	default:
+		am := "no Alertmanager"
+		if opts.Alertmanager {
+			am = "with Alertmanager (its alerts feed the bell in the top bar; no alert rules are defined — add your own, or use “full”)"
+		}
+		plan.Notes = append(plan.Notes,
+			fmt.Sprintf("Metrics are kept for %d days. This installs Prometheus, kube-state-metrics and node-exporter, %s, and no Grafana.", opts.RetentionDay, am))
+	}
 	respondJSON(w, plan)
+}
+
+func serviceOf(l *PrometheusLocation) string {
+	if l == nil {
+		return ""
+	}
+	return l.Service
 }

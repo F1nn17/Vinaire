@@ -132,12 +132,17 @@ type alertmanagerAlert struct {
 // Alerts handles GET /api/v1/alerts — every currently active alert
 // (firing or suppressed) from Alertmanager.
 func (h *Handler) Alerts(w http.ResponseWriter, r *http.Request) {
-	if h.AlertmanagerURL == "" {
-		respondJSON(w, alertsResponse{Available: false, Reason: "ALERTMANAGER_URL is not configured"})
+	_, cs, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	fetch, reason := h.alertmanagerFetcher(r.Context(), cs)
+	if fetch == nil {
+		respondJSON(w, alertsResponse{Available: false, Reason: reason})
 		return
 	}
 
-	body, err := fetchUpstream(r.Context(), h.AlertmanagerURL, "/api/v2/alerts", nil)
+	body, err := fetch(r.Context(), "/api/v2/alerts", nil)
 	if err != nil {
 		respondJSON(w, alertsResponse{Available: false, Reason: err.Error()})
 		return
@@ -151,6 +156,11 @@ func (h *Handler) Alerts(w http.ResponseWriter, r *http.Request) {
 
 	rows := make([]AlertRow, 0, len(raw))
 	for _, a := range raw {
+		// the heartbeat rules kube-prometheus-stack ships: "Watchdog" fires forever on
+		// purpose, to prove Alertmanager is alive; "InfoInhibitor" only silences others
+		if n := a.Labels["alertname"]; n == "Watchdog" || n == "InfoInhibitor" {
+			continue
+		}
 		color := StatusWarn
 		if a.Labels["severity"] == "critical" {
 			color = StatusErr
