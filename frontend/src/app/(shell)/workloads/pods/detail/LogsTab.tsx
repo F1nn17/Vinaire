@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLogsStream } from "@/lib/hooks/useLogsStream";
 import { useLogsSearch } from "@/lib/hooks/useObservability";
@@ -290,7 +291,10 @@ export function LogsTab({
             </div>
           ) : !search.data.available ? (
             <div className="font-mono text-xs text-text-faint">
-              Historical log search unavailable: {search.data.reason}
+              Historical log search unavailable: {search.data.reason}{" "}
+              <Link href="/logging" className="text-accent-text underline">
+                Set up the logs stack →
+              </Link>
             </div>
           ) : (search.data.lines ?? []).length === 0 ? (
             <div className="font-mono text-xs text-text-faint">

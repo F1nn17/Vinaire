@@ -108,6 +108,12 @@ const groups: NavGroup[] = [
         isActive: (p) => p.startsWith("/marketplace"),
       },
       {
+        href: "/logging",
+        label: "Logs stack",
+        icon: <ListIcon />,
+        isActive: (p) => p.startsWith("/logging"),
+      },
+      {
         href: "/gitops",
         label: "GitOps",
         icon: <GitOpsIcon />,

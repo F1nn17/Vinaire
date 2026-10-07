@@ -544,6 +544,12 @@ rules:
   - apiGroups: [""]
     resources: ["pods/portforward"]
     verbs: ["create"]
+  # Phase 45: history search reaches Loki through the API server's service proxy,
+  # as the caller — only for Loki's own Service names.
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    resourceNames: ["loki", "loki-gateway", "loki-read", "loki-query-frontend"]
+    verbs: ["get"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
     verbs: ["get", "list", "watch"]

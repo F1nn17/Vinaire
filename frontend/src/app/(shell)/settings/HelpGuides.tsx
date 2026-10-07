@@ -423,6 +423,17 @@ export function TroubleshootingHelp() {
       ),
     },
     {
+      title: "История логов недоступна («Historical log search unavailable»)",
+      body: (
+        <>
+          Нужен Loki. Откройте страницу «Logs stack» (Apps): она покажет, что стоит в кластере, и
+          установит Loki и сборщик Alloy одной кнопкой — от вашего имени, с проверкой прав. Если Loki
+          уже есть, но вы видите «no permission to reach Loki», нужна роль <Mono>-viewer</Mono> чарта
+          (в ней есть <Mono>get services/proxy</Mono> для имён loki*).
+        </>
+      ),
+    },
+    {
       title: "Нет графиков метрик («unavailable»)",
       body: (
         <>

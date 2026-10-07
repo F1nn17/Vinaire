@@ -44,8 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ClusterRoleBinding), remove bindings, and ask the cluster "what can X do?" (SubjectAccessReview). Vinaire never
   creates roles, and Kubernetes' escalation check applies; chart role `<fullname>-rbac-admin`.
 
+- **Logs stack in one click** (Loki + Grafana Alloy, pinned charts, single-binary Loki for small clusters) on the new
+  Logs stack page; installed as the signed-in user through the Marketplace's Helm path. Loki is found in the cluster
+  and queried through the API server's service proxy as the caller.
+
 ### Fixed
 
+- **Log search authorization:** the history search (`/pods/{ns}/{pod}/logs/search`) read Loki without checking that the
+  caller may read that pod's logs, so any signed-in user could read any namespace's logs. It now checks `get pods/log`
+  as the caller first (with a test that fails if the check is lost).
 - CI: the Trivy step referenced a non-existent `trivy-action` tag; it is now pinned to a release commit.
 - Marketplace: a 502 from the backend showed "backend is unavailable"; the real reason is shown.
 - The `-admin` role is documented as not granting any Kubernetes access (it only permits changes to

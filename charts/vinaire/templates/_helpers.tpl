@@ -105,6 +105,12 @@ ClusterRole a person is bound to, and — only when rbac.broad or authMode
 - apiGroups: ["policy", "autoscaling"]
   resources: ["poddisruptionbudgets", "horizontalpodautoscalers"]
   verbs: ["get", "list", "watch"]
+# Phase 45: searching logs through the Loki found in the cluster goes through the API
+# server's service proxy, as the caller — and only for Loki's own Service names.
+- apiGroups: [""]
+  resources: ["services/proxy"]
+  resourceNames: ["loki", "loki-gateway", "loki-read", "loki-query-frontend"]
+  verbs: ["get"]
 - apiGroups: ["storage.k8s.io"]
   resources: ["storageclasses"]
   verbs: ["get", "list", "watch"]

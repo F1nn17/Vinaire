@@ -193,22 +193,41 @@ const defaultLogsSearchSince = "1h"
 // differently-labeled Loki setup simply won't find this pod's logs; that's
 // a limitation of proxying rather than reimplementing label discovery.
 func (h *Handler) LogsSearch(w http.ResponseWriter, r *http.Request) {
-	if h.LokiURL == "" {
-		respondJSON(w, logsSearchResponse{Available: false, Reason: "LOKI_URL is not configured"})
+	_, cs, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+	if !nsRe.MatchString(namespace) || !objNameRe.MatchString(name) {
+		respondError(w, http.StatusBadRequest, "invalid namespace or pod name")
+		return
+	}
+	// Loki holds every pod's logs and doesn't know who is asking, so the check the
+	// cluster would have made on `pods/log` is made here, as the caller — without it
+	// anyone signed in could read any namespace's logs through the search.
+	allowed, err := callerCan(r.Context(), cs, "get", "", "pods", "log", namespace, name)
+	if err != nil {
+		respondK8sError(w, err)
+		return
+	}
+	if !allowed {
+		respondError(w, http.StatusForbidden, fmt.Sprintf("you don't have permission to read the logs of pod %s/%s (get pods/log)", namespace, name))
 		return
 	}
 
-	namespace := chi.URLParam(r, "namespace")
-	name := chi.URLParam(r, "name")
 	query := r.URL.Query().Get("query")
+	if len(query) > 500 {
+		respondError(w, http.StatusBadRequest, "the search text is too long")
+		return
+	}
 	since := r.URL.Query().Get("since")
 	if since == "" {
 		since = defaultLogsSearchSince
 	}
-
 	duration, err := time.ParseDuration(since)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid since duration: "+err.Error())
+	if err != nil || duration <= 0 || duration > 31*24*time.Hour {
+		respondError(w, http.StatusBadRequest, "invalid since duration (up to 744h)")
 		return
 	}
 
@@ -216,7 +235,6 @@ func (h *Handler) LogsSearch(w http.ResponseWriter, r *http.Request) {
 	if query != "" {
 		logql += fmt.Sprintf(" |= %q", query)
 	}
-
 	end := time.Now()
 	start := end.Add(-duration)
 	params := url.Values{
@@ -225,13 +243,11 @@ func (h *Handler) LogsSearch(w http.ResponseWriter, r *http.Request) {
 		"end":   {strconv.FormatInt(end.UnixNano(), 10)},
 		"limit": {"1000"},
 	}
-
-	body, err := fetchUpstream(r.Context(), h.LokiURL, "/loki/api/v1/query_range", params)
-	if err != nil {
-		respondJSON(w, logsSearchResponse{Available: false, Reason: err.Error()})
+	body, reason := h.searchLoki(r.Context(), cs, params)
+	if reason != "" {
+		respondJSON(w, logsSearchResponse{Available: false, Reason: reason})
 		return
 	}
-
 	lines, err := parseLokiQueryRange(body)
 	if err != nil {
 		respondJSON(w, logsSearchResponse{Available: false, Reason: "unexpected Loki response: " + err.Error()})

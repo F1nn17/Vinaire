@@ -229,6 +229,9 @@ func main() {
 		protected.Get("/requests-limits", workloadsHandler.RequestsLimits)
 		// "All resources": any kind the cluster serves, read as the caller.
 		protected.Get("/api-resources", workloadsHandler.APIResources)
+		// The logs stack (Phase 45): status and the install plan are reads; the install itself is the Marketplace's.
+		protected.Get("/logging/status", workloadsHandler.LoggingStatus)
+		protected.Get("/logging/plan", workloadsHandler.LoggingPlan)
 		// The audit viewer is gated by requireVinaireRight(audit.vinaire.io, get) — see internal/api/audit_view.go.
 		protected.Get("/audit", workloadsHandler.AuditLog)
 		protected.Get("/api-resources/{group}/{version}/{resource}/objects", workloadsHandler.ResourceObjects)
