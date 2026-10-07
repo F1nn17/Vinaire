@@ -173,7 +173,9 @@ type NodeDetailResponse struct {
 	Taints         []NodeTaintRow        `json:"taints"`
 	Pods           []NodeScheduledPodRow `json:"pods"`
 	Labels         map[string]string     `json:"labels"`
-	YAML           string                `json:"yaml"`
+	// Unschedulable: the node is cordoned (no new pods land on it).
+	Unschedulable bool   `json:"unschedulable"`
+	YAML          string `json:"yaml"`
 }
 
 // NodeDetail handles GET /api/v1/nodes/{name}.
@@ -261,13 +263,14 @@ func buildNodeDetail(n corev1.Node, pods []corev1.Pod, cpu, memory *ResourceUsag
 			Memory: n.Status.Allocatable.Memory().String(),
 			Pods:   n.Status.Allocatable.Pods().String(),
 		},
-		CPU:        cpu,
-		Memory:     memory,
-		Conditions: conditions,
-		Taints:     taints,
-		Pods:       podRows,
-		Labels:     labels,
-		YAML:       yaml,
+		CPU:           cpu,
+		Memory:        memory,
+		Conditions:    conditions,
+		Taints:        taints,
+		Pods:          podRows,
+		Labels:        labels,
+		Unschedulable: n.Spec.Unschedulable,
+		YAML:          yaml,
 	}
 }
 

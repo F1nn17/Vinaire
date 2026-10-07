@@ -526,3 +526,36 @@ export function ListIcon({ size = 16, className }: IconProps) {
     </svg>
   );
 }
+
+export function DrainIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <path d="M4 5h16l-2 9H6z" />
+      <path d="M12 14v6" />
+      <path d="M9 17l3 3 3-3" />
+    </svg>
+  );
+}
+
+export function TagIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      {...base}
+      strokeWidth={1.8}
+      className={className}
+    >
+      <path d="M3 12V4h8l10 10-8 8z" />
+      <circle cx="7.5" cy="8.5" r="1" />
+    </svg>
+  );
+}

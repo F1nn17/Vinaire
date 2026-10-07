@@ -249,6 +249,10 @@ export function RolesHelp() {
               "Создание, изменение и удаление объектов, которые обычно входят в Helm-чарты (Deployment, Service, Ingress, NetworkPolicy, Secret и т. д.). Нужна для Marketplace и для создания ресурсов из YAML. Работает вместе с viewer.",
             ],
             [
+              "<имя>-node-admin",
+              "Обслуживание нод: cordon / uncordon, drain (вытеснение подов с учётом PodDisruptionBudget), метки, taints и удаление объекта Node. Отдельная роль, чтобы вывод ноды из работы был осознанным решением. Работает вместе с viewer.",
+            ],
+            [
               "<имя>-admin",
               "Право менять настройки самого Vinaire: реестр кластеров и GitOps. ЭТО НЕ АДМИНИСТРАТОР КЛАСТЕРА: внутри Kubernetes эта роль не даёт ни одного права — ни читать под, ни ставить чарты. Привязывайте её вместе с viewer, а не вместо.",
             ],
@@ -284,11 +288,15 @@ kubectl create clusterrolebinding me-vinaire-viewer \\
 kubectl create clusterrolebinding me-vinaire-installer \\
   --clusterrole=vinaire-installer --serviceaccount=vinaire:me
 
-# 4. Настройки самого Vinaire — кластеры, GitOps (по желанию)
+# 4. Обслуживание нод — cordon, drain, метки, taints (по желанию)
+kubectl create clusterrolebinding me-vinaire-node-admin \\
+  --clusterrole=vinaire-node-admin --serviceaccount=vinaire:me
+
+# 5. Настройки самого Vinaire — кластеры, GitOps (по желанию)
 kubectl create clusterrolebinding me-vinaire-admin \\
   --clusterrole=vinaire-admin --serviceaccount=vinaire:me
 
-# 5. Токен для экрана входа (с ограниченным сроком)
+# 6. Токен для экрана входа (с ограниченным сроком)
 kubectl create token me -n vinaire --duration=1h`}</Code>
         <div className="mt-1.5 text-xs text-text-faint">
           Для одноразового локального теста на своём dev-кластере можно
@@ -318,6 +326,10 @@ kubectl auth can-i create networkpolicies.networking.k8s.io \\
             ["Установить приложение из Marketplace", "viewer + installer"],
             ["Добавить кластер, настроить GitOps", "viewer + admin"],
             ["Добавить ноду по SSH", "право create на nodes"],
+            [
+              "Cordon, drain, метки и taints, удалить ноду",
+              "viewer + node-admin",
+            ],
           ].map(([what, role], i) => (
             <div
               key={what}

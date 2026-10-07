@@ -239,6 +239,10 @@ kubectl create clusterrolebinding me-vinaire-viewer \
 kubectl create clusterrolebinding me-vinaire-installer \
   --clusterrole=vinaire-installer --serviceaccount=vinaire:me
 
+# optional: operate nodes — cordon, drain, labels, taints, delete (in addition to viewer)
+kubectl create clusterrolebinding me-vinaire-node-admin \
+  --clusterrole=vinaire-node-admin --serviceaccount=vinaire:me
+
 # optional: change Vinaire's own settings (clusters, GitOps) — NOT cluster admin, see below
 kubectl create clusterrolebinding me-vinaire-admin \
   --clusterrole=vinaire-admin --serviceaccount=vinaire:me
@@ -325,7 +329,7 @@ that remain. In short:
 - **Vinaire is a single point with access to every cluster registered in it** — treat it like a
   bastion host, and keep `CLUSTER_STORE_KEY` out of the repository and the image.
 - Almost everything runs as the signed-in user, so the cluster's own RBAC decides; the roles in
-  the chart (`viewer`, `installer`, `admin`) are created unbound — bind them deliberately.
+  the chart (`viewer`, `installer`, `node-admin`, `admin`) are created unbound — bind them deliberately.
 - The `Security` workflow (govulncheck, gosec, npm audit, gitleaks, Trivy, an OWASP ZAP
   baseline and browser checks of the CSP) runs on every pull request and weekly.
 

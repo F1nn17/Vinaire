@@ -133,6 +133,10 @@ rbac:
   installer:
     create: true
     extraRules: []
+  # A role for operating nodes: cordon/uncordon, drain (evictions), labels, taints and
+  # deleting a Node object. Created unbound; bind it IN ADDITION to the viewer role.
+  nodeAdmin:
+    create: true
   # Permission to change Vinaire ITSELF (add/remove clusters, GitOps mode and
   # sources): resources clusters.vinaire.io and gitops.vinaire.io, which exist
   # only as names for this permission. IT IS NOT "CLUSTER ADMIN" — it grants nothing

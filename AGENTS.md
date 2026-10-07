@@ -31,6 +31,25 @@ flow.
 - `POST /api/v1/deployments/{namespace}/{name}/pause` /
   `.../resume` (Phase 33) — patches `spec.paused`
   (`kubectl rollout pause`/`resume`'s mechanism).
+- Node lifecycle (Roadmap Phase 40, `internal/k8s/node_actions.go`,
+  `internal/api/node_actions.go`) — all as the caller, each audited:
+  `POST /api/v1/nodes/{name}/cordon` and `/uncordon` (merge patch of
+  `spec.unschedulable`); `POST /api/v1/nodes/{name}/drain` (cordon, then pods
+  evicted through the **Eviction API**, so PodDisruptionBudgets are honoured —
+  a pod a budget protects is retried ≤ 75 s and reported as *pending*, never
+  deleted instead; DaemonSet and mirror pods are skipped; pods with no controller
+  need `evictUnmanaged` and pods with an emptyDir need `deleteLocalData`, the
+  analogues of kubectl's `--force` / `--delete-emptydir-data`; the body must
+  repeat the node's name; audited `drain-node` with counts);
+  `PUT /api/v1/nodes/{name}/labels` (set/remove in one merge patch; keys and values
+  validated, `kubernetes.io/hostname` refused); `PUT /api/v1/nodes/{name}/taints`
+  (the whole list, replaced under the resourceVersion it was read at; key/value/effect
+  validated); `DELETE /api/v1/nodes/{name}` (the Node *object* only — the body must
+  repeat the name; the machine and kubelet are untouched). `GET
+  .../drain-plan` is a read. Audited `cordon-node`, `uncordon-node`, `drain-node`,
+  `label-node`, `taint-node`, `delete-node`. The chart ships these rights as the
+  separate, unbound `<fullname>-node-admin` role (nodes get/list/watch/patch/delete,
+  pods get/list, `pods/eviction` create) — not folded into viewer.
 - `DELETE /api/v1/pods/{namespace}/{name}` (Phase 33) — a plain `Delete()`
   on the Pod itself (not the Deployment). If the pod has a controller
   (`OwnerReferences` non-empty), the controller recreates it — effectively
@@ -574,6 +593,14 @@ rules:
   - apiGroups: ["argoproj.io"]
     resources: ["applications"]
     verbs: ["patch"]
+  # Phase 40's node lifecycle (cordon/drain/labels/taints/delete node) — the chart
+  # ships this as the separate <fullname>-node-admin role.
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/eviction"]
+    verbs: ["create"]
   # Phase 27's namespace delete — irreversible and cascading; omit unless
   # this identity should be able to remove whole namespaces.
   - apiGroups: [""]

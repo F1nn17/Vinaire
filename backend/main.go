@@ -254,6 +254,7 @@ func main() {
 		protected.Get("/nodes/provision/{id}/stream", provisionStream)
 		protected.Get("/nodes", workloadsHandler.Nodes)
 		protected.Get("/nodes/{name}", workloadsHandler.NodeDetail)
+		protected.Get("/nodes/{name}/drain-plan", workloadsHandler.DrainPlan)
 		protected.Get("/pods", workloadsHandler.Pods)
 		protected.Get("/deployments", workloadsHandler.Deployments)
 		protected.Get("/statefulsets", workloadsHandler.StatefulSets)
@@ -314,6 +315,13 @@ func main() {
 		protected.Post("/resources/dry-run", workloadsHandler.ApplyDryRun)
 		protected.Group(func(w chi.Router) {
 			w.Use(writeLimiter.Middleware)
+			// Roadmap Phase 40: node lifecycle - see internal/api/node_actions.go and AGENTS.md.
+			w.Post("/nodes/{name}/cordon", workloadsHandler.CordonNode)
+			w.Post("/nodes/{name}/uncordon", workloadsHandler.UncordonNode)
+			w.Post("/nodes/{name}/drain", workloadsHandler.DrainNode)
+			w.Put("/nodes/{name}/labels", workloadsHandler.SetNodeLabels)
+			w.Put("/nodes/{name}/taints", workloadsHandler.SetNodeTaints)
+			w.Delete("/nodes/{name}", workloadsHandler.DeleteNodeObject)
 			w.Post("/deployments/{namespace}/{name}/restart", workloadsHandler.RestartDeployment)
 			w.Delete("/deployments/{namespace}/{name}", workloadsHandler.DeleteDeployment)
 			w.Post("/deployments/{namespace}/{name}/rollback", workloadsHandler.RollbackDeployment)

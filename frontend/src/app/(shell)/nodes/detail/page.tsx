@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useNode } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
@@ -11,6 +11,21 @@ import { UnderlineTabs } from "@/components/ui/Tabs";
 import { MetricsPanel } from "@/components/metrics/MetricsPanel";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { ActionBar, ActionButton } from "@/components/ui/ActionBar";
+import { Toast, type ToastState } from "@/components/ui/Toast";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { TypeToConfirmModal } from "@/components/ui/TypeToConfirmModal";
+import { DrainModal } from "@/components/nodes/DrainModal";
+import { NodeMetaModal } from "@/components/nodes/NodeMetaModal";
+import {
+  DrainIcon,
+  PauseIcon,
+  PlayIcon,
+  ShieldIcon,
+  TagIcon,
+  TrashIcon,
+} from "@/components/icons";
+import { cordonNode, deleteNode, uncordonNode } from "@/lib/api/nodeActions";
 
 type Tab = "overview" | "pods" | "metrics" | "yaml";
 
@@ -75,8 +90,53 @@ export default function NodeDetailPageRoute() {
 function NodeDetailPage() {
   const searchParams = useSearchParams();
   const name = searchParams.get("name") ?? "";
+  const router = useRouter();
   const { data: node, isLoading, error, mutate } = useNode(name);
   const [tab, setTab] = useState<Tab>("overview");
+  const [toast, setToast] = useState<ToastState>(null);
+  const [busy, setBusy] = useState(false);
+  const [drainOpen, setDrainOpen] = useState(false);
+  const [metaKind, setMetaKind] = useState<"labels" | "taints" | null>(null);
+  const [cordonOpen, setCordonOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function toggleCordon() {
+    if (!node) return;
+    setBusy(true);
+    try {
+      if (node.unschedulable) {
+        await uncordonNode(node.name);
+        setToast({ type: "success", message: "Node is schedulable again." });
+      } else {
+        await cordonNode(node.name);
+        setToast({
+          type: "success",
+          message: "Node cordoned — no new pods will be scheduled on it.",
+        });
+      }
+      setCordonOpen(false);
+      await mutate();
+    } catch (err) {
+      setToast({ type: "error", message: friendlyErrorMessage(err) });
+      setCordonOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeNode() {
+    if (!node) return;
+    setBusy(true);
+    setDeleteError(null);
+    try {
+      await deleteNode(node.name);
+      router.push("/nodes");
+    } catch (err) {
+      setDeleteError(friendlyErrorMessage(err));
+      setBusy(false);
+    }
+  }
 
   if (error) {
     return (
@@ -100,17 +160,66 @@ function NodeDetailPage() {
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
-      <div>
-        <div className="font-mono text-xs text-text-faint">
-          <Link href="/nodes">Nodes</Link>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="font-mono text-xs text-text-faint">
+            <Link href="/nodes">Nodes</Link>
+          </div>
+          <div className="mt-1.5 flex items-center gap-2.5">
+            <span className="font-mono text-lg font-semibold">{node.name}</span>
+            <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-[3px] text-xs text-text-muted">
+              <StatusDot color={node.statusColor} />
+              {node.status}
+            </span>
+            {node.unschedulable && (
+              <span className="rounded-full border border-warn px-2.5 py-[3px] text-xs text-warn">
+                Cordoned
+              </span>
+            )}
+          </div>
         </div>
-        <div className="mt-1.5 flex items-center gap-2.5">
-          <span className="font-mono text-lg font-semibold">{node.name}</span>
-          <span className="flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-[3px] text-xs text-text-muted">
-            <StatusDot color={node.statusColor} />
-            {node.status}
-          </span>
-        </div>
+        <ActionBar>
+          <ActionButton
+            icon={node.unschedulable ? <PlayIcon /> : <PauseIcon />}
+            label={node.unschedulable ? "Uncordon" : "Cordon"}
+            hint={
+              node.unschedulable
+                ? "Let new pods be scheduled on this node again"
+                : "Stop new pods from landing here; running pods stay"
+            }
+            onClick={() =>
+              node.unschedulable ? void toggleCordon() : setCordonOpen(true)
+            }
+          />
+          <ActionButton
+            icon={<DrainIcon />}
+            label="Drain"
+            hint="Cordon, then move the pods to other nodes"
+            onClick={() => setDrainOpen(true)}
+          />
+          <ActionButton
+            icon={<TagIcon />}
+            label="Edit labels"
+            hint="Add, change or remove labels"
+            onClick={() => setMetaKind("labels")}
+          />
+          <ActionButton
+            icon={<ShieldIcon />}
+            label="Edit taints"
+            hint="Keep pods off this node unless they tolerate it"
+            onClick={() => setMetaKind("taints")}
+          />
+          <ActionButton
+            icon={<TrashIcon />}
+            label="Delete node"
+            hint="Remove the Node object — the machine itself is untouched"
+            danger
+            onClick={() => {
+              setDeleteError(null);
+              setDeleteOpen(true);
+            }}
+          />
+        </ActionBar>
       </div>
 
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
@@ -233,6 +342,49 @@ function NodeDetailPage() {
       {tab === "yaml" && (
         <YamlPanel yaml={node.yaml} onApplied={() => mutate()} />
       )}
+
+      <ConfirmModal
+        open={cordonOpen}
+        title="Cordon this node?"
+        message={`No new pods will be scheduled on "${node.name}". Pods already running keep running — use Drain to move them.`}
+        confirmLabel="Cordon"
+        busy={busy}
+        onConfirm={() => void toggleCordon()}
+        onCancel={() => setCordonOpen(false)}
+      />
+      {drainOpen && (
+        <DrainModal
+          node={node.name}
+          onClose={() => setDrainOpen(false)}
+          onDone={() => void mutate()}
+        />
+      )}
+      {metaKind && (
+        <NodeMetaModal
+          node={node.name}
+          kind={metaKind}
+          labels={node.labels}
+          taints={node.taints}
+          onClose={() => setMetaKind(null)}
+          onSaved={() => {
+            setToast({ type: "success", message: "Saved." });
+            void mutate();
+          }}
+        />
+      )}
+      {deleteOpen && (
+        <TypeToConfirmModal
+          title="Delete node?"
+          message={`This removes the Node object "${node.name}" from the cluster. The machine and its kubelet are untouched — a running kubelet registers the node again. Use it for a node that is already gone or retired; drain it first.`}
+          expected={node.name}
+          confirmLabel="Delete node"
+          busy={busy}
+          error={deleteError}
+          onConfirm={() => void removeNode()}
+          onCancel={() => setDeleteOpen(false)}
+        />
+      )}
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

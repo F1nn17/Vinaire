@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Ingress, a grape favicon, a wider and more complete Settings -> Справка.
 - Licence changed to Apache License 2.0 (`LICENSE`, `NOTICE`).
 
+- **All resources** page (`/resources`): any kind the cluster serves, as `kubectl get` tables, with
+  Events, CronJobs, ReplicaSets, HPA, PDB, NetworkPolicies and more; Secret values redacted.
+- **Node lifecycle:** cordon / uncordon, drain (Eviction API, PodDisruptionBudgets honoured, explicit
+  consent for pods without a controller or with emptyDir), labels, taints and deleting a Node object;
+  all audited; chart role `<fullname>-node-admin`.
+
 ### Fixed
 
 - CI: the Trivy step referenced a non-existent `trivy-action` tag; it is now pinned to a release commit.

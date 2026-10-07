@@ -109,6 +109,8 @@ export type NodeDetail = {
   taints: NodeTaintRow[];
   pods: NodeScheduledPodRow[];
   labels: Record<string, string>;
+  // cordoned: no new pods are scheduled onto the node
+  unschedulable: boolean;
   yaml: string;
 };
 

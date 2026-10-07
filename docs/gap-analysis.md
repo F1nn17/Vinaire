@@ -59,7 +59,7 @@
    (аналог «More Resources»): любая группа/вид, список, детали, YAML. Плюс недостающие встроенные
    страницы: **CronJobs, ReplicaSets, HPA, PDB, NetworkPolicy, ServiceAccount, Events**.
    Закрывает самый заметный разрыв с обоими продуктами.
-2. **Phase B — Жизненный цикл узлов (P1, M).** Cordon / uncordon / drain (с учётом PDB),
+2. **Phase B — Жизненный цикл узлов (P1, M) — ✅ сделано (ROADMAP Phase 40).** Cordon / uncordon / drain (с учётом PDB),
    редактирование labels и taints, удаление ноды из кластера. Это новые *записи* → по AGENTS.md
    сначала отдельное решение и пункт в списке разрешённых записей.
 3. **Phase C — Таблицы: сортировка, фильтры, колонки (P1/P2, S–M).** Единый `DataTable` с

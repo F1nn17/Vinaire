@@ -6,7 +6,7 @@ Vinaire {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installing.
   Namespace:  {{ $ns }}
   Service:    {{ $fullname }}  (port {{ .Values.service.port }})
   Sign-in:    authMode = {{ .Values.authMode }}
-  Roles:      {{ $fullname }}-viewer   {{ $fullname }}-installer   {{ $fullname }}-admin
+  Roles:      {{ $fullname }}-viewer   {{ $fullname }}-installer   {{ $fullname }}-node-admin   {{ $fullname }}-admin
 
 1. Wait for the pod to come up:
 
@@ -57,6 +57,10 @@ Vinaire {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installing.
    # optional: install apps from the Marketplace / apply YAML (on top of viewer)
    kubectl create clusterrolebinding me-vinaire-installer \
      --clusterrole={{ $fullname }}-installer --serviceaccount={{ $ns }}:me
+
+   # optional: operate nodes — cordon, drain, labels, taints, delete (on top of viewer)
+   kubectl create clusterrolebinding me-vinaire-node-admin \
+     --clusterrole={{ $fullname }}-node-admin --serviceaccount={{ $ns }}:me
 
    # optional: change Vinaire's own settings — clusters, GitOps. NOT cluster admin:
    # it grants nothing inside Kubernetes, so it is always IN ADDITION to the viewer.

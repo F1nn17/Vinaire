@@ -101,6 +101,33 @@ rules:
   {{- end }}
 ---
 {{- end }}
+{{- if .Values.rbac.nodeAdmin.create }}
+# Node lifecycle (Roadmap Phase 40): cordon / uncordon, drain, labels, taints and
+# removing a Node object. Kept apart from -viewer so that who may take a node out of
+# service is a decision, not a side effect of being able to browse. Bind it IN
+# ADDITION to -viewer to whoever operates the nodes. Not bound to anyone by default.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "vinaire.fullname" . }}-node-admin
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+  annotations:
+    description: "Cordon, drain, label, taint and delete nodes. Bind together with the -viewer role."
+rules:
+  # cordon/uncordon, labels and taints are patches of the Node; "delete node" is a delete
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: ["get", "list", "watch", "patch", "delete"]
+  # drain evicts through the Eviction API (which honours PodDisruptionBudgets)
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: [pods/eviction]
+    verbs: ["create"]
+---
+{{- end }}
 {{- if .Values.rbac.adminRole.create }}
 # Permission to change Vinaire ITSELF (Roadmap Phase 36): add/remove clusters in
 # its registry, change a cluster's type, GitOps mode and sources. These resources
