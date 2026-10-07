@@ -74,13 +74,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # every commit, not just the tip
-      - uses: actions/setup-go@v5
-        with:
-          go-version: stable
+      # The release binary, checked against the project's published checksums —
+      # `go install ...@latest` depended on sum.golang.org answering, which it
+      # sometimes doesn't, and an unpinned `latest` isn't what a security gate should run.
       - name: gitleaks
         run: |
-          go install github.com/zricethezav/gitleaks/v8@latest
-          "$(go env GOPATH)/bin/gitleaks" detect --source . --config .gitleaks.toml --no-banner
+          v=8.30.1
+          base=https://github.com/gitleaks/gitleaks/releases/download/v$v
+          curl -fsSL --retry 5 --retry-all-errors -o gitleaks.tgz "$base/gitleaks_${v}_linux_x64.tar.gz"
+          curl -fsSL --retry 5 --retry-all-errors -o checksums.txt "$base/gitleaks_${v}_checksums.txt"
+          grep " gitleaks_${v}_linux_x64.tar.gz\$" checksums.txt | sed 's/ .*/  gitleaks.tgz/' | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+          ./gitleaks detect --source . --config .gitleaks.toml --no-banner
 
   image:
     name: Image — trivy, then a dynamic check against a running instance
@@ -109,12 +114,15 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Install the chart on a disposable cluster
         run: |
-          k3d cluster create vinaire-sec --agents 0 --wait --timeout 120s
+          # the cluster's own load balancer publishes port 80 as localhost:8080 — a stable
+          # path for the browser checks and the ZAP container (a `kubectl port-forward`
+          # kept dropping, leaving ZAP with "connection refused")
+          k3d cluster create vinaire-sec --agents 0 -p "8080:80@loadbalancer" --wait --timeout 120s
           k3d image import vinaire:ci -c vinaire-sec
           # the chart's own defaults: non-root, read-only root filesystem, no capabilities
           helm install vinaire charts/vinaire -n vinaire --create-namespace \
             --set image.repository=vinaire --set image.tag=ci --set image.pullPolicy=Never \
-            --set cookie.secure=false --wait --timeout 180s
+            --set cookie.secure=false \n            --set ingress.enabled=true --set ingress.className=traefik \n            --set 'ingress.hosts[0].host=localhost' --wait --timeout 180s
           kubectl -n vinaire rollout status deployment/vinaire --timeout=120s
       - name: Prove the pod really runs hardened
         run: |
@@ -129,14 +137,10 @@ jobs:
           ! kubectl auth can-i --list --as="$sa" | grep -E '^\*|\[\*\]'
           [ "$(kubectl auth can-i get secrets -A --as="$sa")" = "no" ]
           [ "$(kubectl auth can-i delete deployments -A --as="$sa")" = "no" ]
-      - name: Expose it
-        # A bare `kubectl port-forward &` ends when the pod connection drops (the
-        # browser checks below open many), leaving the ZAP scan "connection refused".
-        # Re-establish it whenever it exits.
+      - name: Wait until the ingress answers
         run: |
-          nohup bash -c 'while true; do kubectl -n vinaire port-forward svc/vinaire 8080:8080; sleep 1; done' > /tmp/port-forward.log 2>&1 &
-          for i in $(seq 1 30); do curl -sf http://localhost:8080/healthz && break; sleep 1; done
-          curl -sf http://localhost:8080/healthz
+          for i in $(seq 1 60); do curl -sf http://localhost:8080/healthz && exit 0; sleep 2; done
+          kubectl -n vinaire get pods,ingress; kubectl -n kube-system get pods; exit 1
 
       # The CSP, headers and CSRF guard checked in a real browser: no violations on
       # the main pages, an injected inline script is blocked, a cross-site POST is refused.
@@ -156,7 +160,7 @@ jobs:
       - name: Wait until the instance answers again
         run: |
           for i in $(seq 1 60); do curl -sf http://localhost:8080/healthz && exit 0; sleep 1; done
-          cat /tmp/port-forward.log; kubectl -n vinaire get pods; exit 1
+          kubectl -n vinaire get pods,ingress; exit 1
       - name: OWASP ZAP baseline
         uses: zaproxy/action-baseline@v0.14.0
         with:
