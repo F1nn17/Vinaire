@@ -413,7 +413,9 @@ philosophy: it asks the cluster, with a `SelfSubjectAccessReview` **as the calle
 they may `create`/`update`/`delete` the virtual resources `clusters.vinaire.io` /
 `gitops.vinaire.io` on the registry's default cluster (the chart ships an unbound
 `<fullname>-admin` ClusterRole). Any new handler that changes Vinaire's own
-configuration MUST call it first (a test lists every gated handler). Otherwise:
+configuration MUST call it first (a test lists every gated handler). Reading the audit
+log (`GET /api/v1/audit`, Roadmap Phase 42) is gated the same way — it shows every
+user's activity — by `get` on `audit.vinaire.io`. Otherwise:
 `internal/clusters.Entry.ClientsetForToken` builds a
 per-request Kubernetes clientset authenticated as the caller's own
 token/identity, so **the target cluster's real RBAC is what decides**
@@ -587,6 +589,10 @@ rules:
   - apiGroups: ["vinaire.io"]
     resources: ["clusters", "gitops"]
     verbs: ["create", "update", "delete"]
+  # Roadmap Phase 42: reading the audit log (the audit viewer).
+  - apiGroups: ["vinaire.io"]
+    resources: ["audit"]
+    verbs: ["get"]
   # Phase 29's Argo CD mode: listing Applications needs read on them (grant
   # the group like any other CRD above), "Sync now" a patch. Native mode needs
   # nothing here — it applies as the source's own ServiceAccount.

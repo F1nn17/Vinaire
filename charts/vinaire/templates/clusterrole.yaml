@@ -151,6 +151,10 @@ rules:
   - apiGroups: ["vinaire.io"]
     resources: ["clusters", "gitops"]
     verbs: ["create", "update", "delete"]
+  # Reading the audit log (who did what, when) — the virtual resource audit.vinaire.io.
+  - apiGroups: ["vinaire.io"]
+    resources: ["audit"]
+    verbs: ["get"]
 {{- with .Values.rbac.adminRole.subjects }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

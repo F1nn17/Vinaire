@@ -160,7 +160,7 @@ func (hs *harness) call(handler http.HandlerFunc, method, token string) *httptes
 func TestVinaireGateAllowsOnlyThoseWhoWereGranted(t *testing.T) {
 	hs := newHarness(t, "token")
 	hs.api.grant("admin", "vinaire.io/clusters/create", "vinaire.io/clusters/update", "vinaire.io/clusters/delete",
-		"vinaire.io/gitops/create", "vinaire.io/gitops/update", "vinaire.io/gitops/delete")
+		"vinaire.io/gitops/create", "vinaire.io/gitops/update", "vinaire.io/gitops/delete", "vinaire.io/audit/get")
 	hs.api.grant("viewer", "/pods/list") // can do things in the cluster, but not change Vinaire
 
 	gated := map[string]http.HandlerFunc{
@@ -176,6 +176,7 @@ func TestVinaireGateAllowsOnlyThoseWhoWereGranted(t *testing.T) {
 		"gitops add source":    hs.h.GitOpsAddSource,
 		"gitops remove source": hs.h.GitOpsRemoveSource,
 		"gitops sync source":   hs.h.GitOpsSyncSource,
+		"audit viewer":         hs.h.AuditLog,
 	}
 	for name, handler := range gated {
 		w := hs.call(handler, "POST", "viewer")

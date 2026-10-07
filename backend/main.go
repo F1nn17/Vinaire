@@ -229,6 +229,8 @@ func main() {
 		protected.Get("/requests-limits", workloadsHandler.RequestsLimits)
 		// "All resources": any kind the cluster serves, read as the caller.
 		protected.Get("/api-resources", workloadsHandler.APIResources)
+		// The audit viewer is gated by requireVinaireRight(audit.vinaire.io, get) — see internal/api/audit_view.go.
+		protected.Get("/audit", workloadsHandler.AuditLog)
 		protected.Get("/api-resources/{group}/{version}/{resource}/objects", workloadsHandler.ResourceObjects)
 		protected.Get("/api-resources/{group}/{version}/{resource}/objects/{name}", workloadsHandler.ResourceObject)
 		protected.Get("/forms/{resourceType}", workloadsHandler.FormSchemaByType)

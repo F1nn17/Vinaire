@@ -251,7 +251,7 @@ kubectl create token me -n vinaire --duration=1h      # paste this into the logi
 ```
 
 The three roles do different things, and **`-admin` is not cluster admin**: it only lets you
-change Vinaire's own configuration (the registry of clusters, GitOps) and grants nothing
+change Vinaire's own configuration (the registry of clusters, GitOps) and to read the audit log, and grants nothing
 inside Kubernetes, so it is always *in addition to* `-viewer`. `-installer` gives create /
 update / delete on the namespaced kinds Helm charts usually contain; a chart that also creates
 ClusterRoles or CRDs needs more, which Vinaire tells you *before* it starts installing (add

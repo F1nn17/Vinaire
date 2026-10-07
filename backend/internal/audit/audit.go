@@ -26,7 +26,8 @@ type Entry struct {
 
 // Logger appends audit Entries as JSON lines to a rotated log file.
 type Logger struct {
-	out io.Writer
+	out  io.Writer
+	path string // the live file, for reading the log back (query.go)
 }
 
 // Retention policy (Phase 17's own risk note: decide this explicitly
@@ -43,7 +44,7 @@ const (
 
 // NewLogger opens (creating if needed) a rotated audit log at path.
 func NewLogger(path string) *Logger {
-	return &Logger{out: &lumberjack.Logger{
+	return &Logger{path: path, out: &lumberjack.Logger{
 		Filename:   path,
 		MaxSize:    maxSizeMB,
 		MaxBackups: maxBackups,
