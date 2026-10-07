@@ -10,6 +10,7 @@ import {
   GitOpsIcon,
   GaugeIcon,
   GridIcon,
+  ListIcon,
   GrapeLogo,
   LayersIcon,
   NamespaceIcon,
@@ -70,6 +71,12 @@ const groups: NavGroup[] = [
         label: "Nodes",
         icon: <ServerIcon />,
         isActive: (p) => p.startsWith("/nodes"),
+      },
+      {
+        href: "/resources",
+        label: "All resources",
+        icon: <ListIcon />,
+        isActive: (p) => p.startsWith("/resources"),
       },
       {
         href: "/requests-limits",

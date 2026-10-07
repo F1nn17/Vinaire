@@ -202,6 +202,13 @@ flow.
 Every other resource kind (Pods, ConfigMaps, Secrets, Ingress, ...) and
 every other verb, on any cluster a user browses, stays read-only.
 
+> **Reading is broad, writing is not.** The "All resources" page
+> (`internal/api/allresources.go`, Roadmap Phase 39) *lists and gets* any kind the
+> cluster's discovery shows the caller — as the caller, with strictly validated path
+> parts, never touching Vinaire's own credentials. It writes nothing; editing goes
+> through Phase 25's generic YAML apply above. A core Secret's values are redacted
+> there, and apply refuses a Secret that still carries the `<redacted>` placeholder.
+
 **Rules for touching this list:**
 - Do not add a write verb to `internal/k8s` (`Create*`, `Update*`,
   `Patch*`, `Delete*`, `Apply*`) for a resource kind or action not already

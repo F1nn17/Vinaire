@@ -130,6 +130,9 @@ func parseSingleManifest(text string) (*unstructured.Unstructured, error) {
 	if obj.GetName() == "" && obj.GetGenerateName() == "" {
 		return nil, errors.New("metadata.name is required")
 	}
+	if hasRedactedSecretValue(obj) {
+		return nil, errors.New("this Secret still contains <redacted> placeholders (the viewer hides values) — applying it would overwrite the real values; set the values yourself or remove those keys")
+	}
 	return obj, nil
 }
 
@@ -281,4 +284,25 @@ func (h *Handler) applyReal(w http.ResponseWriter, r *http.Request, update bool)
 		"namespace": after.GetNamespace(),
 		"name":      after.GetName(),
 	})
+}
+
+// hasRedactedSecretValue reports whether a core Secret carries the "<redacted>"
+// placeholder Vinaire shows instead of values: saving that back would replace the
+// real values with the placeholder.
+func hasRedactedSecretValue(obj *unstructured.Unstructured) bool {
+	if obj.GetKind() != "Secret" || obj.GroupVersionKind().Group != "" {
+		return false
+	}
+	for _, field := range []string{"data", "stringData"} {
+		m, found, _ := unstructured.NestedMap(obj.Object, field)
+		if !found {
+			continue
+		}
+		for _, v := range m {
+			if v == "<redacted>" {
+				return true
+			}
+		}
+	}
+	return false
 }
