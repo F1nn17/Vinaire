@@ -1,19 +1,43 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: dark;
   --bg: #0e0f13;
   --surface: #16181d;
   --surface-2: #1c1f26;
   --border: #262a33;
   --text: #edeff3;
   --text-muted: #9ba3b7;
-  --text-faint: #767f96;
+  --text-faint: #7a839a;
   --ok: #3fd98a;
   --warn: #f0a83d;
   --err: #f1665c;
   --accent: #8b5fbf;
   --accent-text: color-mix(in oklch, var(--accent) 65%, white 35%);
   --code-bg: #0a0b0e;
+}
+
+/* Roadmap Phase 56: the light theme. Same tokens, other values; every colour in the app
+   comes from these (a check script fails on a hard-coded one). The text-bearing
+   colours were picked to keep WCAG AA contrast (4.5:1) on the surface behind them —
+   scripts/check-theme.mjs verifies that for both themes. The theme is chosen by
+   data-theme on <html>, set before first paint by public/theme-init.js from the saved
+   choice (a cookie) or the system's preference. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f5f9;
+  --surface: #ffffff;
+  --surface-2: #eceff5;
+  --border: #d3d8e3;
+  --text: #14161c;
+  --text-muted: #474f63;
+  --text-faint: #636c82;
+  --ok: #0d7a3b;
+  --warn: #8a5200;
+  --err: #c0271b;
+  --accent: #7a4eb0;
+  --accent-text: color-mix(in oklch, var(--accent) 85%, black 15%);
+  --code-bg: #eef0f6;
 }
 
 @theme inline {

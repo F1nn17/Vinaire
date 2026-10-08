@@ -5,6 +5,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { buildStreamURL } from "@/lib/api/wsUrl";
+import { terminalThemes, useResolvedTheme } from "@/lib/theme";
 import type { ContainerSummary } from "@/lib/types";
 
 type Status = "connecting" | "connected" | "disconnected";
@@ -24,6 +25,13 @@ export function TerminalTab({
   const [container, setContainer] = useState(containers[0]?.name ?? "");
   const [status, setStatus] = useState<Status>("connecting");
   const containerRef = useRef<HTMLDivElement>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const theme = useResolvedTheme();
+
+  // a change of theme recolours the open terminal without reconnecting it
+  useEffect(() => {
+    if (termRef.current) termRef.current.options.theme = terminalThemes[theme];
+  }, [theme]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -35,9 +43,15 @@ export function TerminalTab({
       convertEol: true,
       fontFamily: "var(--font-mono), ui-monospace, monospace",
       fontSize: 12,
-      theme: { background: "#0a0b0e", foreground: "#edeff3" },
+      theme:
+        terminalThemes[
+          document.documentElement.getAttribute("data-theme") === "light"
+            ? "light"
+            : "dark"
+        ],
     });
     const fitAddon = new FitAddon();
+    termRef.current = term;
     term.loadAddon(fitAddon);
     term.open(el);
     fitAddon.fit();
@@ -91,6 +105,7 @@ export function TerminalTab({
       dataDisposable.dispose();
       resizeObserver.disconnect();
       ws?.close();
+      termRef.current = null;
       term.dispose();
     };
   }, [namespace, name, container]);

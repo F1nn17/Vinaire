@@ -37,7 +37,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${plexSans.variable} ${jetBrainsMono.variable} h-full antialiased`}
+      // public/theme-init.js sets data-theme before React hydrates
+      suppressHydrationWarning
     >
+      <head>
+        {/* sets <html data-theme> before first paint, so there is no flash of the wrong theme */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts -- deliberately blocking: a tiny same-origin file that must run before first paint */}
+        <script src="/theme-init.js" />
+      </head>
       <body className="min-h-full bg-bg text-text font-sans text-[14px]">
         <AppInit>
           <I18nProvider>{children}</I18nProvider>

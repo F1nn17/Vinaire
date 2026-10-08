@@ -54,6 +54,9 @@ jobs:
       - name: eslint
         run: npm run lint
 
+      - name: theme contrast and colour tokens
+        run: npm run check:theme
+
       - name: interface-language dictionaries
         run: npm run check:i18n
 

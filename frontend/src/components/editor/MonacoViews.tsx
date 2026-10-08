@@ -4,6 +4,10 @@ import { useEffect, useRef } from "react";
 import Editor, { DiffEditor } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import "./monacoSetup";
+import { useResolvedTheme, type ResolvedTheme } from "@/lib/theme";
+
+// Monaco's two built-in themes: "vs" is its light one.
+const monacoTheme = (t: ResolvedTheme) => (t === "light" ? "vs" : "vs-dark");
 
 const baseOptions = {
   minimap: { enabled: false },
@@ -25,11 +29,12 @@ export function MonacoYamlEditor({
   readOnly?: boolean;
   height: string;
 }) {
+  const theme = useResolvedTheme();
   return (
     <Editor
       height={height}
       language="yaml"
-      theme="vs-dark"
+      theme={monacoTheme(theme)}
       value={value}
       onChange={(v) => onChange?.(v ?? "")}
       options={{ ...baseOptions, readOnly }}
@@ -47,6 +52,7 @@ export function MonacoYamlDiff({
   height: string;
 }) {
   const diffRef = useRef<editor.IStandaloneDiffEditor | null>(null);
+  const theme = useResolvedTheme();
 
   // Detach the models before the wrapper disposes them, or Monaco throws
   // "TextModel got disposed before DiffEditorWidget model got reset".
@@ -61,7 +67,7 @@ export function MonacoYamlDiff({
       }}
       height={height}
       language="yaml"
-      theme="vs-dark"
+      theme={monacoTheme(theme)}
       original={before}
       modified={after}
       options={{

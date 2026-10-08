@@ -55,7 +55,8 @@ for (const file of walk(root)) {
   );
   const add = (raw) => {
     const t = decode(raw).replace(/\s+/g, " ").trim();
-    if (CYR.test(t) && !(t in en) && !(decode(raw).trim() in en)) missing.add(t);
+    if (CYR.test(t) && !(t in en) && !(decode(raw).trim() in en))
+      missing.add(t);
   };
   const visit = (n) => {
     if (ts.isJsxText(n)) add(n.getText());

@@ -816,8 +816,12 @@ resource name it doesn't know at build time — these pages instead read
 - Tailwind CSS for styling; theme tokens (background, surface, border,
   foreground, muted, accent) are defined in `src/app/globals.css` — reuse
   them instead of hardcoding colors.
-- Dark theme is the default and, for now, the only theme. Don't add a light
-  theme toggle unless asked.
+- Dark is the default theme; a light theme and a ☀ / Auto / ☾ switch exist
+  (Roadmap Phase 56). Every colour comes from a token in `globals.css` (one set of values
+  for each theme) — no hex/rgb in components; `npm run check:theme` fails on one, and
+  on a text colour below WCAG AA (4.5:1) on its surface. Colours that a canvas needs
+  (xterm) live in `src/lib/theme.ts`. The theme is a cookie, set on `<html data-theme>`
+  by `public/theme-init.js` before first paint.
 - Fonts are wired through `next/font` in `src/app/layout.tsx`
   (`--font-sans` = IBM Plex Sans, `--font-mono` = JetBrains Mono). Use the
   Tailwind `font-sans` / `font-mono` utilities rather than importing fonts

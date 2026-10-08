@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Light theme (Roadmap Phase 56).** A ☀ / Auto / ☾ switch in the top bar; the choice is a cookie and the theme is set
+  before first paint, so there is no flash. Monaco and the terminal follow it. `npm run check:theme` (CI) checks WCAG AA
+  contrast for every text colour on every surface in both themes and fails on a hard-coded colour outside the tokens.
+  The dark theme's faint text was nudged lighter to pass.
 - **Projects (Roadmap Phase 53).** Group namespaces under the label `vinaire.io/project`, kept in the cluster itself:
   a *Projects* page with a create wizard (new or existing namespaces, a quota template), a project page with quotas,
   members (a role in every namespace at once) and namespace management, a Project column on Namespaces and a project
