@@ -115,6 +115,8 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/pods/{namespace}/{name}/logs` | yes | — |
 | GET | `/api/v1/pods/{namespace}/{name}/logs/search` | yes | — |
 | GET | `/api/v1/pods/{namespace}/{name}/metrics` | yes | — |
+| GET | `/api/v1/projects` | yes | — |
+| GET | `/api/v1/projects/{name}` | yes | — |
 | GET | `/api/v1/provision/options` | yes | — |
 | GET | `/api/v1/pvcs` | yes | — |
 | GET | `/api/v1/pvcs/{namespace}/{name}` | yes | — |

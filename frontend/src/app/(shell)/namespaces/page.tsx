@@ -30,6 +30,21 @@ const columns: DataTableColumn<NamespaceRow>[] = [
     ),
   },
   {
+    header: "Project",
+    width: "1fr",
+    render: (r) =>
+      r.project ? (
+        <a
+          href={`/projects/detail?name=${encodeURIComponent(r.project)}`}
+          className="font-mono text-xs text-accent-text hover:underline"
+        >
+          {r.project}
+        </a>
+      ) : (
+        <span className="text-xs text-text-faint">—</span>
+      ),
+  },
+  {
     header: "Pods",
     width: ".6fr",
     render: (r) => (

@@ -49,6 +49,8 @@ type NamespaceRow struct {
 	Pods        *int            `json:"pods"`
 	Quota       []QuotaUsageRow `json:"quota"`
 	Href        string          `json:"href"`
+	// Project (Roadmap Phase 53): the namespace's vinaire.io/project label, if any.
+	Project string `json:"project,omitempty"`
 }
 
 // quotaResourceOrder puts the figures people care about first; anything else
@@ -138,9 +140,10 @@ func (h *Handler) Namespaces(w http.ResponseWriter, r *http.Request) {
 		status, color := namespaceStatus(ns)
 		row := NamespaceRow{
 			Name: ns.Name, Status: status, StatusColor: color,
-			Age:   formatAge(ns.CreationTimestamp.Time),
-			Quota: quotaRows(quotasByNS[ns.Name]),
-			Href:  "/namespaces/detail?name=" + url.QueryEscape(ns.Name),
+			Age:     formatAge(ns.CreationTimestamp.Time),
+			Quota:   quotaRows(quotasByNS[ns.Name]),
+			Project: ns.Labels[ProjectLabel],
+			Href:    "/namespaces/detail?name=" + url.QueryEscape(ns.Name),
 		}
 		if len(row.Quota) > 3 {
 			row.Quota = row.Quota[:3]

@@ -68,6 +68,12 @@ const groups: NavGroup[] = [
         isActive: (p) => p.startsWith("/namespaces"),
       },
       {
+        href: "/projects",
+        label: "Projects",
+        icon: <NamespaceIcon />,
+        isActive: (p) => p.startsWith("/projects"),
+      },
+      {
         href: "/nodes",
         label: "Nodes",
         icon: <ServerIcon />,

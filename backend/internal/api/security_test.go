@@ -69,8 +69,9 @@ type fakeAPI struct {
 	mu  sync.Mutex
 	// allowed: bearer token -> set of "group/resource/verb" it may do
 	allowed map[string]map[string]bool
-	seen    []string // Authorization headers of every request
-	asked   []string // "group/resource/verb" of every SelfSubjectAccessReview
+	seen    []string       // Authorization headers of every request
+	canned  map[string]any // path -> JSON answered to a GET (tests that need real objects)
+	asked   []string       // "group/resource/verb" of every SelfSubjectAccessReview
 }
 
 func newFakeAPI(t *testing.T) *fakeAPI {
@@ -98,6 +99,10 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 				"kind": "SelfSubjectAccessReview", "apiVersion": "authorization.k8s.io/v1",
 				"status": map[string]any{"allowed": f.allowed[token][key]},
 			})
+			return
+		}
+		if v, ok := f.canned[r.URL.Path]; ok && r.Method == http.MethodGet {
+			_ = json.NewEncoder(w).Encode(v)
 			return
 		}
 		// anything else (a metrics or gateway call): an empty list

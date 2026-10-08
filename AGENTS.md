@@ -267,6 +267,10 @@ flow.
   replaces the bearer token of a cluster added with a token: right `clusters.vinaire.io` `update`, secure
   transport only, verified by a real call, must be the **same** cluster (kube-system UID), audited as
   `rotate-cluster-credentials` — never the token. No endpoint ever returns a stored credential.
+- Projects (Roadmap Phase 53, `internal/api/projects.go`) add **no write path**: a project is the label
+  `vinaire.io/project` on namespaces, `GET /api/v1/projects[/{name}]` only read (as the caller), and the UI changes
+  a project exclusively through Phase 25's YAML apply (labels, namespaces, ResourceQuota) and Phase 44's
+  role-binding endpoints (members) — each already audited, each decided by the caller's own RBAC.
 - (Phase 24, unchanged:) cluster management via the web UI (Settings page): create/get/update on exactly
   one Secret (`vinaire-clusters`, in this backend's own namespace, via a
   dedicated narrow `Role`/`RoleBinding` — never the broad, cluster-wide

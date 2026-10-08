@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Projects (Roadmap Phase 53).** Group namespaces under the label `vinaire.io/project`, kept in the cluster itself:
+  a *Projects* page with a create wizard (new or existing namespaces, a quota template), a project page with quotas,
+  members (a role in every namespace at once) and namespace management, a Project column on Namespaces and a project
+  filter on Workloads. Reading is two new GET routes; every change reuses the YAML apply and RBAC binding endpoints,
+  so nothing new can write to a cluster.
 - **Security review package and automated checks (Roadmap Phase 50).** `docs/security-review.md` (+ Russian) for a
   reviewer; `docs/api-routes.md` generated from the router; tests that fail when a route skips the session or the write
   rate limit, or a handler reads an unbounded body; 11 fuzz targets (CI runs each for 30 s); a CycloneDX SBOM job; a

@@ -618,6 +618,8 @@ export type NamespaceRow = {
   pods: number | null;
   quota: QuotaUsageRow[];
   href: string;
+  // Roadmap Phase 53: the namespace's vinaire.io/project label.
+  project?: string;
 };
 
 export type QuotaDetail = {

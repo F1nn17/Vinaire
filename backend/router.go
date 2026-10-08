@@ -88,6 +88,9 @@ func newRouter(d routerDeps) *chi.Mux {
 		protected.Get("/forms/{resourceType}", workloadsHandler.FormSchemaByType)
 		protected.Get("/namespaces", workloadsHandler.Namespaces)
 		protected.Get("/namespaces/{name}", workloadsHandler.NamespaceDetail)
+		// Roadmap Phase 53: projects are namespaces with a label; these two only read.
+		protected.Get("/projects", workloadsHandler.Projects)
+		protected.Get("/projects/{name}", workloadsHandler.ProjectDetail)
 		// Roadmap Phase 28: browsing the Helm catalog and reading releases;
 		// the writes are in the writeLimiter group below.
 		protected.Get("/catalog/repos", workloadsHandler.CatalogRepos)
