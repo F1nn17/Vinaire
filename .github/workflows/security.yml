@@ -194,42 +194,31 @@ jobs:
           npx playwright install --with-deps chromium
           E2E_BASE_URL=http://localhost:8080 E2E_SAME_ORIGIN=1 npx playwright test e2e/security.spec.ts
 
-      # Passive baseline against the running instance. .zap/rules.tsv turns the
-      # checks for what Phase 36 hardened (CSP, cookie flags, framing, sniffing)
-      # into failures.
-      - name: Wait until the instance answers again
+      # Passive baseline. .zap/rules.tsv turns the checks for what Phase 36 hardened (CSP,
+      # cookie flags, framing, sniffing) into failures. It scans the same image run on its own
+      # with the chart's container hardening (non-root, read-only filesystem, no capabilities)
+      # rather than through the cluster's ingress: the ingress path answered ZAP with
+      # intermittent 503s that came from the load balancer, never from Vinaire, and the
+      # headers ZAP judges are Vinaire's own.
+      - name: Start the image for ZAP
         run: |
-          # the page itself (what ZAP spiders), not only /healthz, and five times in a row —
-          # a single answer can come from before the pod's last restart settles
+          docker run -d --name vinaire-zap -p 8081:8080 --read-only --cap-drop ALL \
+            --security-opt no-new-privileges vinaire:ci
           ok=0
-          for i in $(seq 1 90); do
-            if curl -sf -o /dev/null http://localhost:8080/healthz && curl -sf -o /dev/null http://localhost:8080/                && curl -sf -o /dev/null http://localhost:8080/login/; then ok=$((ok+1)); else ok=0; fi
-            [ "$ok" -ge 5 ] && exit 0
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:8081/healthz && curl -sf -o /dev/null http://localhost:8081/ \
+               && curl -sf -o /dev/null http://localhost:8081/login/; then ok=$((ok+1)); else ok=0; fi
+            [ "$ok" -ge 3 ] && exit 0
             sleep 1
           done
-          kubectl -n vinaire get pods,ingress; exit 1
-      # ZAP runs in a container on the host network and got 503 where curl on the runner got 200:
-      # show what such a container sees, over IPv4 and IPv6, before it runs.
-      - name: What a host-network container sees
-        continue-on-error: true
-        run: |
-          for t in "http://localhost:8080/" "http://127.0.0.1:8080/" "http://[::1]:8080/"; do
-            echo "== $t"
-            docker run --rm --network=host curlimages/curl:8.10.1 -s -o /dev/null -D - --max-time 10 "$t" | head -8 || true
-          done
-          env | grep -i proxy || echo "no proxy variables"
+          docker logs vinaire-zap --tail=40; exit 1
       - name: OWASP ZAP baseline
         uses: zaproxy/action-baseline@v0.14.0
         with:
-          target: http://localhost:8080
+          target: http://localhost:8081
           rules_file_name: .zap/rules.tsv
           fail_action: true
           allow_issue_writing: false
-      - name: What the cluster looked like when ZAP failed
+      - name: The image's log when ZAP failed
         if: failure()
-        run: |
-          kubectl -n vinaire get pods,svc,endpoints,ingress -o wide || true
-          kubectl -n vinaire describe pod -l app.kubernetes.io/name=vinaire | tail -40 || true
-          kubectl -n vinaire logs deploy/vinaire --tail=40 || true
-          kubectl -n kube-system logs deploy/traefik --tail=40 || true
-          for u in / /robots.txt /login/; do curl -s -o /dev/null -w "$u %{http_code}\n" "http://localhost:8080$u"; done
+        run: docker logs vinaire-zap --tail=60 || true
