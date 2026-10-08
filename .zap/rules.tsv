@@ -10,3 +10,4 @@
 10055	IGNORE	(CSP: style-src 'unsafe-inline' — accepted: the UI sets style attributes and Monaco injects styles; scripts are hash-restricted)
 2	IGNORE	(Private IP Disclosure — the UI shows example addresses such as 10.0.0.5 as placeholders and help text on the Clusters and Nodes pages; they are not the host's)
 90004	IGNORE	(Cross-Origin-Embedder-Policy — COOP same-origin is set; COEP require-corp would block the sandboxed pod pages and cross-origin images, and nothing of Vinaire is embedded elsewhere: X-Frame-Options DENY and frame-ancestors none)
+10049	IGNORE	(Storable/Non-Storable Content — one rule that warns either way: a page is "storable" or "non-storable" and ZAP wants it to be neither. Vinaire chooses no-store on purpose, so nothing about a cluster is kept in a cache)
