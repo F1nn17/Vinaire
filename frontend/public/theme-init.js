@@ -7,7 +7,7 @@
     var mode = m ? m[1] : "auto";
     var dark = mode === "dark" || (mode === "auto" && !(window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches));
     document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
-  } catch (e) {
+  } catch {
     document.documentElement.setAttribute("data-theme", "dark");
   }
 })();
