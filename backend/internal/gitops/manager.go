@@ -61,6 +61,7 @@ type Manager struct {
 	registry ClusterLookup
 	fetcher  Fetcher
 	audit    AuditFunc
+	leader   func() bool // nil = this replica always polls
 
 	// replaceable in tests
 	newApplier func(cfg *rest.Config, src Source) (Applier, error)
@@ -436,6 +437,22 @@ func (m *Manager) SyncNow(id, identity string) (SourceView, error) {
 
 // ---- workers ----------------------------------------------------------------
 
+// SetLeader makes the scheduled polls run only while fn says this replica is the
+// leader (Roadmap Phase 48: several replicas must not all apply the same sources).
+// A "Sync now" always runs where it was asked. nil = always (a single replica).
+func (m *Manager) SetLeader(fn func() bool) {
+	m.mu.Lock()
+	m.leader = fn
+	m.mu.Unlock()
+}
+
+func (m *Manager) isLeader() bool {
+	m.mu.Lock()
+	fn := m.leader
+	m.mu.Unlock()
+	return fn == nil || fn()
+}
+
 func (m *Manager) startLocked(rt *runtime) {
 	if rt.cancel != nil || m.root == nil || m.modes[rt.src.Cluster] != ModeNative {
 		return
@@ -463,7 +480,9 @@ func (m *Manager) run(ctx context.Context, rt *runtime) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			m.reconcile(ctx, rt, "")
+			if m.isLeader() {
+				m.reconcile(ctx, rt, "")
+			}
 		case who := <-rt.trigger:
 			m.reconcile(ctx, rt, who)
 		}

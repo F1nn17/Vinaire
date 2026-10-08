@@ -20,6 +20,20 @@ rules:
     resources: ["secrets"]
     resourceNames: ["vinaire-clusters", "vinaire-clusters-key"]
     verbs: ["get", "update"]
+  # Roadmap Phase 48: sessions shared between replicas live in this one Secret, one key
+  # per session, changed with a patch of that key alone.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["vinaire-sessions"]
+    verbs: ["get", "patch"]
+  # Roadmap Phase 48: the leader-election Lease (only used with more than one replica).
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    resourceNames: ["vinaire-leader"]
+    verbs: ["get", "update"]
   # Roadmap Phase 34: the registry is sealed (AES-GCM) and its key lives in the
   # *separate* Secret vinaire-clusters-key, generated on first run (create is
   # allowed above, get/update only for these two names). Skip this Secret by

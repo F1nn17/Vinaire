@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 )
@@ -136,4 +137,36 @@ func (s *MemoryStore) Delete(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.sessions, id)
+}
+
+// Lister is what a store offers the administrator's sessions list. Both stores do.
+type Lister interface {
+	List() []SessionInfo
+	// Revoke ends the session with this Ref; false if there is none.
+	Revoke(ref string) bool
+}
+
+func (s *MemoryStore) List() []SessionInfo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	out := make([]SessionInfo, 0, len(s.sessions))
+	for id, sess := range s.sessions {
+		if now.Before(sess.ExpiresAt) {
+			out = append(out, SessionInfo{Ref: Ref(id), Owner: sess.OwnerKey(), Username: sess.Username, ExpiresAt: sess.ExpiresAt})
+		}
+	}
+	return out
+}
+
+func (s *MemoryStore) Revoke(ref string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id := range s.sessions {
+		if len(ref) >= 8 && strings.HasPrefix(Ref(id), ref) {
+			delete(s.sessions, id)
+			return true
+		}
+	}
+	return false
 }

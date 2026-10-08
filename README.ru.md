@@ -307,6 +307,14 @@ helm upgrade --install vinaire ./charts/vinaire … --set cookie.secure=false
 > ⚠️ С `cookie.secure=false` cookie сессии тоже идёт без шифрования — любой на пути по сети
 > может её прочитать. Никогда не делайте так на общем или настоящем кластере.
 
+#### Больше одной реплики
+
+`replicaCount: 2` (и больше) хранит сеансы запечатанными в Secret, общем для всех реплик (`sessions.store: auto`
+выбирает это сам; `memory` при нескольких репликах отвергается), выбирает одну реплику для опроса GitOps, включает
+привязку по IP клиента у Service и добавляет PodDisruptionBudget. Нужны `rbac.clusterManagement.create: true` и ключ
+шифрования (`CLUSTER_STORE_KEY` или управляемый `vinaire-clusters-key`). Settings → Sign-in показывает активные сеансы
+и может их завершить.
+
 #### Обновление
 
 `helm upgrade --install` — одна и та же команда и для первой установки, и для каждого

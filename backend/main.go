@@ -28,6 +28,7 @@ import (
 	"github.com/shiraku/vinaire/backend/internal/gitops"
 	"github.com/shiraku/vinaire/backend/internal/helm"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/shiraku/vinaire/backend/internal/leader"
 	"github.com/shiraku/vinaire/backend/internal/netguard"
 	"github.com/shiraku/vinaire/backend/internal/provision"
 	"github.com/shiraku/vinaire/backend/internal/stream"
@@ -95,6 +96,32 @@ func main() {
 	// Phase 34). With neither, cluster management is unavailable. Loaded now
 	// so clusters added in a previous run survive this restart.
 	clusterStore, clusterStoreOK := buildClusterStore(ctx, cfg)
+	// Roadmap Phase 48: sessions shared by every replica (and surviving a restart).
+	switch cfg.SessionStore {
+	case "memory":
+	case "secret":
+		ss, isSecret := clusterStore.(*clusters.SecretStore)
+		if auth.Mode == authn.ModeDisabled {
+			slog.Info("SESSION_STORE=secret has no effect with AUTH_MODE=disabled (there are no sessions)")
+			break
+		}
+		if !clusterStoreOK || !isSecret {
+			slog.Error("SESSION_STORE=secret needs Vinaire to run in a cluster (it keeps the sessions in a Secret of its own namespace)")
+			os.Exit(1)
+		}
+		backend, sealer, sealed := ss.SessionBackend()
+		if !sealed {
+			slog.Error("SESSION_STORE=secret needs an encryption key — set CLUSTER_STORE_KEY or let Vinaire manage the Secret vinaire-clusters-key; a session holds a Kubernetes token and is never stored unsealed")
+			os.Exit(1)
+		}
+		shared := authn.NewSharedStore(backend, sealer)
+		shared.StartJanitor(ctx)
+		auth.UseStore(shared)
+		slog.Info("sessions are kept in a sealed Secret, shared by every replica")
+	default:
+		slog.Error("unknown SESSION_STORE (want memory or secret)", "value", cfg.SessionStore)
+		os.Exit(1)
+	}
 	if !clusterStoreOK {
 		slog.Info("cluster management via the web UI is unavailable (not running in-cluster and VINAIRE_DATA_DIR is not set)")
 	} else if stored, err := clusterStore.Load(ctx); err != nil {
@@ -145,6 +172,15 @@ func main() {
 		slog.Warn("OIDC_ALLOW_INSECURE is set: the Keycloak setup may use http:// on loopback. Never set this on a real deployment.")
 	}
 	workloadsHandler.GitOps = gitops.NewManager(gitopsDocs, registry, gitops.GitFetcher{}, workloadsHandler.AuditBackground)
+	// Roadmap Phase 48: with several replicas only the elected one polls git.
+	if os.Getenv("LEADER_ELECTION") == "true" {
+		if ss, ok := clusterStore.(*clusters.SecretStore); ok && clusterStoreOK {
+			id, _ := os.Hostname()
+			workloadsHandler.GitOps.SetLeader(leader.Run(ctx, ss.Clientset(), ss.Namespace(), id).IsLeader)
+		} else {
+			slog.Warn("LEADER_ELECTION=true needs Vinaire to run in a cluster — ignored")
+		}
+	}
 	if err := workloadsHandler.GitOps.Start(ctx); err != nil {
 		slog.Error("gitops: couldn't load its configuration — it stays off", "error", err)
 	}
@@ -308,6 +344,8 @@ func main() {
 		protected.Get("/crds", workloadsHandler.CRDs)
 		protected.Get("/crds/{crdName}/instances", workloadsHandler.CRDInstances)
 		protected.Get("/crds/{crdName}/instances/{name}", workloadsHandler.CRDInstanceDetail)
+		protected.Get("/auth/sessions", workloadsHandler.Sessions)
+		protected.Delete("/auth/sessions/{ref}", workloadsHandler.RevokeSession)
 		protected.Get("/auth/keycloak", workloadsHandler.KeycloakStatus)
 		protected.Post("/auth/keycloak/setup", workloadsHandler.KeycloakSetup)
 		protected.Put("/auth/keycloak/token-login", workloadsHandler.KeycloakTokenLogin)

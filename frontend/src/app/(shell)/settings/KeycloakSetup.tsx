@@ -4,6 +4,8 @@ import { useState } from "react";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import {
   disableKeycloak,
+  revokeSession,
+  useSessions,
   setKeycloakTokenLogin,
   setupKeycloak,
   useKeycloakStatus,
@@ -137,6 +139,8 @@ export function KeycloakSetup() {
           </div>
 
           {result && <Done result={result} />}
+
+          <SessionsList />
 
           {status.available && (
             <SetupForm
@@ -412,5 +416,78 @@ function SetupForm({
         </button>
       </div>
     </form>
+  );
+}
+
+// Who is signed in, and a way to end a session.
+function SessionsList() {
+  const { data, error, mutate } = useSessions();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function end(ref: string) {
+    setBusy(ref);
+    setErr(null);
+    try {
+      await revokeSession(ref);
+      await mutate();
+    } catch (e) {
+      setErr(friendlyErrorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (error || !data) return null;
+  return (
+    <div className="rounded-[10px] border border-border bg-surface p-5">
+      <div className="text-[13px] font-semibold">Signed-in sessions</div>
+      <div className="mt-1 text-[11px] text-text-faint">
+        {data.shared
+          ? "Sessions are kept sealed in a Secret, shared by every replica, and survive a restart."
+          : "Sessions are kept in this pod's memory: a restart signs everyone out, and only one replica can run."}
+      </div>
+      {data.sessions.length === 0 ? (
+        <div className="mt-3 text-xs text-text-muted">No sessions.</div>
+      ) : (
+        <table className="mt-3 w-full text-xs">
+          <thead className="text-left text-text-faint">
+            <tr>
+              <th className="py-1 font-normal">Who</th>
+              <th className="py-1 font-normal">Until</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {data.sessions.map((s) => (
+              <tr key={s.ref} className="border-t border-border">
+                <td className="py-1.5 font-mono">
+                  {s.username || s.owner}
+                  {s.current && (
+                    <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-accent-text">
+                      this session
+                    </span>
+                  )}
+                </td>
+                <td className="py-1.5 text-text-muted">
+                  {new Date(s.expiresAt).toLocaleString()}
+                </td>
+                <td className="py-1.5 text-right">
+                  <button
+                    type="button"
+                    disabled={s.current || busy === s.ref}
+                    onClick={() => void end(s.ref)}
+                    className="rounded-lg border border-border px-2.5 py-1 text-[11px] text-err hover:border-err disabled:opacity-40"
+                  >
+                    End session
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {err && <div className="mt-2 text-xs text-err">{err}</div>}
+    </div>
   );
 }

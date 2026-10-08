@@ -60,6 +60,19 @@ spec:
             {{- end }}
             - name: AUDIT_LOG_PATH
               value: /audit/audit.log
+            {{- $store := include "vinaire.sessionStore" . }}
+            {{- if and (eq $store "memory") (gt (int .Values.replicaCount) 1) }}
+            {{- fail "replicaCount > 1 needs sessions.store=secret (or auto): sessions kept in a pod's memory can't be shared between replicas" }}
+            {{- end }}
+            {{- if and (eq $store "secret") (not .Values.rbac.clusterManagement.create) }}
+            {{- fail "sessions.store=secret keeps the sessions in a Secret and needs rbac.clusterManagement.create=true" }}
+            {{- end }}
+            - name: SESSION_STORE
+              value: {{ $store | quote }}
+            {{- if gt (int .Values.replicaCount) 1 }}
+            - name: LEADER_ELECTION
+              value: "true"
+            {{- end }}
             - name: SESSION_MAX_TTL
               value: {{ .Values.sessionMaxTTL | quote }}
             {{- if .Values.trustForwardedFor }}

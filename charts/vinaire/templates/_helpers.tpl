@@ -1,6 +1,14 @@
 {{/*
 Chart name, truncated and DNS-1123-safe.
 */}}
+{{/*
+Where sessions live: "auto" is memory for one replica and a sealed Secret for more (Roadmap Phase 48).
+*/}}
+{{- define "vinaire.sessionStore" -}}
+{{- $s := (.Values.sessions).store | default "auto" -}}
+{{- if eq $s "auto" -}}{{- if gt (int .Values.replicaCount) 1 -}}secret{{- else -}}memory{{- end -}}{{- else -}}{{- $s -}}{{- end -}}
+{{- end }}
+
 {{- define "vinaire.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}

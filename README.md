@@ -301,6 +301,14 @@ helm upgrade --install vinaire ./charts/vinaire … --set cookie.secure=false
 > ⚠️ With `cookie.secure=false` the session cookie also travels unencrypted — anyone on the
 > network path can read it. Never do this on a shared or real cluster.
 
+#### More than one replica
+
+`replicaCount: 2` (or more) keeps sessions sealed in a Secret shared by all replicas
+(`sessions.store: auto` picks that; `memory` is refused with several replicas), elects one replica for the
+GitOps poller, sets client-IP affinity on the Service and adds a PodDisruptionBudget. It needs
+`rbac.clusterManagement.create: true` and an encryption key (`CLUSTER_STORE_KEY`, or the managed
+`vinaire-clusters-key`). Settings → Sign-in lists the signed-in sessions and can end them.
+
 #### Upgrading
 
 `helm upgrade --install` is the same command for first install and every upgrade. Chart 0.2.0

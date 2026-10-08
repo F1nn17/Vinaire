@@ -7,6 +7,11 @@ metadata:
     {{- include "vinaire.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
+  {{- if gt (int .Values.replicaCount) 1 }}
+  # A running install or provisioning job lives on the replica that started it, so a
+  # client keeps talking to the same one (Roadmap Phase 48).
+  sessionAffinity: ClientIP
+  {{- end }}
   ports:
     - port: {{ .Values.service.port }}
       targetPort: http

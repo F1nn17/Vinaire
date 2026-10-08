@@ -201,6 +201,10 @@ func (m *Manager) HandleConfig(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, map[string]any{"mode": string(m.Mode), "oidc": oidcOn, "tokenLogin": tokenOn})
 }
 
+// UseStore replaces the (in-memory) session store — done once at start, before any
+// login, when the sessions are shared between replicas (Roadmap Phase 48).
+func (m *Manager) UseStore(st Store) { m.Sessions = st }
+
 func (m *Manager) getOIDC() *oidcClient {
 	m.oidcMu.RLock()
 	defer m.oidcMu.RUnlock()

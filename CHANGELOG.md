@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Shared sessions and several replicas (Roadmap Phase 48).** `sessions.store: secret` (default for
+  `replicaCount > 1`) keeps sessions sealed in a Secret of Vinaire's own namespace, one key per session: they survive
+  restarts and are shared by every replica. A *Signed-in sessions* list with *End session* in Settings → Sign-in;
+  one replica is elected leader (a Lease) for GitOps polling; the chart adds client-IP affinity and a
+  PodDisruptionBudget for more than one replica.
 - **Sign-in through Keycloak in one click (Roadmap Phase 47).** *Settings → Sign-in*: with a Keycloak
   administrator's credentials (used once, never stored) Vinaire creates a realm, a confidential PKCE-only client
   and an optional first user, then switches OIDC sign-in on without a restart; it is restored after a restart.

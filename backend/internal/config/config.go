@@ -121,6 +121,10 @@ type Config struct {
 	// SessionMaxTTL (SESSION_MAX_TTL, a Go duration like 8h) caps how long a login
 	// lasts however long its token lives; default 12h.
 	SessionMaxTTL time.Duration
+	// SessionStore (SESSION_STORE): "memory" (default; sessions live in this process and
+	// are lost on a restart) or "secret" (sealed, in a Secret of Vinaire's own namespace,
+	// shared by every replica and surviving restarts — Roadmap Phase 48; in-cluster only).
+	SessionStore string
 	// TrustForwardedFor (TRUST_FORWARDED_FOR=true): the login throttle counts the
 	// first X-Forwarded-For address instead of the connection's peer. Set it only
 	// behind a proxy you control that sets the header.
@@ -194,6 +198,7 @@ func Load() Config {
 		ClusterStoreKey:          os.Getenv(envClusterStoreKey),
 		ClusterStorePrevious:     splitCSV(os.Getenv(envClusterStorePrevious)),
 		SessionMaxTTL:            parseDuration(os.Getenv("SESSION_MAX_TTL")),
+		SessionStore:             getEnv("SESSION_STORE", "memory"),
 		TrustForwardedFor:        os.Getenv("TRUST_FORWARDED_FOR") == "true",
 		DiscoveryKubeconfigPaths: splitCSV(os.Getenv(envDiscoveryPaths)),
 	}

@@ -5,6 +5,16 @@
   "type": "object",
   "properties": {
     "replicaCount": { "type": "integer", "minimum": 0 },
+    "sessions": {
+      "type": "object",
+      "properties": {
+        "store": {
+          "type": "string",
+          "enum": ["auto", "memory", "secret"],
+          "description": "Where sessions live: memory (one replica, lost on restart), secret (sealed, shared by replicas) or auto."
+        }
+      }
+    },
     "image": {
       "type": "object",
       "properties": {

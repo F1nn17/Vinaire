@@ -2,6 +2,19 @@
 
 replicaCount: 1
 
+# Where signed-in sessions live (Roadmap Phase 48).
+#   memory — inside the pod: lost on a restart, and only one replica is possible.
+#   secret — sealed in a Secret of this namespace, shared by every replica and
+#            surviving restarts (needs rbac.clusterManagement.create and an
+#            encryption key: CLUSTER_STORE_KEY or the managed vinaire-clusters-key).
+#   auto   — memory for one replica, secret for more.
+# With more than one replica the chart also elects one leader (a Lease) for work that
+# must happen once (the GitOps poller), asks the Service for client-IP affinity (a
+# running install or provisioning job lives on the replica that started it) and adds a
+# PodDisruptionBudget.
+sessions:
+  store: auto
+
 image:
   # Point this at wherever you actually pushed the single combined image
   # (see the repo root Dockerfile) — "vinaire:latest" only resolves on a

@@ -69,3 +69,29 @@ export function setKeycloakTokenLogin(allow: boolean): Promise<void> {
 export function disableKeycloak(): Promise<void> {
   return apiFetch("/api/v1/auth/keycloak", { method: "DELETE" });
 }
+
+// The signed-in sessions (Roadmap Phase 48): who and until when — never a cookie or token.
+export type SessionRow = {
+  ref: string;
+  owner: string;
+  username?: string;
+  expiresAt: string;
+  current: boolean;
+};
+
+export function useSessions() {
+  return useSWR(
+    "auth-sessions",
+    () =>
+      apiFetch<{ sessions: SessionRow[]; shared: boolean }>(
+        "/api/v1/auth/sessions",
+      ),
+    { refreshInterval: 15000 },
+  );
+}
+
+export function revokeSession(ref: string): Promise<void> {
+  return apiFetch(`/api/v1/auth/sessions/${encodeURIComponent(ref)}`, {
+    method: "DELETE",
+  });
+}

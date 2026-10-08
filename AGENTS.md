@@ -249,6 +249,15 @@ flow.
   client, steps — no credentials), `keycloak-token-login`, `keycloak-disable`. What Vinaire
   cannot do is make the **cluster's API server trust the issuer** — the wizard shows the
   `--oidc-*` flags; without them sign-in works and every cluster call is a 401.
+- Shared sessions and the sessions list (Roadmap Phase 48, `internal/authn/shared.go`,
+  `internal/clusters/sessions_kv.go`, `internal/leader`, `internal/api/sessions.go`) — Vinaire's
+  **own** state again: with `SESSION_STORE=secret` the sessions live in the Secret `vinaire-sessions`
+  of Vinaire's own namespace, written with Vinaire's own identity (the narrow `-cluster-manager`
+  Role: `get`/`patch` on that one name), **sealed** with the registry's key (never unsealed — the mode
+  refuses to start without a key), one key per session named by the SHA-256 of the id. A
+  leader-election Lease (`vinaire-leader`) keeps scheduled GitOps polling to one replica.
+  `GET /api/v1/auth/sessions` and `DELETE /api/v1/auth/sessions/{ref}` (right `auth.vinaire.io`,
+  audited `session-revoke`) list and end sessions; the list never carries a cookie or token.
 - (Phase 24, unchanged:) cluster management via the web UI (Settings page): create/get/update on exactly
   one Secret (`vinaire-clusters`, in this backend's own namespace, via a
   dedicated narrow `Role`/`RoleBinding` — never the broad, cluster-wide

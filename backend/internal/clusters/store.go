@@ -132,7 +132,7 @@ func unmarshalList(c *Cipher, data []byte) (stored []StoredCluster, reseal bool,
 // token, since this is Vinaire managing its own configuration, not browsing a
 // target cluster's resources.
 type SecretStore struct {
-	clientset *kubernetes.Clientset
+	clientset kubernetes.Interface
 	namespace string
 	cipher    *Cipher
 }
@@ -202,6 +202,11 @@ func (s *SecretStore) resolveKey(ctx context.Context, envKey string) ([]byte, er
 	}
 	return key, nil
 }
+
+// Clientset and Namespace expose the pod's own in-cluster identity and namespace, for
+// the few things that belong to Vinaire itself (the leader-election Lease).
+func (s *SecretStore) Clientset() kubernetes.Interface { return s.clientset }
+func (s *SecretStore) Namespace() string               { return s.namespace }
 
 func (s *SecretStore) Kind() string    { return "secret" }
 func (s *SecretStore) Encrypted() bool { return s.cipher != nil }

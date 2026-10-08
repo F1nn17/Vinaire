@@ -1,0 +1,15 @@
+{{- if gt (int .Values.replicaCount) 1 }}
+# With several replicas, a node drain must not take them all down at once (Roadmap Phase 48).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "vinaire.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "vinaire.selectorLabels" . | nindent 6 }}
+{{- end }}
