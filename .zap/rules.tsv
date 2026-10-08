@@ -8,3 +8,5 @@
 10063	WARN	(Permissions Policy Header Not Set)
 10035	IGNORE	(Strict-Transport-Security Header — the CI instance is plain HTTP; HSTS is sent over HTTPS and tested in unit tests)
 10055	IGNORE	(CSP: style-src 'unsafe-inline' — accepted: the UI sets style attributes and Monaco injects styles; scripts are hash-restricted)
+2	IGNORE	(Private IP Disclosure — the UI shows example addresses such as 10.0.0.5 as placeholders and help text on the Clusters and Nodes pages; they are not the host's)
+90004	IGNORE	(Cross-Origin-Embedder-Policy — COOP same-origin is set; COEP require-corp would block the sandboxed pod pages and cross-origin images, and nothing of Vinaire is embedded elsewhere: X-Frame-Options DENY and frame-ancestors none)

@@ -85,6 +85,23 @@ func writeExport(t *testing.T) string {
 	return dir
 }
 
+func TestPagesAreRevalidatedButHashedBuildFilesMayBeCached(t *testing.T) {
+	h := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
+	for path, want := range map[string]string{
+		"/":                               "no-cache",
+		"/login":                          "no-cache",
+		"/robots.txt":                     "no-cache",
+		"/api/v1/pods":                    "no-cache",
+		"/_next/static/chunks/app-abc.js": "",
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if got := w.Header().Get("Cache-Control"); got != want {
+			t.Errorf("%s: Cache-Control = %q, want %q", path, got, want)
+		}
+	}
+}
+
 func TestPageCSPListsInlineScriptsByHashNotUnsafeInline(t *testing.T) {
 	h := securityHeaders(staticFileHandler(writeExport(t)))
 	r := httptest.NewRequest("GET", "/login", nil)
