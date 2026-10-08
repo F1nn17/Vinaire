@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache-dependency-path: backend/go.sum
@@ -90,7 +90,7 @@ jobs:
           kubectl wait --for=condition=ready pod -l app=demo-sts -n vinaire-ci-test --timeout=120s
           kubectl wait --for=condition=complete job/demo-job -n vinaire-ci-test --timeout=120s
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache-dependency-path: backend/go.sum
