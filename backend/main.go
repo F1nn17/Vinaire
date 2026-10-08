@@ -139,10 +139,16 @@ func main() {
 		devGit = netguard.Client(netguard.Options{AllowLoopback: true, Timeout: 2 * time.Minute})
 	}
 	gitops.InstallTransport(netguard.Client(netguard.Options{Timeout: 2 * time.Minute}), devGit)
+	workloadsHandler.AuthDocs = gitopsDocs
+	if os.Getenv("OIDC_ALLOW_INSECURE") == "true" {
+		workloadsHandler.OIDCAllowInsecure = true // local development only: an http:// Keycloak on loopback
+		slog.Warn("OIDC_ALLOW_INSECURE is set: the Keycloak setup may use http:// on loopback. Never set this on a real deployment.")
+	}
 	workloadsHandler.GitOps = gitops.NewManager(gitopsDocs, registry, gitops.GitFetcher{}, workloadsHandler.AuditBackground)
 	if err := workloadsHandler.GitOps.Start(ctx); err != nil {
 		slog.Error("gitops: couldn't load its configuration — it stays off", "error", err)
 	}
+	workloadsHandler.RestoreOIDC(ctx) // Roadmap Phase 47: a saved Keycloak sign-in comes back after a restart
 	go detectClusterTypes(ctx, registry)
 	writeLimiter := api.NewWriteRateLimiter(writeRateLimit, writeRateBurst)
 
@@ -302,6 +308,10 @@ func main() {
 		protected.Get("/crds", workloadsHandler.CRDs)
 		protected.Get("/crds/{crdName}/instances", workloadsHandler.CRDInstances)
 		protected.Get("/crds/{crdName}/instances/{name}", workloadsHandler.CRDInstanceDetail)
+		protected.Get("/auth/keycloak", workloadsHandler.KeycloakStatus)
+		protected.Post("/auth/keycloak/setup", workloadsHandler.KeycloakSetup)
+		protected.Put("/auth/keycloak/token-login", workloadsHandler.KeycloakTokenLogin)
+		protected.Delete("/auth/keycloak", workloadsHandler.KeycloakDisable)
 		protected.Get("/metrics/status", workloadsHandler.MetricsStatus)
 		protected.Get("/metrics/plan", workloadsHandler.MetricsPlan)
 		protected.Get("/metrics/query", workloadsHandler.MetricsQuery)

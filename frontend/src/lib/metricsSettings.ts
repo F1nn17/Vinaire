@@ -11,7 +11,33 @@ export type StackSettings = {
   retentionDays: number;
   nodeSelector: string; // "key=value", empty = anywhere
   alertmanager: boolean; // standard only; the full profile always has it
+  volumeSize: string; // e.g. "20Gi"; empty = leave the volume alone
 };
+
+const sizeRe = /^([1-9][0-9]{0,4})(Mi|Gi|Ti)$/;
+
+// Mebibytes of a size like "10Gi", or null if it isn't one of the shapes the
+// backend accepts.
+export function toMiB(size: string): number | null {
+  const m = size.match(sizeRe);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return m[2] === "Mi" ? n : m[2] === "Gi" ? n * 1024 : n * 1024 * 1024;
+}
+
+// A claim can only grow: shrinking one would lose data, and Kubernetes refuses it.
+export function volumeChangeError(
+  current: string,
+  next: string,
+): string | null {
+  if (next === "" || next === current) return null;
+  const a = toMiB(current);
+  const b = toMiB(next);
+  if (b === null) return "The volume size must look like 20Gi.";
+  if (a !== null && b < a)
+    return "A volume can only grow — shrinking it would lose data.";
+  return null;
+}
 
 export function readSettings(
   valuesYaml: string,
@@ -41,6 +67,22 @@ export function readSettings(
     nodeSelector: k ? `${k}=${selObj[k]}` : "",
     alertmanager:
       profile === "full" || doc.getIn(["alertmanager", "enabled"]) === true,
+    volumeSize: String(
+      doc.getIn(
+        profile === "full"
+          ? [
+              "prometheus",
+              "prometheusSpec",
+              "storageSpec",
+              "volumeClaimTemplate",
+              "spec",
+              "resources",
+              "requests",
+              "storage",
+            ]
+          : ["server", "persistentVolume", "size"],
+      ) ?? "",
+    ),
   };
 }
 
@@ -70,9 +112,25 @@ export function applySettings(
   if (!validSelector(s.nodeSelector))
     throw new Error("The node selector must look like key=value.");
   const doc = parseDocument(valuesYaml || "{}");
+  if (s.volumeSize !== "") {
+    const path =
+      profile === "full"
+        ? [
+            "prometheus",
+            "prometheusSpec",
+            "storageSpec",
+            "volumeClaimTemplate",
+            "spec",
+            "resources",
+            "requests",
+            "storage",
+          ]
+        : ["server", "persistentVolume", "size"];
+    if (doc.hasIn(path)) doc.setIn(path, s.volumeSize);
+  }
   const sel = (path: (string | number)[]) => {
     if (s.nodeSelector === "") {
-      doc.deleteIn(path);
+      if (doc.hasIn(path)) doc.deleteIn(path);
     } else {
       const i = s.nodeSelector.indexOf("=");
       doc.setIn(path, {
@@ -98,7 +156,8 @@ export function applySettings(
       sel(["alertmanager", "nodeSelector"]);
     } else {
       doc.setIn(["alertmanager", "enabled"], false);
-      doc.deleteIn(["alertmanager", "nodeSelector"]);
+      if (doc.hasIn(["alertmanager", "nodeSelector"]))
+        doc.deleteIn(["alertmanager", "nodeSelector"]);
     }
   }
   return doc.toString();

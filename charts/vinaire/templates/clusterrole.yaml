@@ -183,7 +183,7 @@ metadata:
   labels:
     {{- include "vinaire.labels" . | nindent 4 }}
   annotations:
-    description: "Permission to change Vinaire's own settings (clusters, GitOps). Grants no access to anything in Kubernetes — bind it together with the -viewer role."
+    description: "Permission to change Vinaire's own settings (clusters, GitOps, sign-in through Keycloak). Grants no access to anything in Kubernetes — bind it together with the -viewer role."
 rules:
   - apiGroups: ["vinaire.io"]
     resources: ["clusters", "gitops"]
@@ -192,6 +192,10 @@ rules:
   - apiGroups: ["vinaire.io"]
     resources: ["audit"]
     verbs: ["get"]
+  # Setting up sign-in through Keycloak (Phase 47) — the virtual resource auth.vinaire.io.
+  - apiGroups: ["vinaire.io"]
+    resources: ["auth"]
+    verbs: ["get", "create", "update", "delete"]
 {{- with .Values.rbac.adminRole.subjects }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

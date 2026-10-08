@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/shiraku/vinaire/backend/internal/authn"
 	"github.com/shiraku/vinaire/backend/internal/clusters"
+	"github.com/shiraku/vinaire/backend/internal/keycloak"
 )
 
 // ---- headers and CSP ----------------------------------------------------------------
@@ -214,6 +216,32 @@ users:
 	}
 	if _, err := clusters.ParseKubeconfig([]byte("not: [valid yaml "+canary), clusters.ParseOptions{}); err != nil {
 		responses.WriteString(err.Error())
+	}
+
+	// Keycloak setup (Phase 47): a Keycloak that echoes the administrator's password back
+	// in its error bodies, at the login and after it, must not get it into an error or a log
+	echo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		body := r.Form.Get("password") + " " + canary
+		if r.URL.Path == "/realms/master/protocol/openid-connect/token" && r.Form.Get("username") == "ok" {
+			_, _ = w.Write([]byte(`{"access_token":"t"}`))
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer echo.Close()
+	for _, user := range []string{"bad", "ok"} {
+		kp := keycloak.Params{
+			BaseURL: echo.URL, AdminRealm: "master", AdminUser: user, AdminPass: keycloak.NewSecret(canary),
+			Realm: "vinaire", ClientID: "vinaire", RedirectURL: "https://v.example.com/cb", Origin: "https://v.example.com",
+			User: "alice", UserEmail: "a@example.com", UserPass: keycloak.NewSecret(canary + "-user"),
+		}
+		_, err := keycloak.Setup(context.Background(), echo.Client(), kp)
+		if err != nil {
+			responses.WriteString(err.Error())
+		}
+		responses.WriteString(fmt.Sprintf("%v %+v %#v", kp, kp, kp))
 	}
 
 	if strings.Contains(logs.String(), canary) {

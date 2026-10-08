@@ -23,6 +23,12 @@ export type MetricsStatus = {
   // set when Vinaire installed this Prometheus
   profile?: "standard" | "full";
   release?: string;
+  volume?: {
+    name: string;
+    size: string;
+    storageClass?: string;
+    expandable: boolean;
+  };
   missing?: string[];
   // Prometheus answers and holds container metrics
   flowing: boolean;

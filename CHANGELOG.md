@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sign-in through Keycloak in one click (Roadmap Phase 47).** *Settings → Sign-in*: with a Keycloak
+  administrator's credentials (used once, never stored) Vinaire creates a realm, a confidential PKCE-only client
+  and an optional first user, then switches OIDC sign-in on without a restart; it is restored after a restart.
+  Pasting a token stays available until turned off. Secret sealed in the encrypted store; guarded HTTP client;
+  `auth.vinaire.io` right (chart `-admin` role); audited. `OIDC_ALLOW_INSECURE` for local development.
+- **Grow the Prometheus volume** of an installed metrics stack from its Settings panel (storage classes that allow
+  expansion; never shrinks).
+- Roadmap: planned Phases 48–57 (shared session store, credential isolation, security review, cluster upgrade,
+  cloud providers, projects, CIS scans, plugins, light theme, desktop app).
 - **Metrics stack: profiles, Alertmanager, node choice and settings (Phase 37, completed).** *Standard*, *Full*
   (`kube-prometheus-stack`, Grafana off) and *Lite* (metrics-server) profiles; an optional Alertmanager that
   feeds the alert bell and is found and read through the API-server proxy as the caller; a node selector; and a

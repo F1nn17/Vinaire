@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useCRDs } from "@/lib/hooks/useCRDs";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { PuzzleIcon } from "@/components/icons";
+import { KeycloakSetup } from "./KeycloakSetup";
 import {
   AboutHelp,
   OverviewHelp,
@@ -13,10 +14,11 @@ import {
   TroubleshootingHelp,
 } from "./HelpGuides";
 
-type SettingsTab = "crds" | "help";
+type SettingsTab = "crds" | "signin" | "help";
 
 const tabs: { id: SettingsTab; label: string }[] = [
   { id: "crds", label: "Custom Resources" },
+  { id: "signin", label: "Sign-in" },
   { id: "help", label: "Справка" },
 ];
 
@@ -161,6 +163,8 @@ export default function SettingsPage() {
           )}
         </div>
       )}
+
+      {tab === "signin" && <KeycloakSetup />}
 
       {tab === "help" && (
         <div className="flex gap-6">
@@ -1251,6 +1255,24 @@ function KeycloakHelp() {
         отдельно. Это делает не Vinaire, а администратор кластера — если это не
         ваш случай, оставайтесь на{" "}
         <span className="font-mono">AUTH_MODE=token</span>.
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Включить вход через Keycloak в один клик
+        </div>
+        <div className="text-xs text-text-muted">
+          Вкладка «Sign-in» в Settings: укажите адрес Keycloak и учётную запись
+          его администратора — Vinaire создаст realm, клиента для себя и (по
+          желанию) первого пользователя и включит вход без перезапуска. Пароль
+          администратора используется один раз и нигде не сохраняется;
+          сохраняется только секрет нового клиента, в зашифрованном виде. Вход
+          по токену остаётся запасным, пока вы не выключите его там же. Нужно
+          право на auth.vinaire.io (роль -admin). Чего мастер сделать не может —
+          это настроить API-сервер кластера на доверие к Keycloak (флаги
+          --oidc-*, он покажет их готовыми): без этого вход пройдёт, а обращения
+          к кластеру будут получать 401.
+        </div>
       </div>
 
       <div>

@@ -89,6 +89,13 @@ type Handler struct {
 
 	// Roadmap Phase 29: per-cluster GitOps mode and native sources. nil = off.
 	GitOps *gitops.Manager
+
+	// Roadmap Phase 47: sign-in through Keycloak, set up from the UI. AuthDocs is the
+	// sealed document store (nil = unavailable); OIDCAllowInsecure lets the wizard
+	// talk to an http:// Keycloak on loopback (local development only).
+	AuthDocs          clusters.DocStore
+	OIDCAllowInsecure bool
+	keycloak          keycloakState
 }
 
 // ObservabilityConfig groups the optional observability-stack URLs

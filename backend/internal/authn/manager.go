@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -69,7 +70,11 @@ type Manager struct {
 	TrustForwardedFor bool
 
 	limiter *loginLimiter
-	oidc    *oidcClient // nil unless Mode == ModeOIDC
+	// oidc is the OIDC client: set at startup when Mode == ModeOIDC, or switched on
+	// and off at run time by the Keycloak setup (Roadmap Phase 47) in token mode.
+	oidcMu        sync.RWMutex
+	oidc          *oidcClient
+	tokenLoginOff bool // token sign-in turned off while OIDC is active
 }
 
 // defaultMaxSessionTTL is how long a login lasts at most unless configured.
@@ -192,7 +197,69 @@ func (m *Manager) Middleware(next http.Handler) http.Handler {
 // HandleConfig handles GET /api/v1/auth/config — tells the frontend which
 // login screen to show.
 func (m *Manager) HandleConfig(w http.ResponseWriter, r *http.Request) {
-	respondJSON(w, map[string]string{"mode": string(m.Mode)})
+	oidcOn, tokenOn := m.SignInMethods()
+	respondJSON(w, map[string]any{"mode": string(m.Mode), "oidc": oidcOn, "tokenLogin": tokenOn})
+}
+
+func (m *Manager) getOIDC() *oidcClient {
+	m.oidcMu.RLock()
+	defer m.oidcMu.RUnlock()
+	return m.oidc
+}
+
+// SignInMethods says which ways of signing in are open: through the OIDC provider
+// (always in oidc mode; in token mode once Keycloak has been set up) and by pasting
+// a token (token mode, unless it was turned off).
+func (m *Manager) SignInMethods() (oidcOn, tokenOn bool) {
+	if m.Mode == ModeDisabled {
+		return false, false
+	}
+	oidcOn = m.getOIDC() != nil
+	m.oidcMu.RLock()
+	off := m.tokenLoginOff
+	m.oidcMu.RUnlock()
+	tokenOn = m.Mode == ModeToken && !(oidcOn && off)
+	return oidcOn, tokenOn
+}
+
+// ConfigureOIDC discovers the provider through hc and switches OIDC sign-in on in
+// token mode, without a restart. allowToken says whether pasting a token keeps
+// working next to it. A failure leaves the previous setting untouched. Not available
+// when the deployment's own mode is oidc (set by the operator) or disabled.
+func (m *Manager) ConfigureOIDC(ctx context.Context, hc *http.Client, issuer, clientID, clientSecret, redirectURL string, allowToken bool) error {
+	if m.Mode != ModeToken {
+		return fmt.Errorf("sign-in through Keycloak can only be switched on at run time when AUTH_MODE is %q (it is %q)", ModeToken, m.Mode)
+	}
+	c, err := newOIDCClient(ctx, hc, issuer, clientID, clientSecret, redirectURL)
+	if err != nil {
+		return err
+	}
+	m.oidcMu.Lock()
+	m.oidc, m.tokenLoginOff = c, !allowToken
+	m.oidcMu.Unlock()
+	return nil
+}
+
+// DisableOIDC switches run-time OIDC sign-in off again (token sign-in comes back).
+func (m *Manager) DisableOIDC() {
+	if m.Mode != ModeToken {
+		return
+	}
+	m.oidcMu.Lock()
+	m.oidc, m.tokenLoginOff = nil, false
+	m.oidcMu.Unlock()
+}
+
+// SetTokenLogin turns pasting a token on or off while OIDC is active. Turning it
+// off with no OIDC active is refused: that would lock everybody out.
+func (m *Manager) SetTokenLogin(allow bool) error {
+	m.oidcMu.Lock()
+	defer m.oidcMu.Unlock()
+	if m.Mode != ModeToken || m.oidc == nil {
+		return errors.New("token sign-in can only be turned off while Keycloak sign-in is on")
+	}
+	m.tokenLoginOff = !allow
+	return nil
 }
 
 type tokenLoginRequest struct {
@@ -206,6 +273,10 @@ type tokenLoginRequest struct {
 func (m *Manager) HandleTokenLogin(w http.ResponseWriter, r *http.Request) {
 	if m.Mode != ModeToken {
 		respondError(w, http.StatusBadRequest, "token login is not enabled (AUTH_MODE="+string(m.Mode)+")")
+		return
+	}
+	if _, tokenOn := m.SignInMethods(); !tokenOn {
+		respondError(w, http.StatusForbidden, "signing in with a pasted token is turned off — sign in through Keycloak")
 		return
 	}
 

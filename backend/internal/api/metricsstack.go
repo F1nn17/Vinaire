@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -55,14 +56,52 @@ type MetricsStatus struct {
 	Alertmanager *PrometheusLocation `json:"alertmanager,omitempty"`
 	// Profile / Release: set when the Prometheus is one Vinaire installed, so the
 	// page can change its settings (an upgrade of that release).
-	Profile string   `json:"profile,omitempty"`
-	Release string   `json:"release,omitempty"`
-	Missing []string `json:"missing,omitempty"`
+	Profile string `json:"profile,omitempty"`
+	Release string `json:"release,omitempty"`
+	// Volume: the claim Prometheus stores its data on, when Vinaire installed it —
+	// the settings panel can grow it, if the storage class allows.
+	Volume  *StackVolume `json:"volume,omitempty"`
+	Missing []string     `json:"missing,omitempty"`
 	// Flowing: Prometheus answers and holds container metrics.
 	Flowing          bool   `json:"flowing"`
 	Detail           string `json:"detail,omitempty"`
 	ManagedByVinaire bool   `json:"managedByVinaire"`
 	ConfiguredURL    bool   `json:"configuredUrl"`
+}
+
+// StackVolume describes the PersistentVolumeClaim holding Prometheus's data.
+type StackVolume struct {
+	Name         string `json:"name"`
+	Size         string `json:"size"` // what the claim requests, e.g. "10Gi"
+	StorageClass string `json:"storageClass,omitempty"`
+	// Expandable: the storage class allows growing a claim in place.
+	Expandable bool `json:"expandable"`
+}
+
+// prometheusVolume finds the claim a Prometheus in ns stores its data on, as the
+// caller. nil when there is none (an emptyDir install) or it can't be read.
+func prometheusVolume(ctx context.Context, cs *kubernetes.Clientset, ns string) *StackVolume {
+	list, err := cs.CoreV1().PersistentVolumeClaims(ns).List(ctx, metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=prometheus"})
+	if err != nil || len(list.Items) == 0 {
+		return nil
+	}
+	pvc := list.Items[0]
+	q, ok := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+	if !ok {
+		return nil
+	}
+	v := &StackVolume{Name: pvc.Name, Size: q.String()}
+	if pvc.Spec.StorageClassName != nil {
+		v.StorageClass = *pvc.Spec.StorageClassName
+		if scs, err := k8s.ListStorageClasses(ctx, cs); err == nil {
+			for _, sc := range scs {
+				if sc.Name == v.StorageClass && sc.AllowVolumeExpansion != nil {
+					v.Expandable = *sc.AllowVolumeExpansion
+				}
+			}
+		}
+	}
+	return v
 }
 
 func findPrometheus(ctx context.Context, cs kubernetes.Interface) (*PrometheusLocation, error) {
@@ -267,6 +306,7 @@ func (h *Handler) MetricsStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	if p := metricsstack.ProfileOf(serviceOf(loc)); p != "" {
 		st.ManagedByVinaire, st.Profile, st.Release = true, string(p), metricsstack.ReleaseOf(p)
+		st.Volume = prometheusVolume(ctx, cs, loc.Namespace)
 	}
 	if am, err := findAlertmanager(ctx, cs); err == nil {
 		st.Alertmanager = am

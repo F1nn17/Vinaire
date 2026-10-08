@@ -1,7 +1,13 @@
 import { API_BASE } from "./config";
 import { ApiError } from "./http";
 
-export type AuthConfig = { mode: "token" | "oidc" | "disabled" };
+export type AuthConfig = {
+  mode: "token" | "oidc" | "disabled";
+  // Keycloak sign-in is on (also when it was set up at run time in token mode)
+  oidc?: boolean;
+  // pasting a token is open
+  tokenLogin?: boolean;
+};
 
 // Not routed through apiFetch: this one call must succeed even when the
 // caller isn't logged in yet (that's the whole point — it's what decides

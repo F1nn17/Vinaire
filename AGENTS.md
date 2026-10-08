@@ -223,6 +223,32 @@ flow.
     `gitops-apply` with the commit and counts, only when something was applied
     or failed (not on every no-op poll). Creating/removing sources is, like the
     cluster registry, not gated by Kubernetes RBAC: Phase 36 should revisit it.
+- Sign-in through Keycloak (Roadmap Phase 47, `internal/keycloak`, `internal/api/keycloak.go`)
+  — Vinaire's **own** configuration again, plus **writes to a Keycloak** the operator
+  names: `POST /api/v1/auth/keycloak/setup` takes a Keycloak administrator's
+  credentials (in the POST body, over a secure transport only, wrapped in
+  `keycloak.Secret`, used for **one token request** and never stored, logged, audited or
+  returned) and creates — idempotently — a realm, a **confidential** OIDC client for
+  Vinaire (authorization-code flow with PKCE only; no password grant, no service account,
+  redirect URI and web origin exactly Vinaire's own, never a wildcard; an existing
+  *public* client is refused) and, optionally, a first user. The new client's secret is
+  the one thing kept: sealed in the same store as the cluster registry
+  (`auth-oidc` document), and **refused when the store is not encrypted**. Sign-in is
+  then switched on **at run time** (`authn.Manager.ConfigureOIDC`, after OIDC discovery
+  proves the realm and secret work) and again after a restart (`RestoreOIDC`); pasting a
+  token stays open as the way back unless the administrator turns it off
+  (`PUT .../token-login` — refused while OIDC is off, so nobody can lock everyone out);
+  `DELETE /api/v1/auth/keycloak` forgets Vinaire's side only and never touches Keycloak.
+  Every handler calls `requireVinaireRight` on the virtual resource `auth.vinaire.io`
+  (`get`/`create`/`update`/`delete`, in the chart's `-admin` role). The Keycloak URL comes
+  from the request, so it is held to the guarded HTTP client (`internal/netguard`: https,
+  no loopback/link-local; `OIDC_ALLOW_INSECURE=true` is the dev-only opt-out, never on a
+  real deployment) — which is also what OIDC discovery, the token exchange and key
+  fetches use. Not available when `AUTH_MODE` is `disabled` or `oidc` (the operator owns
+  that). Audited as `keycloak-setup` / `keycloak-setup-failed` (Keycloak host, realm,
+  client, steps — no credentials), `keycloak-token-login`, `keycloak-disable`. What Vinaire
+  cannot do is make the **cluster's API server trust the issuer** — the wizard shows the
+  `--oidc-*` flags; without them sign-in works and every cluster call is a 401.
 - (Phase 24, unchanged:) cluster management via the web UI (Settings page): create/get/update on exactly
   one Secret (`vinaire-clusters`, in this backend's own namespace, via a
   dedicated narrow `Role`/`RoleBinding` — never the broad, cluster-wide
@@ -621,6 +647,10 @@ rules:
   - apiGroups: ["vinaire.io"]
     resources: ["audit"]
     verbs: ["get"]
+  # Roadmap Phase 47: setting up sign-in through Keycloak from the UI.
+  - apiGroups: ["vinaire.io"]
+    resources: ["auth"]
+    verbs: ["get", "create", "update", "delete"]
   # Phase 29's Argo CD mode: listing Applications needs read on them (grant
   # the group like any other CRD above), "Sync now" a patch. Native mode needs
   # nothing here — it applies as the source's own ServiceAccount.

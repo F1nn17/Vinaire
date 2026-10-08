@@ -23,6 +23,17 @@ const oidcPendingCookie = "vinaire_oidc_pending"
 type oidcClient struct {
 	verifier     *oidc.IDTokenVerifier
 	oauth2Config oauth2.Config
+	// hc, when set, carries every request to the provider (discovery, token
+	// exchange, keys): the guarded client of a provider named at run time.
+	hc *http.Client
+}
+
+// ctx returns ctx carrying this client's HTTP client, if it has one.
+func (c *oidcClient) ctx(ctx context.Context) context.Context {
+	if c.hc == nil {
+		return ctx
+	}
+	return oidc.ClientContext(ctx, c.hc)
 }
 
 // NewOIDCClient discovers the OIDC provider and builds the Authorization
@@ -31,11 +42,19 @@ type oidcClient struct {
 // phase's risk note: a misconfigured/unreachable issuer must fail loudly
 // at boot, not silently break login later).
 func NewOIDCClient(ctx context.Context, issuerURL, clientID, clientSecret, redirectURL string) (*oidcClient, error) {
+	return newOIDCClient(ctx, nil, issuerURL, clientID, clientSecret, redirectURL)
+}
+
+func newOIDCClient(ctx context.Context, hc *http.Client, issuerURL, clientID, clientSecret, redirectURL string) (*oidcClient, error) {
+	if hc != nil {
+		ctx = oidc.ClientContext(ctx, hc)
+	}
 	provider, err := oidc.NewProvider(ctx, issuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("discover OIDC provider %s: %w", issuerURL, err)
 	}
 	return &oidcClient{
+		hc:       hc,
 		verifier: provider.Verifier(&oidc.Config{ClientID: clientID}),
 		oauth2Config: oauth2.Config{
 			ClientID:     clientID,
@@ -59,7 +78,8 @@ type oidcPending struct {
 // is no equivalent of the Node-specific local networking issue that a
 // frontend-side OIDC client would be exposed to on this dev machine.
 func (m *Manager) HandleOIDCLogin(w http.ResponseWriter, r *http.Request) {
-	if m.Mode != ModeOIDC || m.oidc == nil {
+	oc := m.getOIDC()
+	if m.Mode == ModeDisabled || oc == nil {
 		respondError(w, http.StatusBadRequest, "oidc login is not enabled")
 		return
 	}
@@ -82,7 +102,7 @@ func (m *Manager) HandleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   300,
 	})
 
-	authURL := m.oidc.oauth2Config.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier))
+	authURL := oc.oauth2Config.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier))
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
@@ -97,7 +117,8 @@ func (m *Manager) HandleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 // AGENTS.md's example. Vinaire itself never evaluates permissions; the K8s
 // API does, on every call, same as token mode.
 func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
-	if m.Mode != ModeOIDC || m.oidc == nil {
+	oc := m.getOIDC()
+	if m.Mode == ModeDisabled || oc == nil {
 		respondError(w, http.StatusBadRequest, "oidc login is not enabled")
 		return
 	}
@@ -125,7 +146,7 @@ func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := m.oidc.oauth2Config.Exchange(r.Context(), query.Get("code"), oauth2.VerifierOption(pending.Verifier))
+	token, err := oc.oauth2Config.Exchange(oc.ctx(r.Context()), query.Get("code"), oauth2.VerifierOption(pending.Verifier))
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "token exchange failed: "+err.Error())
 		return
@@ -135,7 +156,7 @@ func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadGateway, "oidc provider did not return an id_token")
 		return
 	}
-	idToken, err := m.oidc.verifier.Verify(r.Context(), rawIDToken)
+	idToken, err := oc.verifier.Verify(oc.ctx(r.Context()), rawIDToken)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "id_token verification failed: "+err.Error())
 		return

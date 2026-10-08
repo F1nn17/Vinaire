@@ -20,6 +20,7 @@ import {
   applySettings,
   readSettings,
   validSelector,
+  volumeChangeError,
   type StackProfile,
   type StackSettings,
 } from "@/lib/metricsSettings";
@@ -197,6 +198,7 @@ export default function MetricsStackPage() {
                 release={status.release}
                 profile={status.profile}
                 hasAlertmanager={!!status.alertmanager}
+                volume={status.volume}
                 onSaved={() => void mutate()}
               />
             )}
@@ -606,12 +608,19 @@ function StackSettingsPanel({
   release,
   profile,
   hasAlertmanager,
+  volume,
   onSaved,
 }: {
   namespace: string;
   release: string;
   profile: StackProfile;
   hasAlertmanager: boolean;
+  volume?: {
+    name: string;
+    size: string;
+    storageClass?: string;
+    expandable: boolean;
+  };
   onSaved: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -639,6 +648,10 @@ function StackSettingsPanel({
     setBusy(true);
     setError(null);
     try {
+      const sizeProblem = volume
+        ? volumeChangeError(volume.size, form.volumeSize)
+        : null;
+      if (sizeProblem) throw new Error(sizeProblem);
       const next = applySettings(values, profile, form);
       // the chart and its pinned version come from the plan, not from the browser
       const q = new URLSearchParams({ profile, namespace });
@@ -716,6 +729,31 @@ function StackSettingsPanel({
                   />
                 </label>
               </div>
+              {volume && form.volumeSize !== "" && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+                    Volume size (now {volume.size}
+                    {volume.storageClass ? `, ${volume.storageClass}` : ""}) —
+                    it can only grow
+                    <input
+                      aria-label="Volume size"
+                      value={form.volumeSize}
+                      disabled={!volume.expandable}
+                      onChange={(e) =>
+                        setForm({ ...form, volumeSize: e.target.value.trim() })
+                      }
+                      className={`${input} disabled:opacity-50`}
+                    />
+                  </label>
+                  {!volume.expandable && (
+                    <div className="text-[11px] text-warn">
+                      This volume&apos;s storage class doesn&apos;t allow
+                      growing a claim in place, so the size can&apos;t be
+                      changed here.
+                    </div>
+                  )}
+                </div>
+              )}
               {profile === "standard" && (
                 <label className="flex items-center gap-2 text-xs text-text-muted">
                   <input

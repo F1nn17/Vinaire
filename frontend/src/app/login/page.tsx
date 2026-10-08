@@ -38,13 +38,33 @@ export default function LoginPage() {
     }
   }
 
+  // Keycloak sign-in is on when the deployment is in oidc mode, or once it was set up
+  // from Settings in token mode; a pasted token stays unless it was turned off.
+  const oidcOn = config?.mode === "oidc" || config?.oidc === true;
+  const tokenOn = config?.mode === "token" && config?.tokenLogin !== false;
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-md rounded-xl border border-border bg-surface p-8">
         <div className="mb-1 font-mono text-lg font-semibold">Vinaire</div>
         <div className="mb-6 text-sm text-text-muted">Sign in to continue</div>
 
-        {config?.mode === "token" && (
+        {oidcOn && (
+          <a
+            href={oidcLoginURL()}
+            className="block rounded-lg bg-accent px-3.5 py-2 text-center text-[13px] font-semibold text-white"
+          >
+            Sign in with Keycloak
+          </a>
+        )}
+
+        {oidcOn && tokenOn && (
+          <div className="my-4 text-center text-[11px] text-text-faint">
+            or paste a token
+          </div>
+        )}
+
+        {tokenOn && (
           <form onSubmit={handleTokenSubmit} className="flex flex-col gap-3">
             <label htmlFor="k8s-token" className="text-xs text-text-muted">
               Kubernetes ServiceAccount token
@@ -55,7 +75,7 @@ export default function LoginPage() {
               onChange={(e) => setToken(e.target.value)}
               placeholder="eyJhbGciOi..."
               rows={5}
-              autoFocus
+              autoFocus={!oidcOn}
               className="resize-none rounded-lg border border-border bg-surface-2 p-3 font-mono text-xs outline-none focus:border-accent"
             />
             {error && <div className="text-xs text-err">{error}</div>}
@@ -75,15 +95,6 @@ export default function LoginPage() {
               session cookie is.
             </p>
           </form>
-        )}
-
-        {config?.mode === "oidc" && (
-          <a
-            href={oidcLoginURL()}
-            className="block rounded-lg bg-accent px-3.5 py-2 text-center text-[13px] font-semibold text-white"
-          >
-            Sign in with Keycloak
-          </a>
         )}
 
         {!config && <div className="text-sm text-text-muted">Loading…</div>}
