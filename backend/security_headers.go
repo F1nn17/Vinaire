@@ -33,11 +33,11 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
-		// Pages, API answers and 404s are revalidated every time (an upgrade must show at once,
+		// Pages, API answers and 404s are never stored (an upgrade must show at once,
 		// and nothing about a cluster may sit in a shared cache); only the content-hashed build
 		// files under /_next/static/ may be kept.
 		if !strings.HasPrefix(r.URL.Path, "/_next/static/") {
-			h.Set("Cache-Control", "no-cache")
+			h.Set("Cache-Control", "no-store")
 		}
 		// Only API responses get the allow-nothing policy. Static assets must not:
 		// a Web Worker takes its CSP from its own script's response, so a worker

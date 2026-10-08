@@ -85,13 +85,13 @@ func writeExport(t *testing.T) string {
 	return dir
 }
 
-func TestPagesAreRevalidatedButHashedBuildFilesMayBeCached(t *testing.T) {
+func TestPagesAreNeverStoredButHashedBuildFilesMayBeCached(t *testing.T) {
 	h := securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
 	for path, want := range map[string]string{
-		"/":                               "no-cache",
-		"/login":                          "no-cache",
-		"/robots.txt":                     "no-cache",
-		"/api/v1/pods":                    "no-cache",
+		"/":                               "no-store",
+		"/login":                          "no-store",
+		"/robots.txt":                     "no-store",
+		"/api/v1/pods":                    "no-store",
 		"/_next/static/chunks/app-abc.js": "",
 	} {
 		w := httptest.NewRecorder()
