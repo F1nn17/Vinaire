@@ -12,6 +12,8 @@ regexes = [
   '''abcdef\.0123456789abcdef''',
   # a token from a throwaway test container, long expired, kept in git history
   '''gftt5q\.x88y4p4dtjlymjor''',
+  # a Kubernetes API path that merely looks high-entropy
+  '''policy/v1/poddisruptionbudgets''',
   # the SSH-key-shaped fixture in the redactor test
   '''-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAAB''',
 ]

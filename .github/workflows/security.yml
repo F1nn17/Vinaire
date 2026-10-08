@@ -160,7 +160,9 @@ jobs:
           # the chart's own defaults: non-root, read-only root filesystem, no capabilities
           helm install vinaire charts/vinaire -n vinaire --create-namespace \
             --set image.repository=vinaire --set image.tag=ci --set image.pullPolicy=Never \
-            --set cookie.secure=false \n            --set ingress.enabled=true --set ingress.className=traefik \n            --set 'ingress.hosts[0].host=localhost' --wait --timeout 180s
+            --set cookie.secure=false \
+            --set ingress.enabled=true --set ingress.className=traefik \
+            --set 'ingress.hosts[0].host=localhost' --wait --timeout 180s
           kubectl -n vinaire rollout status deployment/vinaire --timeout=120s
       - name: Prove the pod really runs hardened
         run: |
