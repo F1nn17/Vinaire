@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Security checks, light version (Roadmap Phase 54).** A "Security checks" page with 16 read-only checks over what the
+  signed-in user may already read: cluster-admin holders, wildcard roles, anonymous and `default`-ServiceAccount
+  bindings, privileged / host-sharing / risky-capability / root / unpinned-image / no-memory-limit pods, namespaces
+  without Pod Security, NetworkPolicy or quota, NodePort/LoadBalancer Services and Ingresses without TLS. Each has a
+  severity, an explanation and a fix; findings in system namespaces are listed but not counted; a kind the user can't
+  list makes the check "unknown", never a false pass. No privileged Job and no new write path.
 - **Light theme (Roadmap Phase 56).** A ☀ / Auto / ☾ switch in the top bar; the choice is a cookie and the theme is set
   before first paint, so there is no flash. Monaco and the terminal follow it. `npm run check:theme` (CI) checks WCAG AA
   contrast for every text colour on every surface in both themes and fails on a hard-coded colour outside the tokens.

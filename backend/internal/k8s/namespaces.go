@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -125,4 +126,13 @@ func DeleteNamespace(ctx context.Context, clientset *kubernetes.Clientset, name 
 		return fmt.Errorf("delete namespace %s: %w", name, err)
 	}
 	return nil
+}
+
+// ListNetworkPolicies returns the NetworkPolicies in namespace ("" = all). Read-only.
+func ListNetworkPolicies(ctx context.Context, clientset *kubernetes.Clientset, namespace string) ([]networkingv1.NetworkPolicy, error) {
+	list, err := clientset.NetworkingV1().NetworkPolicies(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list networkpolicies: %w", err)
+	}
+	return list.Items, nil
 }

@@ -91,6 +91,12 @@ const groups: NavGroup[] = [
         icon: <GaugeIcon />,
         isActive: (p) => p.startsWith("/requests-limits"),
       },
+      {
+        href: "/security",
+        label: "Security checks",
+        icon: <ShieldIcon />,
+        isActive: (p) => p.startsWith("/security"),
+      },
     ],
   },
   {

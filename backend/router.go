@@ -91,6 +91,8 @@ func newRouter(d routerDeps) *chi.Mux {
 		// Roadmap Phase 53: projects are namespaces with a label; these two only read.
 		protected.Get("/projects", workloadsHandler.Projects)
 		protected.Get("/projects/{name}", workloadsHandler.ProjectDetail)
+		// Roadmap Phase 54 (light): read-only security checks, as the caller.
+		protected.Get("/security/checks", workloadsHandler.SecurityChecks)
 		// Roadmap Phase 28: browsing the Helm catalog and reading releases;
 		// the writes are in the writeLimiter group below.
 		protected.Get("/catalog/repos", workloadsHandler.CatalogRepos)

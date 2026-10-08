@@ -350,6 +350,16 @@ records what was verified and how.
 - **Add a test that fails if the property is lost**, and run `govulncheck`, `gosec -severity medium
   -confidence medium` and `npm audit` (the `Security` workflow does).
 
+## Security checks (Phase 54, light) — read-only
+
+`GET /api/v1/security/checks` (`internal/api/securitychecks.go`, engine in `internal/securitychecks`)
+lists pods, services, ingresses, network policies, quotas, roles and bindings **as the caller** and
+evaluates a fixed list of checks over that snapshot. It writes nothing and must stay that way: a
+kube-bench-style scan needs a privileged Job on every node and is a deliberate decision of its own
+(declined for now). A kind the caller can't list makes the checks that need it `unknown` — never
+"pass". A new check is a function over `Snapshot` plus a test; don't add a code path that reads with
+Vinaire's own identity.
+
 ## Port-forward proxy (Phase 26) — not a write, but a new access path
 
 `/proxy/{cluster}/{namespace}/{pod}/{port}/…` (or `{https:port}`) is an

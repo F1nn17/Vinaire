@@ -136,6 +136,7 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/search` | yes | — |
 | GET | `/api/v1/secrets` | yes | — |
 | POST | `/api/v1/secrets/{namespace}/{name}/reveal` | yes | no |
+| GET | `/api/v1/security/checks` | yes | — |
 | GET | `/api/v1/serviceaccounts` | yes | — |
 | GET | `/api/v1/statefulsets` | yes | — |
 | GET | `/api/v1/statefulsets/{namespace}/{name}` | yes | — |
