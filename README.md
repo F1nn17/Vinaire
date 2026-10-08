@@ -179,7 +179,13 @@ and open `http://localhost:8080`.
 
 Push the image to a registry the cluster can pull from, then point the chart at it and publish
 it through your Ingress controller (the example uses Traefik; use `nginx` etc. as your cluster
-has):
+has). The released chart and image are public on GitHub's registry:
+
+```bash
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.0.0   --namespace vinaire --create-namespace   --set ingress.enabled=true --set ingress.className=traefik   --set 'ingress.hosts[0].host=vinaire.example.com'
+```
+
+To run a build of your own instead, push the image and use the chart from a checkout:
 
 ```bash
 docker build -t <registry>/<owner>/vinaire:<version> .

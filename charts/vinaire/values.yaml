@@ -46,11 +46,12 @@ sessions:
   store: auto
 
 image:
-  # Point this at wherever you actually pushed the single combined image
-  # (see the repo root Dockerfile) — "vinaire:latest" only resolves on a
-  # cluster that already has that image locally (e.g. via
-  # `k3d image import`), it is not published anywhere.
-  repository: vinaire
+  # The released, signed image (see .github/workflows/release.yml); the tag
+  # defaults to the chart's appVersion. To run a build of your own, point this at
+  # wherever you pushed it (see the repo root Dockerfile) — a bare name such as
+  # "vinaire" only resolves on a cluster that already has the image locally
+  # (e.g. via `k3d image import`).
+  repository: ghcr.io/f1nn17/vinaire
   tag: ""
   pullPolicy: IfNotPresent
 

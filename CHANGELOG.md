@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **First release plumbing (1.0.0).** The chart and the app are versioned 1.0.0 together; a `v1.0.0` tag builds the image
+  (`ghcr.io/f1nn17/vinaire:1.0.0`, lower-cased — the old name would have been rejected), signs it, and now also pushes the Helm
+  chart as an OCI artifact (`oci://ghcr.io/f1nn17/charts/vinaire`), signs it, and creates a GitHub Release with the chart and
+  the SBOM attached. The release refuses to run when the tag, `version` and `appVersion` disagree. The chart's default
+  `image.repository` is now the published image.
 - **Security checks, light version (Roadmap Phase 54).** A "Security checks" page with 16 read-only checks over what the
   signed-in user may already read: cluster-admin holders, wildcard roles, anonymous and `default`-ServiceAccount
   bindings, privileged / host-sharing / risky-capability / root / unpinned-image / no-memory-limit pods, namespaces
