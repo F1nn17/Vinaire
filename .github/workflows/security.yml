@@ -208,6 +208,16 @@ jobs:
             sleep 1
           done
           kubectl -n vinaire get pods,ingress; exit 1
+      # ZAP runs in a container on the host network and got 503 where curl on the runner got 200:
+      # show what such a container sees, over IPv4 and IPv6, before it runs.
+      - name: What a host-network container sees
+        continue-on-error: true
+        run: |
+          for t in "http://localhost:8080/" "http://127.0.0.1:8080/" "http://[::1]:8080/"; do
+            echo "== $t"
+            docker run --rm --network=host curlimages/curl:8.10.1 -s -o /dev/null -D - --max-time 10 "$t" | head -8 || true
+          done
+          env | grep -i proxy || echo "no proxy variables"
       - name: OWASP ZAP baseline
         uses: zaproxy/action-baseline@v0.14.0
         with:
