@@ -199,7 +199,14 @@ jobs:
       # into failures.
       - name: Wait until the instance answers again
         run: |
-          for i in $(seq 1 60); do curl -sf http://localhost:8080/healthz && exit 0; sleep 1; done
+          # the page itself (what ZAP spiders), not only /healthz, and five times in a row —
+          # a single answer can come from before the pod's last restart settles
+          ok=0
+          for i in $(seq 1 90); do
+            if curl -sf -o /dev/null http://localhost:8080/healthz && curl -sf -o /dev/null http://localhost:8080/                && curl -sf -o /dev/null http://localhost:8080/login/; then ok=$((ok+1)); else ok=0; fi
+            [ "$ok" -ge 5 ] && exit 0
+            sleep 1
+          done
           kubectl -n vinaire get pods,ingress; exit 1
       - name: OWASP ZAP baseline
         uses: zaproxy/action-baseline@v0.14.0
@@ -208,3 +215,11 @@ jobs:
           rules_file_name: .zap/rules.tsv
           fail_action: true
           allow_issue_writing: false
+      - name: What the cluster looked like when ZAP failed
+        if: failure()
+        run: |
+          kubectl -n vinaire get pods,svc,endpoints,ingress -o wide || true
+          kubectl -n vinaire describe pod -l app.kubernetes.io/name=vinaire | tail -40 || true
+          kubectl -n vinaire logs deploy/vinaire --tail=40 || true
+          kubectl -n kube-system logs deploy/traefik --tail=40 || true
+          for u in / /robots.txt /login/; do curl -s -o /dev/null -w "$u %{http_code}\n" "http://localhost:8080$u"; done
