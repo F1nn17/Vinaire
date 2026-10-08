@@ -342,7 +342,7 @@ has (Custom Resources; see Vinaire's Settings → Справка once logged in)
 
 ## Security
 
-Read [docs/security.md](./docs/security.md) ([по-русски](./docs/security.ru.md)) before putting Vinaire anywhere real: a short
+Read [docs/security.md](./docs/security.md) ([по-русски](./docs/security.ru.md)) before putting Vinaire anywhere real (and, for a reviewer, [docs/security-review.md](./docs/security-review.md)): a short
 threat model, the properties that were verified (and how to verify them again), and the risks
 that remain. In short:
 

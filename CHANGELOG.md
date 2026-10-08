@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Security review package and automated checks (Roadmap Phase 50).** `docs/security-review.md` (+ Russian) for a
+  reviewer; `docs/api-routes.md` generated from the router; tests that fail when a route skips the session or the write
+  rate limit, or a handler reads an unbounded body; 11 fuzz targets (CI runs each for 30 s); a CycloneDX SBOM job; a
+  release workflow that signs the image with cosign and attaches an SBOM and provenance attestations.
+- **Fixed by those checks:** six state-changing routes (Keycloak setup/token-login/disable, session revoke, add and remove
+  cluster) were not behind the write rate limiter, and five handlers (including the token sign-in) read their body without a
+  size limit.
 - **The store's master key can live outside the cluster (Roadmap Phase 49).** `keyProvider.type: vault`
   (HashiCorp Vault / OpenBao Transit): only the *wrapped* data key is stored, an existing store is migrated in place,
   Vinaire refuses to start when Vault is unreachable, and the Transit key can be rotated (`rewrapOnStart`). Without a

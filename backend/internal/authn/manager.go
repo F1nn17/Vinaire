@@ -285,7 +285,7 @@ func (m *Manager) HandleTokenLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req tokenLoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Token) == "" {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil || strings.TrimSpace(req.Token) == "" {
 		respondError(w, http.StatusBadRequest, `request body must be {"token": "<service account token>"}`)
 		return
 	}

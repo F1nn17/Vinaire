@@ -47,6 +47,44 @@ jobs:
       - name: tests
         run: go test -count=1 ./...
 
+  # Roadmap Phase 50: the parsers that take text from outside (kubeconfig, YAML, join
+  # commands, node labels, install options...) are fuzzed against the properties they
+  # promise. The same functions also run their seed inputs as ordinary tests on every build.
+  fuzz:
+    name: Fuzz — parsers and validators
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+      - name: Fuzz every target for 30 seconds
+        run: |
+          set -e
+          for pkg in $(grep -rl --include='*_test.go' '^func Fuzz' . | xargs -n1 dirname | sort -u); do
+            for f in $(go test -list '^Fuzz' "$pkg" | grep '^Fuzz'); do
+              echo "== $pkg $f"
+              go test "$pkg" -run '^$' -fuzz "^$f\$" -fuzztime 30s
+            done
+          done
+
+  # A software bill of materials for what the repository contains (Go modules and npm
+  # packages), as CycloneDX. The release workflow does the same for the published image.
+  sbom:
+    name: SBOM — CycloneDX
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: vinaire-source.cdx.json
+          artifact-name: sbom-source
+
   frontend:
     name: Frontend — npm audit
     runs-on: ubuntu-latest

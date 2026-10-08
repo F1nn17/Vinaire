@@ -298,7 +298,7 @@ func (h *Handler) DeleteNamespace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req deleteNamespaceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ConfirmName != name {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil || req.ConfirmName != name {
 		respondError(w, http.StatusBadRequest, `request body must be {"confirmName": "<the namespace's name>"}`)
 		return
 	}

@@ -68,7 +68,7 @@ func (h *Handler) RollbackDeployment(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 
 	var req rollbackRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Revision <= 0 {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req); err != nil || req.Revision <= 0 {
 		respondError(w, http.StatusBadRequest, `request body must be {"revision": <positive integer>}`)
 		return
 	}

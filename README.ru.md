@@ -348,7 +348,7 @@ helm upgrade --install vinaire ./charts/vinaire … --set cookie.secure=false
 
 ## Безопасность
 
-Прочтите [docs/security.ru.md](./docs/security.ru.md), прежде чем ставить Vinaire куда-либо
+Прочтите [docs/security.ru.md](./docs/security.ru.md) (для проверяющего — [docs/security-review.ru.md](./docs/security-review.ru.md)), прежде чем ставить Vinaire куда-либо
 по-настоящему: краткая модель угроз, проверенные свойства (и как проверить их снова) и
 оставшиеся риски. Вкратце:
 

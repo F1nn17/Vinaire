@@ -93,7 +93,7 @@ func (h *Handler) RevealSecretKey(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 
 	var req revealRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Key == "" {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil || req.Key == "" {
 		respondError(w, http.StatusBadRequest, `request body must be {"key": "<key name>"}`)
 		return
 	}

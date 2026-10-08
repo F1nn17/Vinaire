@@ -119,3 +119,23 @@ func TestNoLocalShellExecution(t *testing.T) {
 		}
 	}
 }
+
+// Roadmap Phase 50: every handler that reads a request body bounds it first, so no
+// request can make Vinaire buffer an unbounded amount of memory.
+func TestEveryRequestBodyIsSizeLimited(t *testing.T) {
+	for file, lines := range goSources(t) {
+		if !strings.HasPrefix(file, "internal/api/") && !strings.HasPrefix(file, "internal/stream/") && !strings.HasPrefix(file, "internal/authn/") {
+			continue
+		}
+		for n, l := range lines {
+			c := code(l)
+			if !strings.Contains(c, "r.Body") && !strings.Contains(c, "req.Body") {
+				continue
+			}
+			if strings.Contains(c, "MaxBytesReader") || strings.Contains(c, "Body.Close") {
+				continue
+			}
+			t.Errorf("%s:%d reads a request body without http.MaxBytesReader: %s", file, n+1, strings.TrimSpace(l))
+		}
+	}
+}

@@ -22,7 +22,7 @@ type scaleRequest struct {
 
 func decodeScaleRequest(w http.ResponseWriter, r *http.Request) (int32, bool) {
 	var req scaleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Replicas < 0 {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req); err != nil || req.Replicas < 0 {
 		respondError(w, http.StatusBadRequest, `request body must be {"replicas": <non-negative integer>}`)
 		return 0, false
 	}

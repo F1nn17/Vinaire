@@ -337,6 +337,12 @@ records what was verified and how.
 - **Don't weaken a guard to make something work** (CSP, SameSite, origin check, TLS verification, the
   dial guard). If a feature seems to need it, raise it as a decision. `TestInsecureSkipVerifyOnlyWhereReviewed`
   and the other codebase rule tests make a quiet weakening fail the build.
+- **A new route** is named in `backend/router.go`; `TestEveryRouteNeedsASessionExceptTheSignInFlow` and
+  `TestEveryStateChangingRouteIsRateLimited` (backend/router_test.go) fail if it skips the session or, being
+  state-changing, the write rate limiter — unless it is added, with the reason, to the lists there — and
+  `docs/api-routes.md` must be regenerated (`UPDATE_ROUTES=1 go test . -run TestRouteInventory`). Every handler
+  that reads a request body bounds it with `http.MaxBytesReader` (a rule test enforces it). A new parser of outside
+  text gets a `Fuzz*` test stating what it must never accept.
 - **Add a test that fails if the property is lost**, and run `govulncheck`, `gosec -severity medium
   -confidence medium` and `npm audit` (the `Security` workflow does).
 
