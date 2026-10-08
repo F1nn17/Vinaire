@@ -301,6 +301,14 @@ helm upgrade --install vinaire ./charts/vinaire … --set cookie.secure=false
 > ⚠️ With `cookie.secure=false` the session cookie also travels unencrypted — anyone on the
 > network path can read it. Never do this on a shared or real cluster.
 
+#### Keeping the master key outside the cluster
+
+By default the key that seals Vinaire's store lives in a Secret next to the data. If you run HashiCorp Vault or
+OpenBao, keep it there instead: `keyProvider.type: vault` (create the Transit key first —
+`vault secrets enable transit && vault write -f transit/keys/vinaire`) stores only the key *wrapped* by Vault, so
+reading the Secrets of Vinaire's namespace is not enough to open the registry. An existing install is migrated on
+the first start; Vinaire refuses to start when Vault is unreachable. See `charts/vinaire/values.yaml`.
+
 #### More than one replica
 
 `replicaCount: 2` (or more) keeps sessions sealed in a Secret shared by all replicas

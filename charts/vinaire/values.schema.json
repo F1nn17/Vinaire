@@ -5,6 +5,20 @@
   "type": "object",
   "properties": {
     "replicaCount": { "type": "integer", "minimum": 0 },
+    "keyProvider": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["local", "vault"], "description": "local keeps the store key in a Secret; vault keeps it wrapped by a Vault/OpenBao Transit key." },
+        "vault": {
+          "type": "object",
+          "properties": {
+            "addr": { "type": "string" },
+            "auth": { "type": "string", "enum": ["kubernetes", "token"] }
+          }
+        },
+        "rewrapOnStart": { "type": "boolean" }
+      }
+    },
     "sessions": {
       "type": "object",
       "properties": {

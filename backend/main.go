@@ -28,6 +28,7 @@ import (
 	"github.com/shiraku/vinaire/backend/internal/gitops"
 	"github.com/shiraku/vinaire/backend/internal/helm"
 	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/shiraku/vinaire/backend/internal/keyprovider"
 	"github.com/shiraku/vinaire/backend/internal/leader"
 	"github.com/shiraku/vinaire/backend/internal/netguard"
 	"github.com/shiraku/vinaire/backend/internal/provision"
@@ -398,6 +399,7 @@ func main() {
 			w.Post("/clusters/import-kubeconfig", workloadsHandler.ImportKubeconfig)
 			w.Post("/clusters/add-discovered", workloadsHandler.AddDiscoveredCluster)
 			w.Put("/clusters/{name}/type", workloadsHandler.SetClusterType)
+			w.Put("/clusters/{name}/credentials", workloadsHandler.RotateClusterCredentials)
 			w.Post("/clusters/ssh/hostkey", workloadsHandler.ProvisionHostKey)
 			w.Post("/clusters/import-ssh", workloadsHandler.ClusterSSHStart(provision.ModeImport))
 			w.Post("/clusters/create-ssh", workloadsHandler.ClusterSSHStart(provision.ModeCreate))
@@ -529,18 +531,61 @@ func buildClusterRegistry(ctx context.Context, cfg config.Config) (*clusters.Reg
 // buildClusterStore picks where added clusters persist: a Secret when running
 // in-cluster, otherwise an encrypted file in VINAIRE_DATA_DIR.
 func buildClusterStore(ctx context.Context, cfg config.Config) (clusters.Store, bool) {
-	if s, ok := clusters.NewSecretStore(ctx, cfg.ClusterStoreKey, cfg.ClusterStorePrevious...); ok {
-		return s, true
+	// Roadmap Phase 49: the store's data key can live outside the cluster (Vault Transit).
+	// A misconfigured or unreachable provider is fatal: the alternative would be a store
+	// on a different key, or unencrypted.
+	opts := clusters.StoreOptions{
+		EnvKey: cfg.ClusterStoreKey, Previous: cfg.ClusterStorePrevious,
+		Rewrap: os.Getenv("KEY_REWRAP_ON_START") == "true",
 	}
-	if cfg.DataDir == "" {
-		return nil, false
+	prov, err := keyprovider.FromEnv()
+	switch {
+	case err == nil:
+		opts.Provider = prov
+		slog.Info("the store key is kept by a key provider", "provider", prov.Name())
+	case errors.Is(err, keyprovider.ErrNotConfigured):
+	default:
+		slog.Error("key provider configuration is invalid", "error", err)
+		os.Exit(1)
 	}
-	s, err := clusters.NewFileStore(cfg.DataDir, cfg.ClusterStoreKey, cfg.ClusterStorePrevious...)
-	if err != nil {
-		slog.Error("cluster store: couldn't open the data directory", "dir", cfg.DataDir, "error", err)
-		return nil, false
+	open := func() (clusters.Store, bool, error) {
+		if s, ok, err := clusters.NewSecretStoreOpts(ctx, opts); err != nil || ok {
+			if err != nil {
+				return nil, true, err
+			}
+			return s, true, nil
+		}
+		if cfg.DataDir == "" {
+			return nil, false, nil
+		}
+		s, err := clusters.NewFileStoreOpts(ctx, cfg.DataDir, opts)
+		if err != nil {
+			return nil, true, err
+		}
+		return s, true, nil
 	}
-	return s, true
+	var st clusters.Store
+	var ok bool
+	for attempt := 1; ; attempt++ {
+		st, ok, err = open()
+		if err == nil {
+			break
+		}
+		if prov == nil || attempt >= 6 || errors.Is(err, clusters.ErrKeyUnavailable) {
+			slog.Error("cluster store: couldn't open it", "error", err)
+			if prov != nil || errors.Is(err, clusters.ErrKeyUnavailable) {
+				os.Exit(1)
+			}
+			return nil, false
+		}
+		slog.Warn("cluster store: waiting for the key provider", "attempt", attempt, "error", err)
+		select {
+		case <-ctx.Done():
+			os.Exit(1)
+		case <-time.After(time.Duration(attempt) * 5 * time.Second):
+		}
+	}
+	return st, ok
 }
 
 // detectClusterTypes fills in the type of every registered cluster that

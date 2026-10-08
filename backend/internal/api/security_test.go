@@ -178,6 +178,7 @@ func TestVinaireGateAllowsOnlyThoseWhoWereGranted(t *testing.T) {
 		"gitops remove source": hs.h.GitOpsRemoveSource,
 		"gitops sync source":   hs.h.GitOpsSyncSource,
 		"audit viewer":         hs.h.AuditLog,
+		"rotate credentials":   hs.h.RotateClusterCredentials,
 		"sessions list":        hs.h.Sessions,
 		"session revoke":       hs.h.RevokeSession,
 		"keycloak status":      hs.h.KeycloakStatus,

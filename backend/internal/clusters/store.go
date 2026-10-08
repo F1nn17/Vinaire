@@ -35,8 +35,11 @@ const (
 	clustersSecretKey  = "clusters.json"
 	storeKeySecretName = "vinaire-clusters-key"
 	storeKeySecretKey  = "key"
-	fileStoreName      = "clusters.enc"
-	fileStoreKeyName   = "store.key"
+	// Roadmap Phase 49: with a key provider the Secret holds the data key only wrapped
+	storeKeyWrappedKey  = "wrapped"
+	storeKeyProviderKey = "provider"
+	fileStoreName       = "clusters.enc"
+	fileStoreKeyName    = "store.key"
 )
 
 // Origin records how a cluster was added.
@@ -144,63 +147,60 @@ type SecretStore struct {
 // Secret) the store still works but writes unencrypted, as Phase 24 did, and
 // says so loudly; Encrypted() lets the UI warn too.
 func NewSecretStore(ctx context.Context, envKey string, previous ...string) (*SecretStore, bool) {
+	s, ok, _ := NewSecretStoreOpts(ctx, StoreOptions{EnvKey: envKey, Previous: previous})
+	return s, ok
+}
+
+// NewSecretStoreOpts is NewSecretStore with a key provider (Roadmap Phase 49). With a
+// provider, failing to obtain the key is an error — the store never silently falls back
+// to storing clusters unencrypted.
+func NewSecretStoreOpts(ctx context.Context, opts StoreOptions) (*SecretStore, bool, error) {
 	restConfig, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, false
+		return nil, false, nil
 	}
 	namespaceBytes, err := os.ReadFile(serviceAccountNamespaceFile)
 	if err != nil {
-		return nil, false
+		return nil, false, nil
 	}
 	clientset, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
-		return nil, false
+		return nil, false, nil
 	}
 	s := &SecretStore{clientset: clientset, namespace: strings.TrimSpace(string(namespaceBytes))}
 
-	key, err := s.resolveKey(ctx, envKey)
+	key, err := s.resolveKey(ctx, opts)
 	if err != nil {
+		if opts.Provider != nil || errors.Is(err, ErrKeyUnavailable) {
+			return nil, true, fmt.Errorf("cluster store: %w", err)
+		}
 		slog.Warn("cluster store: no encryption key available — added clusters will be stored UNENCRYPTED. Set CLUSTER_STORE_KEY, or let Vinaire manage the Secret "+storeKeySecretName+" (grant it get/create in the cluster-manager Role)", "error", err)
-		return s, true
+		return s, true, nil
 	}
-	prev, perr := ParseKeys(strings.Join(previous, ","))
+	prev, perr := ParseKeys(strings.Join(opts.Previous, ","))
 	if perr != nil {
 		slog.Warn("cluster store: CLUSTER_STORE_KEY_PREVIOUS is invalid — ignoring it", "error", perr)
 		prev = nil
 	}
 	if s.cipher, err = NewCipher(key, prev...); err != nil {
+		if opts.Provider != nil {
+			return nil, true, fmt.Errorf("cluster store: invalid encryption key: %w", err)
+		}
 		slog.Warn("cluster store: invalid encryption key — storing unencrypted", "error", err)
 	}
-	return s, true
+	return s, true, nil
 }
 
-func (s *SecretStore) resolveKey(ctx context.Context, envKey string) ([]byte, error) {
-	if envKey != "" {
-		return ParseKey(envKey)
-	}
-	secrets := s.clientset.CoreV1().Secrets(s.namespace)
-	sec, err := secrets.Get(ctx, storeKeySecretName, metav1.GetOptions{})
-	if err == nil {
-		if k := sec.Data[storeKeySecretKey]; len(k) == 32 {
-			return k, nil
+// resolveKey: CLUSTER_STORE_KEY if set (simple mode; not together with a provider), else
+// the key kept in the Secret vinaire-clusters-key — raw, or wrapped by the provider.
+func (s *SecretStore) resolveKey(ctx context.Context, opts StoreOptions) ([]byte, error) {
+	if opts.EnvKey != "" {
+		if opts.Provider != nil {
+			return nil, errors.New("CLUSTER_STORE_KEY and KEY_PROVIDER are both set — use one: the key from the environment, or a key provider")
 		}
-		return nil, errors.New("the " + storeKeySecretName + " Secret doesn't hold a 32-byte key")
+		return ParseKey(opts.EnvKey)
 	}
-	if !apierrors.IsNotFound(err) {
-		return nil, err
-	}
-	key, err := GenerateKey()
-	if err != nil {
-		return nil, err
-	}
-	_, err = secrets.Create(ctx, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: storeKeySecretName, Namespace: s.namespace},
-		Data:       map[string][]byte{storeKeySecretKey: key},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return key, nil
+	return resolveDataKey(ctx, secretKeyBackend{s}, opts.Provider, opts.Rewrap)
 }
 
 // Clientset and Namespace expose the pod's own in-cluster identity and namespace, for
@@ -327,20 +327,29 @@ type FileStore struct {
 
 // NewFileStore opens (creating if needed) the data directory.
 func NewFileStore(dir, envKey string, previous ...string) (*FileStore, error) {
+	return NewFileStoreOpts(context.Background(), dir, StoreOptions{EnvKey: envKey, Previous: previous})
+}
+
+// NewFileStoreOpts is NewFileStore with a key provider (Roadmap Phase 49): the key file
+// then holds only the wrapped key.
+func NewFileStoreOpts(ctx context.Context, dir string, opts StoreOptions) (*FileStore, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
 	var key []byte
 	var err error
-	if envKey != "" {
-		key, err = ParseKey(envKey)
-	} else {
-		key, err = loadOrCreateKeyFile(filepath.Join(dir, fileStoreKeyName))
+	switch {
+	case opts.EnvKey != "" && opts.Provider != nil:
+		return nil, errors.New("CLUSTER_STORE_KEY and KEY_PROVIDER are both set — use one: the key from the environment, or a key provider")
+	case opts.EnvKey != "":
+		key, err = ParseKey(opts.EnvKey)
+	default:
+		key, err = resolveDataKey(ctx, fileKeyBackend{dir}, opts.Provider, opts.Rewrap)
 	}
 	if err != nil {
 		return nil, err
 	}
-	prev, err := ParseKeys(strings.Join(previous, ","))
+	prev, err := ParseKeys(strings.Join(opts.Previous, ","))
 	if err != nil {
 		return nil, err
 	}
@@ -349,31 +358,6 @@ func NewFileStore(dir, envKey string, previous ...string) (*FileStore, error) {
 		return nil, err
 	}
 	return &FileStore{dir: dir, cipher: c}, nil
-}
-
-func loadOrCreateKeyFile(path string) ([]byte, error) {
-	if b, err := os.ReadFile(path); err == nil { // #nosec G304 -- the key file inside the data directory
-		key, perr := ParseKey(string(b))
-		if perr != nil {
-			return nil, fmt.Errorf("%s is not a valid key file: %w", path, perr)
-		}
-		return key, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	key, err := GenerateKey()
-	if err != nil {
-		return nil, err
-	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- the key file inside the data directory
-	if err != nil {
-		return nil, fmt.Errorf("create key file: %w", err)
-	}
-	defer f.Close()
-	if _, err := f.WriteString(encodeKey(key) + "\n"); err != nil {
-		return nil, err
-	}
-	return key, nil
 }
 
 func (f *FileStore) Kind() string    { return "file" }

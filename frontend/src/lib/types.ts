@@ -12,6 +12,9 @@ export type Cluster = {
   // Whether Phase 30's "Add node" makes sense for this type (k3s/kubeadm).
   canAddNode: boolean;
   status: "connected" | "unreachable";
+  // Roadmap Phase 49: the health of the bearer token Vinaire uses for this cluster.
+  credential?: "no-expiry" | "expiring" | "expired";
+  credentialExpiresAt?: string;
 };
 
 export type ClusterType =

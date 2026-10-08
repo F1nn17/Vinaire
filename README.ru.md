@@ -307,6 +307,14 @@ helm upgrade --install vinaire ./charts/vinaire … --set cookie.secure=false
 > ⚠️ С `cookie.secure=false` cookie сессии тоже идёт без шифрования — любой на пути по сети
 > может её прочитать. Никогда не делайте так на общем или настоящем кластере.
 
+#### Мастер-ключ вне кластера
+
+По умолчанию ключ, которым запечатано хранилище Vinaire, лежит в Secret рядом с данными. Если у вас есть HashiCorp Vault
+или OpenBao, держите его там: `keyProvider.type: vault` (сначала создайте ключ Transit —
+`vault secrets enable transit && vault write -f transit/keys/vinaire`) хранит только ключ, *обёрнутый* Vault'ом, —
+чтения Secret'ов namespace Vinaire уже недостаточно, чтобы открыть реестр. Существующая установка переносится при первом
+старте; если Vault недоступен, Vinaire не запускается. См. `charts/vinaire/values.yaml`.
+
 #### Больше одной реплики
 
 `replicaCount: 2` (и больше) хранит сеансы запечатанными в Secret, общем для всех реплик (`sessions.store: auto`

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The store's master key can live outside the cluster (Roadmap Phase 49).** `keyProvider.type: vault`
+  (HashiCorp Vault / OpenBao Transit): only the *wrapped* data key is stored, an existing store is migrated in place,
+  Vinaire refuses to start when Vault is unreachable, and the Transit key can be rotated (`rewrapOnStart`). Without a
+  provider the key stays in a Secret as before. The Clusters page shows tokens that never expire / expire soon /
+  have expired and can replace a cluster's token (`PUT /api/v1/clusters/{name}/credentials`).
 - **Shared sessions and several replicas (Roadmap Phase 48).** `sessions.store: secret` (default for
   `replicaCount > 1`) keeps sessions sealed in a Secret of Vinaire's own namespace, one key per session: they survive
   restarts and are shared by every replica. A *Signed-in sessions* list with *End session* in Settings → Sign-in;

@@ -73,6 +73,48 @@ spec:
             - name: LEADER_ELECTION
               value: "true"
             {{- end }}
+            {{- $kp := .Values.keyProvider | default dict }}
+            {{- if eq ($kp.type | default "local") "vault" }}
+            {{- $v := $kp.vault | default dict }}
+            {{- if not $v.addr }}
+            {{- fail "keyProvider.type=vault needs keyProvider.vault.addr" }}
+            {{- end }}
+            - name: KEY_PROVIDER
+              value: "vault"
+            - name: VAULT_ADDR
+              value: {{ $v.addr | quote }}
+            - name: VAULT_TRANSIT_MOUNT
+              value: {{ $v.transitMount | default "transit" | quote }}
+            - name: VAULT_TRANSIT_KEY
+              value: {{ $v.key | default "vinaire" | quote }}
+            {{- with $v.namespace }}
+            - name: VAULT_NAMESPACE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if $v.allowInsecure }}
+            - name: VAULT_ALLOW_INSECURE
+              value: "true"
+            {{- end }}
+            {{- if eq ($v.auth | default "kubernetes") "token" }}
+            {{- if not $v.tokenSecret }}
+            {{- fail "keyProvider.vault.auth=token needs keyProvider.vault.tokenSecret (an existing Secret holding the token)" }}
+            {{- end }}
+            - name: VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $v.tokenSecret | quote }}
+                  key: {{ $v.tokenSecretKey | default "token" | quote }}
+            {{- else }}
+            - name: VAULT_K8S_ROLE
+              value: {{ $v.kubernetesRole | default "vinaire" | quote }}
+            - name: VAULT_K8S_MOUNT
+              value: {{ $v.kubernetesMount | default "kubernetes" | quote }}
+            {{- end }}
+            {{- if $kp.rewrapOnStart }}
+            - name: KEY_REWRAP_ON_START
+              value: "true"
+            {{- end }}
+            {{- end }}
             - name: SESSION_MAX_TTL
               value: {{ .Values.sessionMaxTTL | quote }}
             {{- if .Values.trustForwardedFor }}

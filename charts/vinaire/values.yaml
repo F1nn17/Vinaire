@@ -2,6 +2,36 @@
 
 replicaCount: 1
 
+# Where the master key of Vinaire's encrypted store lives (Roadmap Phase 49).
+#   local — in a Secret next to the data (CLUSTER_STORE_KEY or the managed
+#           vinaire-clusters-key): protects a leaked backup, not someone who can read
+#           every Secret of this namespace.
+#   vault — only *wrapped* by a HashiCorp Vault / OpenBao Transit key is stored; the
+#           raw key exists in Vinaire's memory. Vault has its own access control and
+#           audit log, so reading the Secrets gets an attacker a blob that is useless
+#           without asking Vault. An existing store is migrated on the first start
+#           (the same key, wrapped; the raw copy is removed). Vinaire refuses to start
+#           when Vault can't be reached — it never invents a new key.
+# Create the Transit key first:  vault secrets enable transit && vault write -f transit/keys/vinaire
+keyProvider:
+  type: local
+  vault:
+    addr: ""            # https://vault.example.com:8200
+    transitMount: transit
+    key: vinaire
+    namespace: ""       # Vault Enterprise / HCP namespace
+    # "kubernetes": Vault's Kubernetes auth with this pod's ServiceAccount (a role bound
+    # to it, allowed encrypt/decrypt/rewrap on the key). "token": a token from an existing
+    # Secret (tokenSecret, key tokenSecretKey).
+    auth: kubernetes
+    kubernetesRole: vinaire
+    kubernetesMount: kubernetes
+    tokenSecret: ""
+    tokenSecretKey: token
+    allowInsecure: false  # http:// Vault — local development only
+  # After rotating the Transit key, set once to move the wrapped key to its newest version.
+  rewrapOnStart: false
+
 # Where signed-in sessions live (Roadmap Phase 48).
 #   memory — inside the pod: lost on a restart, and only one replica is possible.
 #   secret — sealed in a Secret of this namespace, shared by every replica and

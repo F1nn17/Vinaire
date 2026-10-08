@@ -33,6 +33,11 @@ type ClusterRow struct {
 	CanAddNode bool `json:"canAddNode"`
 	// Status is "connected" or "unreachable" (a cached probe of /version).
 	Status string `json:"status"`
+	// Credential (Roadmap Phase 49): the health of the bearer token Vinaire uses for a
+	// cluster someone added — "" (fine), "no-expiry", "expiring" (within a week) or
+	// "expired". The expiry date is shown; the token never is.
+	Credential          string     `json:"credential,omitempty"`
+	CredentialExpiresAt *time.Time `json:"credentialExpiresAt,omitempty"`
 }
 
 // ClusterManagement describes the registry's persistence.
@@ -127,6 +132,9 @@ func (h *Handler) ListClusters(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		rows[i].Type = entry.Type()
+		if entry.Removable && entry.RESTConfig != nil {
+			rows[i].Credential, rows[i].CredentialExpiresAt = clusters.CredentialHealth(entry.RESTConfig.BearerToken, time.Now())
+		}
 		rows[i].CanAddNode = clusters.SupportsAddNode(rows[i].Type)
 		wg.Add(1)
 		go func() {
@@ -537,4 +545,92 @@ func (h *Handler) RemoveCluster(w http.ResponseWriter, r *http.Request) {
 	statusMu.Unlock()
 	h.auditLog(r, "remove_cluster", "", name)
 	respondJSON(w, map[string]string{"status": "ok"})
+}
+
+type rotateRequest struct {
+	Token string `json:"token"`
+}
+
+// RotateClusterCredentials handles PUT /api/v1/clusters/{name}/credentials — replace the
+// bearer token Vinaire uses for a cluster that was added with a token (Roadmap Phase
+// 49), before the old one runs out or after it leaked. The new token must reach the same
+// cluster (compared by the kube-system namespace UID, as when adding), is verified with a
+// real call before anything is saved, and is audited without the token.
+func (h *Handler) RotateClusterCredentials(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "clusters", "update") {
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	if !h.requireSecureTransport(w, r) {
+		return
+	}
+	name := chi.URLParam(r, "name")
+	old, ok := h.Clusters.Get(name)
+	if !ok || !old.Removable {
+		respondError(w, http.StatusNotFound, "no such cluster, or it is configured by the deployment and can't be changed here")
+		return
+	}
+	if h.ClusterStore == nil {
+		respondError(w, http.StatusServiceUnavailable, "cluster management is unavailable here")
+		return
+	}
+	var req rotateRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil || strings.TrimSpace(req.Token) == "" {
+		respondError(w, http.StatusBadRequest, `request body must be {"token": "<new bearer token>"}`)
+		return
+	}
+	req.Token = strings.TrimSpace(req.Token)
+
+	stored, err := h.ClusterStore.Load(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to load existing clusters: "+err.Error())
+		return
+	}
+	idx := -1
+	for i := range stored {
+		if stored[i].Name == name {
+			idx = i
+		}
+	}
+	if idx < 0 {
+		respondError(w, http.StatusNotFound, "no such cluster")
+		return
+	}
+	if stored[idx].Kubeconfig != "" {
+		respondError(w, http.StatusConflict, "this cluster was added from a kubeconfig, whose credentials may be a certificate — import the new kubeconfig instead")
+		return
+	}
+	updated := stored[idx]
+	updated.Token = req.Token
+	entry, err := clusters.EntryFromStored(updated)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "failed to build a client for this cluster: "+err.Error())
+		return
+	}
+	if err := clusters.VerifyConnection(entry); err != nil {
+		respondError(w, http.StatusBadRequest, "the new token doesn't work: "+explainConnectError(err))
+		return
+	}
+	// the same cluster: a token for some other one must not replace this one's
+	if oid, ok1 := clusters.Identity(r.Context(), old.Clientset); ok1 {
+		if nid, ok2 := clusters.Identity(r.Context(), entry.Clientset); ok2 && nid != oid {
+			respondError(w, http.StatusConflict, "the new token belongs to a different cluster")
+			return
+		}
+	}
+	stored[idx] = updated
+	if err := h.ClusterStore.Save(r.Context(), stored); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to save clusters: "+err.Error())
+		return
+	}
+	entry.SetType(old.Type())
+	h.Clusters.Remove(name)
+	h.Clusters.AddDynamic(entry)
+	state, exp := clusters.CredentialHealth(req.Token, time.Now())
+	expires := ""
+	if exp != nil {
+		expires = exp.UTC().Format(time.RFC3339)
+	}
+	h.auditLog(r, "rotate-cluster-credentials", "", name, "credential", state, "expires", expires)
+	respondJSON(w, clusterRowFor(entry))
 }

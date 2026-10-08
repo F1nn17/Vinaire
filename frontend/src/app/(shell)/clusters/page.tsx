@@ -2,8 +2,13 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { t } from "@/lib/i18n/translate";
 import { useClusters } from "@/lib/hooks/useClusters";
-import { removeCluster, setClusterType } from "@/lib/api/clusters";
+import {
+  removeCluster,
+  rotateClusterCredentials,
+  setClusterType,
+} from "@/lib/api/clusters";
 import { setCurrentCluster } from "@/lib/clusterStore";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import type { Cluster, ClusterType } from "@/lib/types";
@@ -38,6 +43,10 @@ function ClustersPage() {
   const [wizardOpen, setWizardOpen] = useState(searchParams.get("add") === "1");
   const [pendingRemove, setPendingRemove] = useState<Cluster | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [rotating, setRotating] = useState<Cluster | null>(null);
+  const [newToken, setNewToken] = useState("");
+  const [rotateBusy, setRotateBusy] = useState(false);
+  const [rotateError, setRotateError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
 
   async function changeType(c: Cluster, type: ClusterType) {
@@ -46,6 +55,28 @@ function ClustersPage() {
       await mutate();
     } catch (err) {
       setToast({ type: "error", message: friendlyErrorMessage(err) });
+    }
+  }
+
+  async function handleRotate() {
+    if (!rotating || !newToken.trim()) return;
+    setRotateBusy(true);
+    setRotateError(null);
+    try {
+      await rotateClusterCredentials(rotating.name, newToken.trim());
+      setToast({
+        type: "success",
+        message: t('The token for "{name}" was replaced.', {
+          name: rotating.name,
+        }),
+      });
+      setRotating(null);
+      setNewToken("");
+      await mutate();
+    } catch (err) {
+      setRotateError(friendlyErrorMessage(err));
+    } finally {
+      setRotateBusy(false);
     }
   }
 
@@ -105,6 +136,24 @@ function ClustersPage() {
         <span className="flex items-center gap-1.5 text-xs">
           <StatusDot color={c.status === "connected" ? "ok" : "err"} />
           {c.status}
+          {c.credential && (
+            <span
+              className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-warn"
+              title={
+                c.credential === "no-expiry"
+                  ? "This cluster's token never expires — if it leaks, it stays valid. Replace it with a short-lived one."
+                  : c.credential === "expiring"
+                    ? `The token expires ${c.credentialExpiresAt ? new Date(c.credentialExpiresAt).toLocaleString() : "soon"} — replace it before then.`
+                    : "The token has expired — replace it."
+              }
+            >
+              {c.credential === "no-expiry"
+                ? "token never expires"
+                : c.credential === "expiring"
+                  ? "token expires soon"
+                  : "token expired"}
+            </span>
+          )}
         </span>
       ),
     },
@@ -133,6 +182,19 @@ function ClustersPage() {
           >
             Open
           </button>
+          {c.removable && (
+            <button
+              type="button"
+              onClick={() => {
+                setRotateError(null);
+                setNewToken("");
+                setRotating(c);
+              }}
+              className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-xs"
+            >
+              Replace token
+            </button>
+          )}
           {c.removable ? (
             <button
               type="button"
@@ -188,6 +250,56 @@ function ClustersPage() {
             router.push("/nodes");
           }}
         />
+      )}
+
+      {rotating && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-xl border border-border bg-surface p-5">
+            <div className="text-sm font-semibold">
+              Replace the token for &ldquo;{rotating.name}&rdquo;
+            </div>
+            <div className="mt-1 text-xs text-text-muted">
+              Paste a new bearer token for the same cluster. Vinaire checks it
+              against the cluster before saving, then forgets the old one.
+              Prefer a short-lived one:{" "}
+              <code className="font-mono">
+                kubectl create token &lt;serviceaccount&gt; --duration=720h
+              </code>
+              .
+            </div>
+            <textarea
+              aria-label="New token"
+              value={newToken}
+              onChange={(e) => setNewToken(e.target.value)}
+              rows={4}
+              autoComplete="off"
+              className="mt-3 w-full resize-none rounded-lg border border-border bg-surface-2 p-3 font-mono text-xs outline-none focus:border-accent"
+            />
+            {rotateError && (
+              <div className="mt-2 text-xs text-err">{rotateError}</div>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setRotating(null);
+                  setNewToken("");
+                }}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={rotateBusy || !newToken.trim()}
+                onClick={() => void handleRotate()}
+                className="rounded-lg bg-accent px-4 py-1.5 text-[12.5px] font-semibold text-white disabled:opacity-50"
+              >
+                {rotateBusy ? "Checking…" : "Replace token"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <ConfirmModal

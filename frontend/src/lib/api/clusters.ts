@@ -177,3 +177,19 @@ export function removeCluster(name: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+// Replace the bearer token Vinaire uses for a cluster that was added with one
+// (Roadmap Phase 49). The new token is checked against the cluster before it is saved.
+export function rotateClusterCredentials(
+  name: string,
+  token: string,
+): Promise<void> {
+  return apiFetch<void>(
+    `/api/v1/clusters/${encodeURIComponent(name)}/credentials`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    },
+  );
+}

@@ -258,6 +258,15 @@ flow.
   leader-election Lease (`vinaire-leader`) keeps scheduled GitOps polling to one replica.
   `GET /api/v1/auth/sessions` and `DELETE /api/v1/auth/sessions/{ref}` (right `auth.vinaire.io`,
   audited `session-revoke`) list and end sessions; the list never carries a cookie or token.
+- Key provider and credential rotation (Roadmap Phase 49, `internal/keyprovider`,
+  `internal/clusters/keyring.go`): `KEY_PROVIDER=vault` keeps the store's data key only *wrapped* by a
+  Vault/OpenBao Transit key (configuration from the environment, never from a request; https unless
+  `VAULT_ALLOW_INSECURE=true`, dev only). Failing to obtain the key is **fatal** — never fall back to a new
+  key or to an unencrypted store; a wrapped store is not opened without its provider. A raw key and a
+  provider together (`CLUSTER_STORE_KEY` + `KEY_PROVIDER`) is refused. `PUT /api/v1/clusters/{name}/credentials`
+  replaces the bearer token of a cluster added with a token: right `clusters.vinaire.io` `update`, secure
+  transport only, verified by a real call, must be the **same** cluster (kube-system UID), audited as
+  `rotate-cluster-credentials` — never the token. No endpoint ever returns a stored credential.
 - (Phase 24, unchanged:) cluster management via the web UI (Settings page): create/get/update on exactly
   one Secret (`vinaire-clusters`, in this backend's own namespace, via a
   dedicated narrow `Role`/`RoleBinding` — never the broad, cluster-wide
