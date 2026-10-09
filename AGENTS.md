@@ -617,16 +617,17 @@ rules:
     resources: ["pods/portforward"]
     verbs: ["create"]
   # Phase 45: history search reaches Loki through the API server's service proxy,
-  # as the caller — only for Loki's own Service names.
+  # as the caller — only for Loki's own Services. The API server authorizes a service proxy
+  # by "scheme:service:port" (what Vinaire asks for), so that is what resourceNames lists.
   - apiGroups: [""]
     resources: ["services/proxy"]
-    resourceNames: ["loki", "loki-gateway", "loki-read", "loki-query-frontend"]
+    resourceNames: ["http:loki:3100", "http:loki-gateway:80", "http:loki-read:3100", "http:loki-query-frontend:3100"]
     verbs: ["get"]
   # Phase 37: metrics are read from the Prometheus found in the cluster the same
   # way — as the caller, through the service proxy, for Prometheus's own names only.
   - apiGroups: [""]
     resources: ["services/proxy"]
-    resourceNames: ["prometheus-server", "prometheus", "prometheus-operated", "kube-prometheus-stack-prometheus", "vmsingle", "prometheus-alertmanager", "alertmanager", "kube-prometheus-stack-alertmanager"]
+    resourceNames: ["http:prometheus-server:80", "http:prometheus:9090", "http:prometheus-operated:9090", "http:kube-prometheus-stack-prometheus:9090", "http:vmsingle:8429", "http:prometheus-alertmanager:9093", "http:alertmanager:9093", "http:kube-prometheus-stack-alertmanager:9093"]
     verbs: ["get"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]

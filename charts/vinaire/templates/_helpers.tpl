@@ -114,16 +114,18 @@ ClusterRole a person is bound to, and — only when rbac.broad or authMode
   resources: ["poddisruptionbudgets", "horizontalpodautoscalers"]
   verbs: ["get", "list", "watch"]
 # Phase 45: searching logs through the Loki found in the cluster goes through the API
-# server's service proxy, as the caller — and only for Loki's own Service names.
+# server's service proxy, as the caller — and only for Loki's own Services. The API server
+# authorizes a service proxy by the name "scheme:service:port" (what Vinaire asks for), not by
+# the bare Service name, so that is what is listed; a Loki on another port needs its own rule.
 - apiGroups: [""]
   resources: ["services/proxy"]
-  resourceNames: ["loki", "loki-gateway", "loki-read", "loki-query-frontend"]
+  resourceNames: ["http:loki:3100", "http:loki-gateway:80", "http:loki-read:3100", "http:loki-query-frontend:3100"]
   verbs: ["get"]
 # Phase 37: metrics are read from the Prometheus found in the cluster the same way —
 # the community chart's server, kube-prometheus-stack's, an operator's, VictoriaMetrics.
 - apiGroups: [""]
   resources: ["services/proxy"]
-  resourceNames: ["prometheus-server", "prometheus", "prometheus-operated", "kube-prometheus-stack-prometheus", "vmsingle", "prometheus-alertmanager", "alertmanager", "kube-prometheus-stack-alertmanager"]
+  resourceNames: ["http:prometheus-server:80", "http:prometheus:9090", "http:prometheus-operated:9090", "http:kube-prometheus-stack-prometheus:9090", "http:vmsingle:8429", "http:prometheus-alertmanager:9093", "http:alertmanager:9093", "http:kube-prometheus-stack-alertmanager:9093"]
   verbs: ["get"]
 - apiGroups: ["storage.k8s.io"]
   resources: ["storageclasses"]

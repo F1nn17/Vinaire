@@ -139,3 +139,33 @@ func TestEveryRequestBodyIsSizeLimited(t *testing.T) {
 		}
 	}
 }
+
+// Roadmap Phase 61: the API server authorizes a service proxy by the name
+// "scheme:service:port" — which is how Vinaire always calls it (ProxyGet("http", name, port)) —
+// not by the bare Service name. A role listing bare names grants nothing: Prometheus and Loki
+// answered "forbidden" to a viewer who had, on paper, the right to reach them.
+func TestServiceProxyRulesNameSchemeServicePort(t *testing.T) {
+	for _, file := range []string{"../charts/vinaire/templates/_helpers.tpl", "../AGENTS.md"} {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines := strings.Split(string(data), "\n")
+		for i, line := range lines {
+			if !strings.Contains(line, `"services/proxy"`) {
+				continue
+			}
+			// the rule's resourceNames line is within the next few lines (or just before)
+			for j := i - 2; j <= i+3 && j < len(lines); j++ {
+				if j < 0 || !strings.Contains(lines[j], "resourceNames:") {
+					continue
+				}
+				for _, name := range regexp.MustCompile(`"([^"]+)"`).FindAllStringSubmatch(lines[j], -1) {
+					if !regexp.MustCompile(`^https?:[a-z0-9.-]+:[0-9]+$`).MatchString(name[1]) {
+						t.Errorf("%s:%d: services/proxy resourceName %q must be scheme:service:port", file, j+1, name[1])
+					}
+				}
+			}
+		}
+	}
+}

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Node and namespace Overviews in two columns (Roadmap Phase 62).** They were the only Overview pages still stacked in one column.
+
+### Fixed
+
+- **Metrics and log search for a non-admin viewer.** The chart's `-viewer` role listed bare Service names for `services/proxy`, but the
+  API server authorizes a service proxy by `scheme:service:port` (which is how Vinaire always calls it), so Prometheus and Loki
+  answered "forbidden" to a viewer who had the right on paper. The role now lists `http:<service>:<port>` for the standard
+  Services; a rule test fails if a bare name comes back.
 - **Node metrics on the node's Overview, and they work with the community Prometheus chart (Roadmap Phase 61).** The charts
   (CPU, memory, network, disk) are now a card on the node's Overview instead of a separate tab. They previously looked for the
   `node` label only, so a Prometheus that names the node in `instance` / `kubernetes_io_hostname` (the community `prometheus`
