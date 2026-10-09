@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Pages refresh themselves.** Lists and detail pages of resources (workloads, nodes, storage, namespaces, Helm releases, …) re-read every 5 s, so the result of a scale, restart or delete appears without reloading (the action's own refetch ran before the cluster caught up). Forms, install checks and searches do not poll.
 - **Marketplace hides Bitnami by default.** Charts from the three Bitnami repositories (`unmaintained: true` in `catalog.json`) are left out of a search, with a check box "Show Bitnami charts (their images are no longer updated)" and a count of what is hidden; they carry a badge and a warning on the install page. Naming the repository shows them. The Marketplace is now translated (title, tabs, categories), and the catalog no longer reloads: a stale repository index is served at once and refreshed in the background (kept warm by a timer).
 - **Marketplace: "Show the manifests".** In the "This install will create" box, the full YAML the install would apply, rendered locally with the values
   entered (`POST /api/v1/catalog/install/manifest`, a read as the caller): Secret values are replaced with `<redacted>`, capped at 512 KiB.
