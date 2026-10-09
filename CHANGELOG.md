@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The chart's `-viewer` role now also lets a viewer read `endpoints` and `ingressclasses`, which the install page's checks and the Ingress-class picker need.
 - **Metrics and log search for a non-admin viewer.** The chart's `-viewer` role listed bare Service names for `services/proxy`, but the
   API server authorizes a service proxy by `scheme:service:port` (which is how Vinaire always calls it), so Prometheus and Loki
   answered "forbidden" to a viewer who had the right on paper. The role now lists `http:<service>:<port>` for the standard

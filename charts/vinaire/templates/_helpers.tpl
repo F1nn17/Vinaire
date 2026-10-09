@@ -75,7 +75,9 @@ ClusterRole a person is bound to, and — only when rbac.broad or authMode
     - configmaps
     - secrets
     - services
+    - endpoints
     - ingresses
+    - ingressclasses
     # What charts commonly create beside workloads — readable so those pages (and
     # an install's own existence checks) don't 403 on a plain browse.
     - networkpolicies
