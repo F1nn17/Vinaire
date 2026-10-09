@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cancel with rollback for Marketplace installs (Roadmap Phase 60).** An install can now be stopped at any stage. Once Helm
+  is creating objects, "Stop and roll back" interrupts it and uninstalls the release the install itself made (as the caller,
+  audited `helm-install-rollback`); the same button undoes an install that failed halfway. A release that existed before is never
+  touched, and the namespace and volume claims are not deleted behind your back — they are listed, with the existing namespace
+  delete offered.
 - **Bulk restart / delete (Roadmap Phase 58).** Tick rows in the Deployments and Pods lists (or "select all" for the filtered rows)
   and restart or delete them together. Deleting needs the number of selected objects typed. It uses the same endpoints as the
   single actions — one audited request per object, the caller's own RBAC decides, the write rate limit is waited out rather
