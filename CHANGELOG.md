@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Service, Ingress and HTTPRoute forms fill themselves in (Roadmap Phase 63).** Pick the application (or the Service) and the form
+  takes its name, namespace, selector, ports, backend and port; an Ingress offers the cluster's Ingress classes, and there is a new
+  HTTPRoute (Gateway API) form with a Gateway and Service picker. Everything stays editable and goes through the usual reviewed
+  apply — no new write path.
 - **Node and namespace Overviews in two columns (Roadmap Phase 62).** They were the only Overview pages still stacked in one column.
 
 ### Fixed
