@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Image wizard: tags from a list, more programs.** The tag field offers the newest versions of the image from Docker Hub or quay.io (`GET /api/v1/images/tags?image=`, anonymous, through the guarded client, cached 10 min; a request names an image, never a URL) and warns about a tag that isn't among them. New presets: Keycloak (connected to an existing PostgreSQL through its Secret), nginx, Memcached, NATS, MinIO, Grafana, Adminer, Uptime Kuma.
+- **Image wizard: tags from a list, more programs.** The tag field offers the newest versions of the image from Docker Hub or quay.io (`GET /api/v1/images/tags?image=`, anonymous, through the guarded client, cached 10 min; a request names an image, never a URL) and warns about a tag that isn't among them. New presets: Keycloak (connected to an existing PostgreSQL through its Secret), nginx, Memcached, NATS, Grafana, Adminer, Uptime Kuma.
 - **Namespace page: a Workloads tab** with the pods (and deployments, StatefulSets, DaemonSets, Jobs) of that namespace.
 - **Overview: cluster usage history** (CPU, memory, network, disk of the whole cluster from Prometheus; `GET /api/v1/cluster/metrics`).
 - **Russian interface: no all-capitals labels** ("УПАВШИЕ ПОДЫ" is now "Упавшие поды").

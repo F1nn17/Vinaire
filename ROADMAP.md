@@ -4669,7 +4669,7 @@ RabbitMQ, MongoDB и «любой образ». Для каждого — пол
 ждётся, как в массовых действиях. Проверено вживую: Redis (вход по паролю) и PostgreSQL (psql) поднялись из мастера, owner-ссылки работают,
 после удаления StatefulSet Secret и Service собраны.
 **Позже добавлено (2026-10-10):** список тегов из реестра (`GET /api/v1/images/tags`, Docker Hub и quay.io через netguard, кэш 10 мин),
-подсказка о теге вне списка; пресеты Keycloak (к существующему PostgreSQL через его Secret), nginx, Memcached, NATS, MinIO, Grafana, Adminer,
+подсказка о теге вне списка; пресеты Keycloak (к существующему PostgreSQL через его Secret), nginx, Memcached, NATS, Grafana, Adminer,
 Uptime Kuma; вкладка «Нагрузки» на странице namespace; история нагрузки всего кластера на Overview (`GET /api/v1/cluster/metrics`).
 **Не вошло:** бэкапы и реплики (для них — операторы), реестры кроме Docker Hub и quay.io (теги вводятся вручную).
 

@@ -451,45 +451,6 @@ export const presets: Preset[] = [
     note: T("One server, no password: for pods inside the cluster."),
   },
   {
-    id: "minio",
-    title: "MinIO",
-    summary: T("S3-compatible object storage. Image `quay.io/minio/minio`."),
-    image: "quay.io/minio/minio",
-    tagHint: T(
-      "A release tag like RELEASE.2025-…; pick the newest from the list.",
-    ),
-    defaultTag: "",
-    ports: [
-      { name: "api", port: 9000 },
-      { name: "console", port: 9001 },
-    ],
-    dataPath: "/data",
-    fields: [
-      {
-        id: "user",
-        label: T("Access key (administrator)"),
-        hint: T("The administrator's name; at least 3 characters."),
-        default: "admin",
-        pattern: /^[a-z][a-z0-9_]{2,30}$/,
-      },
-    ],
-    secrets: ["password"],
-    env: (v) => [
-      { name: "MINIO_ROOT_USER", value: v.user },
-      { name: "MINIO_ROOT_PASSWORD", secret: "password" },
-    ],
-    args: () => ["server", "/data", "--console-address", ":9001"],
-    probe: { tcp: 9000 },
-    resources: { cpu: "100m", memory: "256Mi", memoryLimit: "1Gi" },
-    connect: (v, host, secret) => [
-      [T("S3 address"), `http://${host}:9000`],
-      [T("Console"), `${host}:9001 (${T("use Forward port on the pod")})`],
-      [T("Access key"), v.user],
-      [T("Password"), `${T("Secret")} ${secret}, ${T("key")} password`],
-    ],
-    note: T("One server on one volume. The console is not published outside."),
-  },
-  {
     id: "grafana",
     title: "Grafana",
     summary: T("Dashboards. Official image `grafana/grafana`."),
