@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -272,8 +273,11 @@ func TestBrokenRepositoryIsReportedNotFatal(t *testing.T) {
 
 func TestIndexIsCachedAndExpires(t *testing.T) {
 	hits := 0
+	var mu sync.Mutex
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
 		hits++
+		mu.Unlock()
 		fmt.Fprint(w, "apiVersion: v1\nentries: {}\n")
 	}))
 	defer srv.Close()
@@ -288,8 +292,67 @@ func TestIndexIsCachedAndExpires(t *testing.T) {
 	}
 	now = now.Add(indexTTL + time.Second)
 	c.Search(context.Background(), "", "", "")
-	if hits != 2 {
-		t.Fatalf("index fetched %d times after expiry, want 2", hits)
+	// the stale index is served at once and refreshed in the background
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := hits
+		mu.Unlock()
+		if n == 2 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("index fetched %d times after expiry, want 2", hits)
+}
+
+func TestAStaleIndexIsServedWithoutWaitingForTheRefresh(t *testing.T) {
+	release := make(chan struct{})
+	var calls int
+	var cmu sync.Mutex
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		cmu.Lock()
+		calls++
+		n := calls
+		cmu.Unlock()
+		if n > 1 {
+			<-release // the refresh is slow
+		}
+		fmt.Fprint(w, "apiVersion: v1\nentries:\n  demo:\n    - {name: demo, version: 1.0.0}\n")
+	}))
+	defer srv.Close()
+	defer close(release)
+	c := newCatalog(Config{Repos: []Repo{{Name: "fake", URL: srv.URL}}}, srv.Client())
+	now := time.Now()
+	c.now = func() time.Time { return now }
+	if res := c.Search(context.Background(), "", "", ""); len(res.Charts) != 1 {
+		t.Fatalf("first search: %+v", res)
+	}
+	now = now.Add(indexTTL + time.Second)
+	start := time.Now()
+	res := c.Search(context.Background(), "", "", "")
+	if time.Since(start) > 2*time.Second || len(res.Charts) != 1 || len(res.Pending) != 0 {
+		t.Errorf("the stale index should answer at once, took %v with %+v", time.Since(start), res)
+	}
+}
+
+func TestUnmaintainedRepositoriesAreLeftOutUnlessAskedFor(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, "apiVersion: v1\nentries:\n  demo:\n    - {name: demo, version: 1.0.0}\n")
+	}))
+	defer srv.Close()
+	c := newCatalog(Config{Repos: []Repo{{Name: "good", URL: srv.URL}, {Name: "old", URL: srv.URL, Unmaintained: true}}}, srv.Client())
+	res := c.SearchOpts(context.Background(), "", "", "", SearchOptions{})
+	if len(res.Charts) != 1 || res.Charts[0].Repo != "good" || res.HiddenUnmaintained != 1 {
+		t.Errorf("default search: %+v", res)
+	}
+	if res := c.SearchOpts(context.Background(), "", "", "", SearchOptions{IncludeUnmaintained: true}); len(res.Charts) != 2 {
+		t.Errorf("asked for: %+v", res)
+	}
+	// naming the repository is an explicit choice
+	res = c.SearchOpts(context.Background(), "", "old", "", SearchOptions{})
+	if len(res.Charts) != 1 || !res.Charts[0].Unmaintained || res.HiddenUnmaintained != 0 {
+		t.Errorf("named repository: %+v", res)
 	}
 }
 

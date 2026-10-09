@@ -237,7 +237,8 @@
         "elasticsearch": [
           "search"
         ]
-      }
+      },
+      "unmaintained": true
     },
     {
       "name": "strimzi",
@@ -333,7 +334,8 @@
         "zookeeper": [
           "kafka"
         ]
-      }
+      },
+      "unmaintained": true
     },
     {
       "name": "ingress-nginx",
@@ -830,7 +832,8 @@
           "java",
           "web"
         ]
-      }
+      },
+      "unmaintained": true
     },
     {
       "name": "opentelemetry",

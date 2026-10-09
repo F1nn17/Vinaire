@@ -12,6 +12,8 @@ export type CatalogRepo = {
   category?: string;
   // an OCI registry rather than a classic Helm repository
   oci?: boolean;
+  // its images are no longer updated (Bitnami's): left out of a search unless asked for
+  unmaintained?: boolean;
 };
 
 export type ChartSummary = {
@@ -22,6 +24,8 @@ export type ChartSummary = {
   description?: string;
   keywords?: string[];
   deprecated?: boolean;
+  // the repository's images are no longer updated
+  unmaintained?: boolean;
   category?: string;
   // an icon the backend serves (see components/marketplace/ChartIcon)
   hasIcon?: boolean;
@@ -37,6 +41,8 @@ export type CatalogSearch = {
   errors?: Record<string, string>;
   // matches left out because the chart is deprecated (unmaintained, maybe unsafe)
   hiddenDeprecated?: number;
+  // matches left out because their repository is unmaintained (Bitnami's)
+  hiddenUnmaintained?: number;
 };
 
 export type ChartVersionInfo = {
@@ -85,9 +91,11 @@ export function searchCatalog(
   repo: string,
   category = "",
   includeDeprecated = false,
+  includeUnmaintained = false,
 ): Promise<CatalogSearch> {
   const p = new URLSearchParams();
   if (includeDeprecated) p.set("deprecated", "true");
+  if (includeUnmaintained) p.set("unmaintained", "true");
   if (search) p.set("search", search);
   if (repo) p.set("repo", repo);
   if (category) p.set("category", category);

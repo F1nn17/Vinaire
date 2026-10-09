@@ -63,11 +63,13 @@ function CatalogTab() {
   const [category, setCategory] = useState("");
   const { data: repos } = useCatalogRepos();
   const [showDeprecated, setShowDeprecated] = useState(false);
+  const [showUnmaintained, setShowUnmaintained] = useState(false);
   const { data, error, isLoading } = useCatalogSearch(
     search,
     repo,
     category,
     showDeprecated,
+    showUnmaintained,
   );
   const categories = Array.from(
     new Set(
@@ -109,6 +111,7 @@ function CatalogTab() {
               <option key={r.name} value={r.name}>
                 {r.name}
                 {r.oci ? " (OCI)" : ""}
+                {r.unmaintained ? ` — ${t("no longer updated")}` : ""}
               </option>
             ))}
         </select>
@@ -126,6 +129,25 @@ function CatalogTab() {
             ? t(" ({n} hidden — no longer maintained, may be unsafe)", {
                 n: data.hiddenDeprecated,
               })
+            : ""}
+        </label>
+      )}
+
+      {(showUnmaintained || !!data?.hiddenUnmaintained) && (
+        <label className="flex items-center gap-2 text-xs text-text-muted">
+          <input
+            type="checkbox"
+            checked={showUnmaintained}
+            onChange={(e) => setShowUnmaintained(e.target.checked)}
+          />
+          {t("Show Bitnami charts (their images are no longer updated)")}
+          {!showUnmaintained && data?.hiddenUnmaintained
+            ? t(
+                " ({n} hidden — Bitnami moved its images to an archive: no security fixes)",
+                {
+                  n: data.hiddenUnmaintained,
+                },
+              )
             : ""}
         </label>
       )}
@@ -217,6 +239,9 @@ function CatalogTab() {
                   <span>{c.repo}</span>
                   {c.deprecated && (
                     <span className="text-warn">deprecated</span>
+                  )}
+                  {!c.deprecated && c.unmaintained && (
+                    <span className="text-warn">{t("images not updated")}</span>
                   )}
                   {!c.deprecated && c.appVersion && (
                     <span>app {c.appVersion}</span>

@@ -64,15 +64,16 @@ func (h *Handler) CatalogRepos(w http.ResponseWriter, _ *http.Request) {
 	}
 	// Only what the UI shows — not the configuration's per-chart search tags.
 	type repoView struct {
-		Name        string `json:"name"`
-		URL         string `json:"url"`
-		Description string `json:"description,omitempty"`
-		Category    string `json:"category,omitempty"`
-		OCI         bool   `json:"oci,omitempty"`
+		Name         string `json:"name"`
+		URL          string `json:"url"`
+		Description  string `json:"description,omitempty"`
+		Category     string `json:"category,omitempty"`
+		OCI          bool   `json:"oci,omitempty"`
+		Unmaintained bool   `json:"unmaintained,omitempty"`
 	}
 	var repos []repoView
 	for _, r := range h.Catalog.Repos() {
-		repos = append(repos, repoView{r.Name, r.URL, r.Description, r.Category, r.IsOCI()})
+		repos = append(repos, repoView{r.Name, r.URL, r.Description, r.Category, r.IsOCI(), r.Unmaintained})
 	}
 	respondJSON(w, map[string]any{"repos": repos})
 }
@@ -87,8 +88,11 @@ func (h *Handler) CatalogSearch(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "search is too long")
 		return
 	}
-	respondJSON(w, h.Catalog.SearchWith(r.Context(), q, r.URL.Query().Get("repo"), r.URL.Query().Get("category"),
-		r.URL.Query().Get("deprecated") == "true"))
+	respondJSON(w, h.Catalog.SearchOpts(r.Context(), q, r.URL.Query().Get("repo"), r.URL.Query().Get("category"),
+		helm.SearchOptions{
+			IncludeDeprecated:   r.URL.Query().Get("deprecated") == "true",
+			IncludeUnmaintained: r.URL.Query().Get("unmaintained") == "true",
+		}))
 }
 
 // CatalogChart handles GET /api/v1/catalog/charts/{repo}/{chart}?version=.

@@ -37,9 +37,13 @@ type Repo struct {
 	// so that a search for "postgres" finds CloudNativePG's chart called
 	// "cluster". They're per chart, not per repository, so they never make an
 	// unrelated chart match.
-	Category  string              `json:"category,omitempty"`
-	ChartTags map[string][]string `json:"chartTags,omitempty"`
-	Charts    []string            `json:"charts,omitempty"` // OCI sources only
+	// Unmaintained marks a repository whose charts still work but whose images are no longer
+	// updated (Bitnami's, since it moved its free images to an archive): it is left out of a
+	// search unless asked for, and the install page says so.
+	Unmaintained bool                `json:"unmaintained,omitempty"`
+	Category     string              `json:"category,omitempty"`
+	ChartTags    map[string][]string `json:"chartTags,omitempty"`
+	Charts       []string            `json:"charts,omitempty"` // OCI sources only
 }
 
 // IsOCI reports whether the source is an OCI registry.

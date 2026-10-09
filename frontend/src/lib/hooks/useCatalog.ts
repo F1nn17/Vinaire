@@ -21,10 +21,25 @@ export function useCatalogSearch(
   repo: string,
   category: string,
   includeDeprecated = false,
+  includeUnmaintained = false,
 ) {
   return useSWR(
-    ["catalog-search", search, repo, category, includeDeprecated],
-    () => searchCatalog(search, repo, category, includeDeprecated),
+    [
+      "catalog-search",
+      search,
+      repo,
+      category,
+      includeDeprecated,
+      includeUnmaintained,
+    ],
+    () =>
+      searchCatalog(
+        search,
+        repo,
+        category,
+        includeDeprecated,
+        includeUnmaintained,
+      ),
     {
       revalidateOnFocus: false,
       keepPreviousData: true,

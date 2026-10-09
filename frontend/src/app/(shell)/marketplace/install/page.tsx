@@ -354,6 +354,19 @@ function InstallInner() {
               Wait until the resources are ready (up to 5 minutes)
             </label>
 
+            {chart.unmaintained && (
+              <div className="flex flex-col gap-1 rounded-lg border border-warn/40 bg-surface-2 p-3 text-xs">
+                <span className="font-semibold text-warn">
+                  {t("The images of this chart are no longer updated.")}
+                </span>
+                <span className="text-text-muted">
+                  {t(
+                    "Bitnami moved its free images to an archive: they get no security fixes. Fine to try things out; for real use prefer a chart with the project's own, maintained images.",
+                  )}
+                </span>
+              </div>
+            )}
+
             {chart.deprecated && (
               <label className="flex flex-col gap-1.5 rounded-lg border border-warn/40 bg-surface-2 p-3 text-xs text-warn">
                 <span className="font-semibold">This chart is deprecated.</span>

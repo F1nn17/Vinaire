@@ -156,6 +156,18 @@ func (c *Catalog) index(ctx context.Context, r Repo) (*repo.IndexFile, error) {
 		e.mu.Unlock()
 		return idx, err
 	}
+	// An index that has gone stale is still the best answer there is: serve it at once and
+	// refresh behind the scenes, instead of making whoever opens the Marketplace next wait for
+	// every repository to be fetched again.
+	if e.idx != nil && e.err == nil {
+		if e.loading == nil {
+			e.loading = make(chan struct{})
+			go c.refresh(r, e) // #nosec G118 -- shared with other requests, so it outlives this one
+		}
+		idx := e.idx
+		e.mu.Unlock()
+		return idx, nil
+	}
 	if e.loading == nil {
 		e.loading = make(chan struct{})
 		go c.refresh(r, e) // #nosec G118 -- the load is shared between requests, so it must outlive the one that started it
@@ -200,6 +212,28 @@ func (c *Catalog) Warm() {
 	for _, r := range c.cfg.Repos {
 		go func() { _, _ = c.index(context.Background(), r) }()
 	}
+	// and keep them warm: a repository is refreshed before its index goes stale, so a search
+	// never has to wait for a download
+	go func() {
+		t := time.NewTicker(indexTTL / 2)
+		defer t.Stop()
+		for range t.C {
+			for _, r := range c.cfg.Repos {
+				c.mu.Lock()
+				e := c.indexes[r.Name]
+				c.mu.Unlock()
+				if e == nil {
+					continue
+				}
+				e.mu.Lock()
+				if e.loading == nil && e.idx != nil {
+					e.loading = make(chan struct{})
+					go c.refresh(r, e)
+				}
+				e.mu.Unlock()
+			}
+		}
+	}()
 }
 
 func (c *Catalog) loadIndex(ctx context.Context, r Repo) (*repo.IndexFile, error) {
@@ -236,7 +270,9 @@ type ChartSummary struct {
 	Description string   `json:"description,omitempty"`
 	Keywords    []string `json:"keywords,omitempty"`
 	Deprecated  bool     `json:"deprecated,omitempty"`
-	Category    string   `json:"category,omitempty"`
+	// Unmaintained: the repository's images are no longer updated (see Repo.Unmaintained).
+	Unmaintained bool   `json:"unmaintained,omitempty"`
+	Category     string `json:"category,omitempty"`
 	// HasIcon: the chart names an icon, served by the backend at
 	// /api/v1/catalog/icons/{repo}/{chart} (never fetched by the browser).
 	HasIcon bool `json:"hasIcon,omitempty"`
@@ -246,7 +282,7 @@ func summarize(r Repo, name string, cv *repo.ChartVersion) ChartSummary {
 	return ChartSummary{
 		Repo: r.Name, Name: name, Version: cv.Version, AppVersion: cv.AppVersion,
 		Description: cv.Description, Keywords: cv.Keywords, Deprecated: cv.Deprecated,
-		Category: r.Category, HasIcon: iconURL(r, cv.Icon) != "",
+		Unmaintained: r.Unmaintained, Category: r.Category, HasIcon: iconURL(r, cv.Icon) != "",
 	}
 }
 
@@ -261,6 +297,15 @@ type SearchResult struct {
 	// HiddenDeprecated counts matches left out because the chart is deprecated
 	// (unmaintained, and possibly unsafe); ask again with includeDeprecated to see them.
 	HiddenDeprecated int `json:"hiddenDeprecated,omitempty"`
+	// HiddenUnmaintained counts matches left out because their repository is unmaintained
+	// (Bitnami's); ask again with includeUnmaintained, or pick that repository, to see them.
+	HiddenUnmaintained int `json:"hiddenUnmaintained,omitempty"`
+}
+
+// SearchOptions are the choices a search makes about charts it would otherwise hide.
+type SearchOptions struct {
+	IncludeDeprecated   bool
+	IncludeUnmaintained bool
 }
 
 // Search lists charts across the configured repositories whose name,
@@ -274,6 +319,14 @@ func (c *Catalog) Search(ctx context.Context, query, repoName, category string) 
 // SearchWith is Search with a choice about deprecated charts, which are
 // unmaintained and so hidden unless includeDeprecated is set.
 func (c *Catalog) SearchWith(ctx context.Context, query, repoName, category string, includeDeprecated bool) SearchResult {
+	return c.SearchOpts(ctx, query, repoName, category, SearchOptions{IncludeDeprecated: includeDeprecated, IncludeUnmaintained: true})
+}
+
+// SearchOpts is the search with every choice spelled out. Charts of an unmaintained repository
+// are left out of a search across all repositories unless IncludeUnmaintained is set; naming the
+// repository is an explicit choice and shows them.
+func (c *Catalog) SearchOpts(ctx context.Context, query, repoName, category string, opts SearchOptions) SearchResult {
+	includeDeprecated := opts.IncludeDeprecated
 	query = strings.ToLower(strings.TrimSpace(query))
 	res := SearchResult{Charts: []ChartSummary{}}
 
@@ -325,6 +378,10 @@ collect:
 				}
 				if cv.Deprecated && !includeDeprecated {
 					res.HiddenDeprecated++
+					continue
+				}
+				if g.r.Unmaintained && !opts.IncludeUnmaintained && repoName == "" {
+					res.HiddenUnmaintained++
 					continue
 				}
 				res.Charts = append(res.Charts, summarize(g.r, name, cv))
