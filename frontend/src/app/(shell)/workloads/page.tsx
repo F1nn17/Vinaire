@@ -14,6 +14,8 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { CreateResourceModal } from "@/components/editor/CreateResourceModal";
 import { workloadTemplates } from "@/components/editor/templates";
 import { PlusIcon } from "@/components/icons";
+import { BulkBar } from "@/components/workloads/BulkActions";
+import { BULK_MAX } from "@/lib/api/bulk";
 
 const columns: DataTableColumn<WorkloadRow>[] = [
   {
@@ -77,6 +79,18 @@ export default function WorkloadsPage() {
     : (data ?? []);
   useWorkloadsStream(tab, namespace);
 
+  // Roadmap Phase 58: tick rows to restart / delete several at once. Only where an
+  // action endpoint exists (Deployments, Pods); the selection belongs to one tab.
+  const bulkKind = tab === "deployments" || tab === "pods" ? tab : null;
+  const [picked, setPicked] = useState<{
+    tab: WorkloadKind;
+    keys: Set<string>;
+  }>({ tab: "deployments", keys: new Set() });
+  const selected = picked.tab === tab ? picked.keys : new Set<string>();
+  const selectedItems = rows
+    .filter((r) => selected.has(`${r.namespace}/${r.name}`))
+    .map((r) => ({ namespace: r.namespace, name: r.name }));
+
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
       <div className="flex items-center justify-between">
@@ -126,6 +140,20 @@ export default function WorkloadsPage() {
         </div>
       </div>
 
+      {bulkKind && (
+        <BulkBar
+          kind={bulkKind}
+          items={selectedItems}
+          onClear={() => setPicked({ tab, keys: new Set() })}
+          onFinished={(done) => {
+            const left = new Set(selected);
+            for (const k of done) left.delete(k);
+            setPicked({ tab, keys: left });
+            void mutate();
+          }}
+        />
+      )}
+
       {error ? (
         <div className="text-sm text-err">
           Failed to load {tab}: {friendlyErrorMessage(error)}
@@ -137,6 +165,15 @@ export default function WorkloadsPage() {
           rowKey={(r) => `${r.namespace}/${r.name}`}
           rowHref={(r) => r.href}
           isLoading={isLoading || !data}
+          selection={
+            bulkKind
+              ? {
+                  selected,
+                  onChange: (keys) => setPicked({ tab, keys }),
+                  max: BULK_MAX,
+                }
+              : undefined
+          }
           emptyLabel={
             namespace
               ? t('No {tab} found in namespace "{ns}".', { tab, ns: namespace })

@@ -137,6 +137,41 @@ function subscribe(onChange: () => void) {
 const getSearch = () => window.location.search;
 const getServerSearch = () => "";
 
+// A row's check box. It is a button, not an <input>: rows that link to a detail page are
+// anchors, and a button can cancel the navigation without the half-checked states a
+// cancelled checkbox click leaves behind.
+function RowCheck({
+  checked,
+  mixed = false,
+  label,
+  onToggle,
+}: {
+  checked: boolean;
+  mixed?: boolean;
+  label: string;
+  onToggle: () => void;
+}) {
+  const on = checked || mixed;
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={mixed ? "mixed" : checked}
+      aria-label={label}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggle();
+      }}
+      className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] leading-none text-white ${
+        on ? "border-accent bg-accent" : "border-border bg-surface-2"
+      }`}
+    >
+      {mixed ? "–" : checked ? "✓" : ""}
+    </button>
+  );
+}
+
 // ---- component ----------------------------------------------------------------
 
 export function DataTable<T>({
@@ -147,6 +182,7 @@ export function DataTable<T>({
   emptyLabel = "Nothing here yet.",
   isLoading = false,
   toolbar = true,
+  selection,
 }: {
   columns: DataTableColumn<T>[];
   rows: T[];
@@ -160,6 +196,15 @@ export function DataTable<T>({
   isLoading?: boolean;
   // Filter box and Columns menu; sorting by header is always on.
   toolbar?: boolean;
+  // Roadmap Phase 58: a check box on every row (and one in the header for the rows
+  // that pass the filter). The keys are the ones `rowKey` returns; the page owns the
+  // set and decides what to do with it.
+  selection?: {
+    selected: ReadonlySet<string>;
+    onChange: (next: Set<string>) => void;
+    // the most that may be selected at once (the page's actions are one request per row)
+    max?: number;
+  };
 }) {
   // Callers often build `columns` inline, so identify the table by its headers (a
   // string), not by the array — that stays the same across renders.
@@ -198,7 +243,8 @@ export function DataTable<T>({
   }
 
   const visible = columns.filter((c) => !hidden.has(c.header));
-  const gridTemplateColumns = visible.map((c) => c.width).join(" ");
+  const gridTemplateColumns =
+    (selection ? "24px " : "") + visible.map((c) => c.width).join(" ");
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -230,6 +276,31 @@ export function DataTable<T>({
   }
 
   const showToolbar = toolbar && rows.length > 0;
+
+  const shownKeys = shown.map(rowKey);
+  const pickedShown = selection
+    ? shownKeys.filter((k) => selection.selected.has(k)).length
+    : 0;
+  function toggleRow(key: string) {
+    if (!selection) return;
+    const next = new Set(selection.selected);
+    if (next.has(key)) next.delete(key);
+    else if (!selection.max || next.size < selection.max) next.add(key);
+    selection.onChange(next);
+  }
+  function toggleAllShown() {
+    if (!selection) return;
+    const next = new Set(selection.selected);
+    if (pickedShown === shownKeys.length) {
+      for (const k of shownKeys) next.delete(k);
+    } else {
+      for (const k of shownKeys) {
+        if (selection.max && next.size >= selection.max) break;
+        next.add(k);
+      }
+    }
+    selection.onChange(next);
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-2">
@@ -284,6 +355,18 @@ export function DataTable<T>({
           style={{ gridTemplateColumns }}
           role="row"
         >
+          {selection && (
+            <span role="columnheader" className="flex items-center">
+              <RowCheck
+                checked={
+                  shownKeys.length > 0 && pickedShown === shownKeys.length
+                }
+                mixed={pickedShown > 0 && pickedShown < shownKeys.length}
+                label="Select all rows"
+                onToggle={toggleAllShown}
+              />
+            </span>
+          )}
           {visible.map((col) => {
             const active = sort?.header === col.header;
             return (
@@ -325,9 +408,23 @@ export function DataTable<T>({
             const href = rowHref?.(row);
             const rowClassName =
               "grid items-center gap-0 border-b border-border px-[18px] py-3 last:border-b-0";
-            const cells = visible.map((col) => (
-              <div key={col.header}>{col.render(row)}</div>
-            ));
+            const key = rowKey(row);
+            const cells = [
+              ...(selection
+                ? [
+                    <div key="__select" className="flex items-center">
+                      <RowCheck
+                        checked={selection.selected.has(key)}
+                        label="Select row"
+                        onToggle={() => toggleRow(key)}
+                      />
+                    </div>,
+                  ]
+                : []),
+              ...visible.map((col) => (
+                <div key={col.header}>{col.render(row)}</div>
+              )),
+            ];
 
             return href ? (
               <Link
