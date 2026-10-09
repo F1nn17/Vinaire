@@ -21,6 +21,7 @@ import { ChartIcon } from "@/components/marketplace/ChartIcon";
 import { InstallProgress } from "@/components/marketplace/InstallProgress";
 import { PermissionsCheck } from "@/components/marketplace/PermissionsCheck";
 import { RollbackNote } from "@/components/marketplace/RollbackNote";
+import { RecipePanel } from "@/components/marketplace/RecipePanel";
 import { ValuesForm } from "@/components/marketplace/ValuesForm";
 import { buildSections } from "@/lib/values/schemaForm";
 import { PillTabs } from "@/components/ui/Tabs";
@@ -320,6 +321,16 @@ function InstallInner() {
               </div>
             )}
 
+            {chart.recipe && !jobId && (
+              <RecipePanel
+                key={`${repo}/${chartName}`}
+                recipe={chart.recipe}
+                installNamespace={namespace.trim()}
+                values={values}
+                onValues={setValues}
+              />
+            )}
+
             <label className="flex items-center gap-2 text-xs text-text-muted">
               <input
                 type="checkbox"
@@ -376,6 +387,35 @@ function InstallInner() {
               active={valuesTab === "form" && !hasForm ? "mine" : valuesTab}
               onChange={setValuesTab}
             />
+            {valuesTab === "mine" && !jobId && (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setValues(chart.values)}
+                  className="rounded-lg border border-border px-3 py-1.5 hover:bg-surface-2"
+                >
+                  Start from the documented defaults
+                </button>
+                <label className="cursor-pointer rounded-lg border border-border px-3 py-1.5 hover:bg-surface-2">
+                  Load a values file…
+                  <input
+                    type="file"
+                    accept=".yaml,.yml,.txt"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || file.size > 1024 * 1024) return;
+                      void file.text().then(setValues);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <span className="text-text-faint">
+                  The defaults come with the chart&apos;s own comments — keep
+                  what you change, delete the rest.
+                </span>
+              </div>
+            )}
             <div className="h-[420px] overflow-hidden rounded-lg border border-border">
               {valuesTab === "form" && hasForm && chart ? (
                 <div className="h-full p-3">

@@ -1,4 +1,5 @@
 import { apiFetch } from "./http";
+import type { Recipe } from "@/lib/values/recipe";
 
 // Real endpoints (Roadmap Phase 28): the Helm application catalog. Browsing is
 // read-only; install/upgrade/rollback/uninstall run as the signed-in user's own
@@ -55,6 +56,8 @@ export type ChartDetails = ChartSummary & {
   schema?: string;
   // has a top-level `nodeSelector` value, so "run on node" can work
   supportsNodeSelector: boolean;
+  // Roadmap Phase 59: install help for charts the catalog knows well
+  recipe?: Recipe;
 };
 
 export type HelmRelease = {

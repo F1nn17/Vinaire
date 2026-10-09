@@ -419,6 +419,8 @@ type ChartDetails struct {
 	// SupportsNodeSelector: the chart has a top-level `nodeSelector` value, the
 	// convention the install page's "run on node" picker relies on.
 	SupportsNodeSelector bool `json:"supportsNodeSelector"`
+	// Recipe (Roadmap Phase 59): install help for charts the catalog knows well — nil otherwise.
+	Recipe *Recipe `json:"recipe,omitempty"`
 }
 
 // ErrNotFound is returned for an unknown repository, chart or version.
@@ -477,6 +479,7 @@ func (c *Catalog) Details(ctx context.Context, repoName, name, version string) (
 		d.Schema = string(ch.Schema)
 	}
 	_, d.SupportsNodeSelector = ch.Values["nodeSelector"]
+	d.Recipe = RecipeFor(repoName, name)
 	return d, nil
 }
 
