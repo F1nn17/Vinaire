@@ -365,7 +365,9 @@ func (h *Handler) CatalogUninstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.auditHelm(r, "helm-uninstall", ns, name, nil)
-	respondJSON(w, map[string]string{"status": "ok"})
+	// Roadmap Phase 59: Helm leaves a StatefulSet's volume claims (and any a chart marks to be
+	// kept) behind. Say which, so the data left in the namespace isn't a surprise.
+	respondJSON(w, map[string]any{"status": "ok", "leftovers": helm.LeftoverClaims(r.Context(), cfg, ns, name)})
 }
 
 // respondInstallForbidden answers an install the caller lacks rights for: the

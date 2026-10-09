@@ -18,6 +18,7 @@ import {
   type RecipeSection,
 } from "@/lib/values/recipe";
 import { backendFromService } from "@/components/editor/forms/fromApp";
+import { FieldChecks } from "./FieldChecks";
 
 // Roadmap Phase 59: the questions a recipe asks before an install — which database, how to reach
 // the app — as a few choices and fields that become values in the "Your values" YAML. Nothing is
@@ -168,6 +169,11 @@ export function RecipePanel({
                     }
                   />
                 ))}
+                <FieldChecks
+                  option={option}
+                  fields={f}
+                  namespace={installNamespace}
+                />
                 <div className="flex items-center gap-3">
                   <button
                     type="button"

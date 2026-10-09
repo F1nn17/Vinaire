@@ -194,8 +194,8 @@ export async function rollbackRelease(
 export async function uninstallRelease(
   namespace: string,
   name: string,
-): Promise<void> {
-  await apiFetch(
+): Promise<{ leftovers?: string[] }> {
+  return apiFetch(
     `/api/v1/catalog/releases/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
     {
       method: "DELETE",
@@ -218,6 +218,10 @@ export type Preflight = {
   missing: MissingPermission[];
   // kinds that couldn't be checked (typically CRDs the chart installs itself)
   unchecked?: string[];
+  // Roadmap Phase 59: what the install creates, the storage it asks for, what the cluster lacks
+  created: { kind: string; count: number }[];
+  volumes: { name: string; size?: string; storageClass?: string }[];
+  warnings: { code: string; detail?: string }[];
 };
 
 export function preflightInstall(req: InstallRequest): Promise<Preflight> {

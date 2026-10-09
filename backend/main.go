@@ -209,6 +209,14 @@ func main() {
 			catalogCfg = c
 		}
 	}
+	// Roadmap Phase 59: the operator's own install recipes, on top of the built-in ones.
+	if path := os.Getenv("CATALOG_RECIPES"); path != "" {
+		if n, err := helm.LoadExtraRecipes(path); err != nil {
+			slog.Error("CATALOG_RECIPES is invalid — using the built-in recipes only", "path", path, "error", err)
+		} else {
+			slog.Info("loaded install recipes", "path", path, "count", n)
+		}
+	}
 	workloadsHandler.Catalog = helm.NewCatalog(catalogCfg)
 	// Load every repository's index in the background so the first search is quick.
 	workloadsHandler.Catalog.Warm()

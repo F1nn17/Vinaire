@@ -62,6 +62,11 @@ type PreflightResult struct {
 	// Unchecked lists kinds that couldn't be mapped to a resource (typically CRDs
 	// the chart installs itself) — they weren't verified either way.
 	Unchecked []string `json:"unchecked,omitempty"`
+	// Roadmap Phase 59: what the install will create, the storage it asks for, and what the
+	// cluster seems to lack for it (no default StorageClass, no ingress controller…).
+	Created  []KindCount  `json:"created"`
+	Volumes  []VolumeNeed `json:"volumes"`
+	Warnings []Warning    `json:"warnings"`
 }
 
 // OK reports whether nothing was found missing.
@@ -205,7 +210,9 @@ func (rl *Releases) Preflight(ctx context.Context, cfg *rest.Config, req Install
 	}
 	mapper, mapErr := restGetter{cfg: cfg, namespace: req.Namespace}.ToRESTMapper()
 
-	res := &PreflightResult{Objects: len(objs), Missing: []Needed{}}
+	plan := planOf(objs)
+	res := &PreflightResult{Objects: len(objs), Missing: []Needed{}, Created: plan.Created, Volumes: plan.Volumes,
+		Warnings: clusterWarnings(ctx, cs, plan)}
 	want := map[accessKey]map[string]bool{}
 	add := func(k accessKey, verbs ...string) {
 		if want[k] == nil {

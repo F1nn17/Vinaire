@@ -1,9 +1,12 @@
 package helm
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -26,6 +29,9 @@ type Recipe struct {
 	Summary  string          `json:"summary,omitempty"`
 	Guide    []string        `json:"guide,omitempty"`
 	Sections []RecipeSection `json:"sections"`
+	// After is shown once the install is done: where to go next. {release} and {namespace} are
+	// filled in by the interface; nothing else may appear in these texts.
+	After []string `json:"after,omitempty"`
 }
 
 // RecipeSection is one decision: a database, how to reach the app.
@@ -67,7 +73,8 @@ type RecipeField struct {
 
 // RecipeSet puts one value at a path ("a.b.0.c": numbers index lists). Strings (also inside
 // lists and maps) may hold {field} placeholders; an entry that mentions a field the person left
-// empty is skipped. As "number" turns the substituted string into a number.
+// empty is skipped — except {?field}, an optional one: a map key whose value is just that
+// placeholder is left out when the field is empty, and elsewhere it becomes an empty string. As "number" turns the substituted string into a number.
 type RecipeSet struct {
 	Path  string `json:"path"`
 	Value any    `json:"value"`
@@ -75,7 +82,7 @@ type RecipeSet struct {
 }
 
 var (
-	placeholderRe = regexp.MustCompile(`\{([a-zA-Z][a-zA-Z0-9]*)\}`)
+	placeholderRe = regexp.MustCompile(`\{\??([a-zA-Z][a-zA-Z0-9]*)\}`)
 	recipePathRe  = regexp.MustCompile(`^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$`)
 	recipeIDRe    = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 )
@@ -102,12 +109,73 @@ var builtinRecipes = func() map[string]*Recipe {
 	return r
 }()
 
+// maxRecipesFile bounds an operator's recipes file.
+const maxRecipesFile = 256 << 10
+
+var recipeKeyRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9.-]*$`)
+
+// LoadExtraRecipes adds the operator's own recipes (CATALOG_RECIPES: a JSON file shaped like
+// recipes.json) to the built-in ones; a recipe for a chart the built-in set also covers replaces
+// it. The file goes through exactly the checks the built-in data does — an unknown field, a
+// missing default option, a field that can reach YAML text without a pattern — and one bad
+// recipe refuses the whole file, so what is accepted is as safe as what ships. Call it once at
+// startup, before the server takes requests.
+func LoadExtraRecipes(path string) (int, error) {
+	f, err := os.Open(path) // #nosec G304 -- path is CATALOG_RECIPES, set by the operator
+	if err != nil {
+		return 0, fmt.Errorf("reading recipes: %w", err)
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, maxRecipesFile+1))
+	if err != nil {
+		return 0, fmt.Errorf("reading recipes: %w", err)
+	}
+	if len(data) > maxRecipesFile {
+		return 0, fmt.Errorf("recipes file is larger than %d KiB", maxRecipesFile>>10)
+	}
+	extra, err := loadRecipesStrict(data)
+	if err != nil {
+		return 0, err
+	}
+	for key, r := range extra {
+		builtinRecipes[key] = r
+	}
+	return len(extra), nil
+}
+
+// loadRecipesStrict is loadRecipes for input that did not ship with Vinaire: unknown fields are
+// refused and the keys must look like "repo/chart".
+func loadRecipesStrict(data []byte) (map[string]*Recipe, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	var out map[string]*Recipe
+	if err := dec.Decode(&out); err != nil {
+		return nil, fmt.Errorf("recipes: %w", err)
+	}
+	for key, r := range out {
+		if !recipeKeyRe.MatchString(key) || r == nil {
+			return nil, fmt.Errorf("recipes: %q is not a repo/chart key", key)
+		}
+		if err := r.validate(); err != nil {
+			return nil, fmt.Errorf("recipes: %s: %w", key, err)
+		}
+	}
+	return out, nil
+}
+
 // RecipeFor returns the recipe of a chart, or nil.
 func RecipeFor(repo, chart string) *Recipe { return builtinRecipes[repo+"/"+chart] }
 
 func (r *Recipe) validate() error {
 	if len(r.Sections) == 0 {
 		return fmt.Errorf("no sections")
+	}
+	for _, text := range r.After {
+		for _, m := range placeholderRe.FindAllStringSubmatch(text, -1) {
+			if m[1] != "release" && m[1] != "namespace" {
+				return fmt.Errorf("an \"after\" text uses {%s}; only {release} and {namespace} are filled in", m[1])
+			}
+		}
 	}
 	seenSection := map[string]bool{}
 	for _, s := range r.Sections {

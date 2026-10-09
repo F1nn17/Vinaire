@@ -8,57 +8,289 @@
     ],
     "sections": [
       {
-        "id": "database", "title": "Database", "discover": "postgres",
+        "id": "database",
+        "title": "Database",
+        "discover": "postgres",
         "help": "Where Keycloak keeps its data.",
         "options": [
-          {"id": "builtin", "title": "Built-in development database", "default": true,
-           "note": "H2 stored inside the pod. Good for trying Keycloak out; the data is lost when the pod is replaced.",
-           "set": []},
-          {"id": "external", "title": "My own PostgreSQL",
-           "note": "Use a PostgreSQL that already exists (in this cluster or outside it).",
-           "fields": [
-             {"key": "host", "label": "Host", "required": true, "placeholder": "postgres.db.svc.cluster.local", "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$", "help": "A Service name (name.namespace.svc.cluster.local) or any host name."},
-             {"key": "port", "label": "Port", "default": "5432", "kind": "number"},
-             {"key": "database", "label": "Database name", "default": "keycloak", "required": true, "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"},
-             {"key": "username", "label": "User", "default": "keycloak", "required": true, "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"},
-             {"key": "passwordSecret", "label": "Secret with the password", "required": true, "kind": "secret", "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$", "help": "An existing Secret in the install namespace."},
-             {"key": "passwordKey", "label": "Key in that Secret", "default": "password", "required": true, "pattern": "^[A-Za-z0-9._-]+$"}
-           ],
-           "set": [
-             {"path": "database.vendor", "value": "postgres"},
-             {"path": "database.hostname", "value": "{host}"},
-             {"path": "database.port", "value": "{port}", "as": "number"},
-             {"path": "database.database", "value": "{database}"},
-             {"path": "database.username", "value": "{username}"},
-             {"path": "database.existingSecret", "value": "{passwordSecret}"},
-             {"path": "database.existingSecretKey", "value": "{passwordKey}"}
-           ]}
+          {
+            "id": "builtin",
+            "title": "Built-in development database",
+            "default": true,
+            "note": "H2 stored inside the pod. Good for trying Keycloak out; the data is lost when the pod is replaced.",
+            "set": []
+          },
+          {
+            "id": "external",
+            "title": "My own PostgreSQL",
+            "note": "Use a PostgreSQL that already exists (in this cluster or outside it).",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host",
+                "required": true,
+                "placeholder": "postgres.db.svc.cluster.local",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$",
+                "help": "A Service name (name.namespace.svc.cluster.local) or any host name."
+              },
+              {
+                "key": "port",
+                "label": "Port",
+                "default": "5432",
+                "kind": "number"
+              },
+              {
+                "key": "database",
+                "label": "Database name",
+                "default": "keycloak",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+              },
+              {
+                "key": "username",
+                "label": "User",
+                "default": "keycloak",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
+              },
+              {
+                "key": "passwordSecret",
+                "label": "Secret with the password",
+                "required": true,
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "An existing Secret in the install namespace."
+              },
+              {
+                "key": "passwordKey",
+                "label": "Key in that Secret",
+                "default": "password",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "database.vendor",
+                "value": "postgres"
+              },
+              {
+                "path": "database.hostname",
+                "value": "{host}"
+              },
+              {
+                "path": "database.port",
+                "value": "{port}",
+                "as": "number"
+              },
+              {
+                "path": "database.database",
+                "value": "{database}"
+              },
+              {
+                "path": "database.username",
+                "value": "{username}"
+              },
+              {
+                "path": "database.existingSecret",
+                "value": "{passwordSecret}"
+              },
+              {
+                "path": "database.existingSecretKey",
+                "value": "{passwordKey}"
+              }
+            ]
+          }
         ]
       },
       {
-        "id": "access", "title": "How to reach it",
+        "id": "access",
+        "title": "How to reach it",
         "help": "How people (or other services) get to Keycloak.",
         "options": [
-          {"id": "none", "title": "Only inside the cluster", "default": true, "set": []},
-          {"id": "ingress", "title": "Ingress (a host name)",
-           "fields": [
-             {"key": "host", "label": "Host name", "required": true, "placeholder": "keycloak.example.com", "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"},
-             {"key": "className", "label": "Ingress class", "kind": "ingressclass", "help": "Empty uses the cluster default."},
-             {"key": "tlsSecret", "label": "TLS Secret", "kind": "secret", "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$", "help": "A kubernetes.io/tls Secret; empty serves plain HTTP."}
-           ],
-           "set": [
-             {"path": "ingress.enabled", "value": true},
-             {"path": "ingress.ingressClassName", "value": "{className}"},
-             {"path": "ingress.rules", "value": [{"host": "{host}", "paths": [{"path": "{{ tpl .Values.http.relativePath $ | trimSuffix \"/\" }}/", "pathType": "Prefix"}]}]},
-             {"path": "ingress.tls", "value": [{"hosts": ["{host}"], "secretName": "{tlsSecret}"}]}
-           ]},
-          {"id": "nodeport", "title": "NodePort (a port on every node)", "set": [{"path": "service.type", "value": "NodePort"}]},
-          {"id": "loadbalancer", "title": "LoadBalancer (an external address)", "set": [{"path": "service.type", "value": "LoadBalancer"}]}
+          {
+            "id": "none",
+            "title": "Only inside the cluster",
+            "default": true,
+            "set": []
+          },
+          {
+            "id": "ingress",
+            "title": "Ingress (a host name)",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host name",
+                "required": true,
+                "placeholder": "keycloak.example.com",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "className",
+                "label": "Ingress class",
+                "kind": "ingressclass",
+                "help": "Empty uses the cluster default."
+              },
+              {
+                "key": "tlsSecret",
+                "label": "TLS Secret",
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "A kubernetes.io/tls Secret; empty serves plain HTTP."
+              }
+            ],
+            "set": [
+              {
+                "path": "ingress.enabled",
+                "value": true
+              },
+              {
+                "path": "ingress.ingressClassName",
+                "value": "{className}"
+              },
+              {
+                "path": "ingress.rules",
+                "value": [
+                  {
+                    "host": "{host}",
+                    "paths": [
+                      {
+                        "path": "{{ tpl .Values.http.relativePath $ | trimSuffix \"/\" }}/",
+                        "pathType": "Prefix"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "path": "ingress.tls",
+                "value": [
+                  {
+                    "hosts": [
+                      "{host}"
+                    ],
+                    "secretName": "{tlsSecret}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "gateway",
+            "title": "Gateway API (an HTTPRoute)",
+            "note": "The chart creates an HTTPRoute attached to a Gateway you already have.",
+            "fields": [
+              {
+                "key": "gatewayName",
+                "label": "Gateway",
+                "required": true,
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "placeholder": "my-gateway"
+              },
+              {
+                "key": "gatewayNamespace",
+                "label": "Gateway namespace",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "Empty = this installation's namespace."
+              },
+              {
+                "key": "sectionName",
+                "label": "Listener",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "placeholder": "http",
+                "help": "Optional: the Gateway listener (by name)."
+              },
+              {
+                "key": "host",
+                "label": "Host name",
+                "required": true,
+                "placeholder": "keycloak.example.com",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              }
+            ],
+            "set": [
+              {
+                "path": "httpRoute.enabled",
+                "value": true
+              },
+              {
+                "path": "httpRoute.parentRefs",
+                "value": [
+                  {
+                    "name": "{gatewayName}",
+                    "namespace": "{?gatewayNamespace}",
+                    "sectionName": "{?sectionName}"
+                  }
+                ]
+              },
+              {
+                "path": "httpRoute.hostnames",
+                "value": [
+                  "{host}"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "nodeport",
+            "title": "NodePort (a port on every node)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "NodePort"
+              }
+            ]
+          },
+          {
+            "id": "loadbalancer",
+            "title": "LoadBalancer (an external address)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "LoadBalancer"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "resources",
+        "title": "Resources",
+        "help": "How much CPU and memory Keycloak may use.",
+        "options": [
+          {
+            "id": "default",
+            "title": "The chart's defaults (no limits)",
+            "default": true,
+            "set": []
+          },
+          {
+            "id": "limits",
+            "title": "Requests and a memory limit",
+            "note": "Asks for half a CPU and 1 GiB, and stops Keycloak from using more than 2 GiB.",
+            "set": [
+              {
+                "path": "resources",
+                "value": {
+                  "requests": {
+                    "cpu": "500m",
+                    "memory": "1Gi"
+                  },
+                  "limits": {
+                    "memory": "2Gi"
+                  }
+                }
+              }
+            ]
+          }
         ]
       }
+    ],
+    "after": [
+      "Open Keycloak at the address you chose (inside the cluster: the Service {release} in {namespace}).",
+      "Create the first administrator as the chart's notes describe; the notes are shown above."
     ]
   },
-
   "keycloak/keycloak": {
     "summary": "Keycloak (legacy, WildFly-based chart). It installs its own PostgreSQL unless you point it at yours.",
     "guide": [
@@ -67,52 +299,175 @@
     ],
     "sections": [
       {
-        "id": "database", "title": "Database", "discover": "postgres",
+        "id": "database",
+        "title": "Database",
+        "discover": "postgres",
         "help": "Where Keycloak keeps its data.",
         "options": [
-          {"id": "builtin", "title": "Bundled PostgreSQL", "default": true,
-           "note": "The chart starts a PostgreSQL of its own (default password — change it for real use).",
-           "set": []},
-          {"id": "external", "title": "My own PostgreSQL",
-           "note": "The bundled PostgreSQL is not installed.",
-           "fields": [
-             {"key": "host", "label": "Host", "required": true, "placeholder": "postgres.db.svc.cluster.local", "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"},
-             {"key": "port", "label": "Port", "default": "5432", "kind": "number"},
-             {"key": "database", "label": "Database name", "default": "keycloak", "required": true, "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"},
-             {"key": "username", "label": "User", "default": "keycloak", "required": true, "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"},
-             {"key": "passwordSecret", "label": "Secret with the password", "required": true, "kind": "secret", "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"},
-             {"key": "passwordKey", "label": "Key in that Secret", "default": "password", "required": true, "pattern": "^[A-Za-z0-9._-]+$"}
-           ],
-           "set": [
-             {"path": "postgresql.enabled", "value": false},
-             {"path": "extraEnv", "value": "- name: DB_VENDOR\n  value: postgres\n- name: DB_ADDR\n  value: \"{host}\"\n- name: DB_PORT\n  value: \"{port}\"\n- name: DB_DATABASE\n  value: \"{database}\"\n- name: DB_USER\n  value: \"{username}\"\n- name: DB_PASSWORD\n  valueFrom:\n    secretKeyRef:\n      name: \"{passwordSecret}\"\n      key: \"{passwordKey}\"\n"}
-           ]}
+          {
+            "id": "builtin",
+            "title": "Bundled PostgreSQL",
+            "default": true,
+            "note": "The chart starts a PostgreSQL of its own (default password — change it for real use).",
+            "set": []
+          },
+          {
+            "id": "external",
+            "title": "My own PostgreSQL",
+            "note": "The bundled PostgreSQL is not installed.",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host",
+                "required": true,
+                "placeholder": "postgres.db.svc.cluster.local",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "port",
+                "label": "Port",
+                "default": "5432",
+                "kind": "number"
+              },
+              {
+                "key": "database",
+                "label": "Database name",
+                "default": "keycloak",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+              },
+              {
+                "key": "username",
+                "label": "User",
+                "default": "keycloak",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
+              },
+              {
+                "key": "passwordSecret",
+                "label": "Secret with the password",
+                "required": true,
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+              },
+              {
+                "key": "passwordKey",
+                "label": "Key in that Secret",
+                "default": "password",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "postgresql.enabled",
+                "value": false
+              },
+              {
+                "path": "extraEnv",
+                "value": "- name: DB_VENDOR\n  value: postgres\n- name: DB_ADDR\n  value: \"{host}\"\n- name: DB_PORT\n  value: \"{port}\"\n- name: DB_DATABASE\n  value: \"{database}\"\n- name: DB_USER\n  value: \"{username}\"\n- name: DB_PASSWORD\n  valueFrom:\n    secretKeyRef:\n      name: \"{passwordSecret}\"\n      key: \"{passwordKey}\"\n"
+              }
+            ]
+          }
         ]
       },
       {
-        "id": "access", "title": "How to reach it",
+        "id": "access",
+        "title": "How to reach it",
         "help": "How people (or other services) get to Keycloak.",
         "options": [
-          {"id": "none", "title": "Only inside the cluster", "default": true, "set": []},
-          {"id": "ingress", "title": "Ingress (a host name)",
-           "fields": [
-             {"key": "host", "label": "Host name", "required": true, "placeholder": "keycloak.example.com", "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"},
-             {"key": "className", "label": "Ingress class", "kind": "ingressclass"},
-             {"key": "tlsSecret", "label": "TLS Secret", "kind": "secret", "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"}
-           ],
-           "set": [
-             {"path": "ingress.enabled", "value": true},
-             {"path": "ingress.ingressClassName", "value": "{className}"},
-             {"path": "ingress.rules", "value": [{"host": "{host}", "paths": [{"path": "/", "pathType": "Prefix"}]}]},
-             {"path": "ingress.tls", "value": [{"hosts": ["{host}"], "secretName": "{tlsSecret}"}]}
-           ]},
-          {"id": "nodeport", "title": "NodePort (a port on every node)", "set": [{"path": "service.type", "value": "NodePort"}]},
-          {"id": "loadbalancer", "title": "LoadBalancer (an external address)", "set": [{"path": "service.type", "value": "LoadBalancer"}]}
+          {
+            "id": "none",
+            "title": "Only inside the cluster",
+            "default": true,
+            "set": []
+          },
+          {
+            "id": "ingress",
+            "title": "Ingress (a host name)",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host name",
+                "required": true,
+                "placeholder": "keycloak.example.com",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "className",
+                "label": "Ingress class",
+                "kind": "ingressclass"
+              },
+              {
+                "key": "tlsSecret",
+                "label": "TLS Secret",
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+              }
+            ],
+            "set": [
+              {
+                "path": "ingress.enabled",
+                "value": true
+              },
+              {
+                "path": "ingress.ingressClassName",
+                "value": "{className}"
+              },
+              {
+                "path": "ingress.rules",
+                "value": [
+                  {
+                    "host": "{host}",
+                    "paths": [
+                      {
+                        "path": "/",
+                        "pathType": "Prefix"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "path": "ingress.tls",
+                "value": [
+                  {
+                    "hosts": [
+                      "{host}"
+                    ],
+                    "secretName": "{tlsSecret}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "nodeport",
+            "title": "NodePort (a port on every node)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "NodePort"
+              }
+            ]
+          },
+          {
+            "id": "loadbalancer",
+            "title": "LoadBalancer (an external address)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "LoadBalancer"
+              }
+            ]
+          }
         ]
       }
+    ],
+    "after": [
+      "The bundled PostgreSQL (if you kept it) has a default password — change it before real use. Its credentials are in the Secret named after the release in {namespace} (open the Secrets page; reading a value is audited)."
     ]
   },
-
   "gitea/gitea": {
     "summary": "Gitea (self-hosted Git). The chart starts a highly available PostgreSQL by default, which is heavy for a small install.",
     "guide": [
@@ -121,64 +476,296 @@
     ],
     "sections": [
       {
-        "id": "database", "title": "Database", "discover": "postgres",
+        "id": "database",
+        "title": "Database",
+        "discover": "postgres",
         "help": "Where Gitea keeps its data.",
         "options": [
-          {"id": "builtin", "title": "Bundled PostgreSQL cluster (HA)", "default": true,
-           "note": "Several PostgreSQL pods. Robust, but needs more memory and disks.", "set": []},
-          {"id": "single", "title": "Bundled single PostgreSQL",
-           "note": "One PostgreSQL pod: lighter, fine for a small team.",
-           "set": [
-             {"path": "postgresql-ha.enabled", "value": false},
-             {"path": "postgresql.enabled", "value": true}
-           ]},
-          {"id": "external", "title": "My own PostgreSQL",
-           "note": "No database is installed with Gitea.",
-           "fields": [
-             {"key": "host", "label": "Host", "required": true, "placeholder": "postgres.db.svc.cluster.local", "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"},
-             {"key": "port", "label": "Port", "default": "5432", "kind": "number"},
-             {"key": "database", "label": "Database name", "default": "gitea", "required": true, "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"},
-             {"key": "username", "label": "User", "default": "gitea", "required": true, "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"},
-             {"key": "passwordSecret", "label": "Secret with the password", "required": true, "kind": "secret", "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"},
-             {"key": "passwordKey", "label": "Key in that Secret", "default": "password", "required": true, "pattern": "^[A-Za-z0-9._-]+$"}
-           ],
-           "set": [
-             {"path": "postgresql-ha.enabled", "value": false},
-             {"path": "postgresql.enabled", "value": false},
-             {"path": "gitea.config.database.DB_TYPE", "value": "postgres"},
-             {"path": "gitea.config.database.HOST", "value": "{host}:{port}"},
-             {"path": "gitea.config.database.NAME", "value": "{database}"},
-             {"path": "gitea.config.database.USER", "value": "{username}"},
-             {"path": "gitea.additionalConfigFromEnvs", "value": [{"name": "GITEA__DATABASE__PASSWD", "valueFrom": {"secretKeyRef": {"name": "{passwordSecret}", "key": "{passwordKey}"}}}]}
-           ]}
+          {
+            "id": "builtin",
+            "title": "Bundled PostgreSQL cluster (HA)",
+            "default": true,
+            "note": "Several PostgreSQL pods. Robust, but needs more memory and disks.",
+            "set": []
+          },
+          {
+            "id": "single",
+            "title": "Bundled single PostgreSQL",
+            "note": "One PostgreSQL pod: lighter, fine for a small team.",
+            "set": [
+              {
+                "path": "postgresql-ha.enabled",
+                "value": false
+              },
+              {
+                "path": "postgresql.enabled",
+                "value": true
+              }
+            ]
+          },
+          {
+            "id": "external",
+            "title": "My own PostgreSQL",
+            "note": "No database is installed with Gitea.",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host",
+                "required": true,
+                "placeholder": "postgres.db.svc.cluster.local",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "port",
+                "label": "Port",
+                "default": "5432",
+                "kind": "number"
+              },
+              {
+                "key": "database",
+                "label": "Database name",
+                "default": "gitea",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+              },
+              {
+                "key": "username",
+                "label": "User",
+                "default": "gitea",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
+              },
+              {
+                "key": "passwordSecret",
+                "label": "Secret with the password",
+                "required": true,
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+              },
+              {
+                "key": "passwordKey",
+                "label": "Key in that Secret",
+                "default": "password",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "postgresql-ha.enabled",
+                "value": false
+              },
+              {
+                "path": "postgresql.enabled",
+                "value": false
+              },
+              {
+                "path": "gitea.config.database.DB_TYPE",
+                "value": "postgres"
+              },
+              {
+                "path": "gitea.config.database.HOST",
+                "value": "{host}:{port}"
+              },
+              {
+                "path": "gitea.config.database.NAME",
+                "value": "{database}"
+              },
+              {
+                "path": "gitea.config.database.USER",
+                "value": "{username}"
+              },
+              {
+                "path": "gitea.additionalConfigFromEnvs",
+                "value": [
+                  {
+                    "name": "GITEA__DATABASE__PASSWD",
+                    "valueFrom": {
+                      "secretKeyRef": {
+                        "name": "{passwordSecret}",
+                        "key": "{passwordKey}"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
         ]
       },
       {
-        "id": "access", "title": "How to reach it",
+        "id": "admin",
+        "title": "Administrator account",
+        "help": "Who can sign in as the first administrator.",
+        "options": [
+          {
+            "id": "builtin",
+            "title": "The chart's default account",
+            "default": true,
+            "note": "User gitea_admin with a password that is public in the chart — change it right after the first sign-in.",
+            "set": []
+          },
+          {
+            "id": "secret",
+            "title": "From an existing Secret",
+            "note": "The Secret must hold the keys \"username\" and \"password\".",
+            "fields": [
+              {
+                "key": "adminSecret",
+                "label": "Secret with username and password",
+                "required": true,
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+              }
+            ],
+            "set": [
+              {
+                "path": "gitea.admin.existingSecret",
+                "value": "{adminSecret}"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "access",
+        "title": "How to reach it",
         "help": "How people get to the web interface.",
         "options": [
-          {"id": "none", "title": "Only inside the cluster", "default": true, "set": []},
-          {"id": "ingress", "title": "Ingress (a host name)",
-           "fields": [
-             {"key": "host", "label": "Host name", "required": true, "placeholder": "git.example.com", "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"},
-             {"key": "className", "label": "Ingress class", "kind": "ingressclass"},
-             {"key": "tlsSecret", "label": "TLS Secret", "kind": "secret", "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"}
-           ],
-           "set": [
-             {"path": "ingress.enabled", "value": true},
-             {"path": "ingress.className", "value": "{className}"},
-             {"path": "ingress.hosts", "value": [{"host": "{host}", "paths": [{"path": "/"}]}]},
-             {"path": "ingress.tls", "value": [{"hosts": ["{host}"], "secretName": "{tlsSecret}"}]}
-           ]},
-          {"id": "nodeport", "title": "NodePort (a port on every node)",
-           "set": [{"path": "service.http.type", "value": "NodePort"}, {"path": "service.http.clusterIP", "value": ""}]},
-          {"id": "loadbalancer", "title": "LoadBalancer (an external address)",
-           "set": [{"path": "service.http.type", "value": "LoadBalancer"}, {"path": "service.http.clusterIP", "value": ""}]}
+          {
+            "id": "none",
+            "title": "Only inside the cluster",
+            "default": true,
+            "set": []
+          },
+          {
+            "id": "ingress",
+            "title": "Ingress (a host name)",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host name",
+                "required": true,
+                "placeholder": "git.example.com",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "className",
+                "label": "Ingress class",
+                "kind": "ingressclass"
+              },
+              {
+                "key": "tlsSecret",
+                "label": "TLS Secret",
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+              }
+            ],
+            "set": [
+              {
+                "path": "ingress.enabled",
+                "value": true
+              },
+              {
+                "path": "ingress.className",
+                "value": "{className}"
+              },
+              {
+                "path": "ingress.hosts",
+                "value": [
+                  {
+                    "host": "{host}",
+                    "paths": [
+                      {
+                        "path": "/"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "path": "ingress.tls",
+                "value": [
+                  {
+                    "hosts": [
+                      "{host}"
+                    ],
+                    "secretName": "{tlsSecret}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "nodeport",
+            "title": "NodePort (a port on every node)",
+            "set": [
+              {
+                "path": "service.http.type",
+                "value": "NodePort"
+              },
+              {
+                "path": "service.http.clusterIP",
+                "value": ""
+              }
+            ]
+          },
+          {
+            "id": "loadbalancer",
+            "title": "LoadBalancer (an external address)",
+            "set": [
+              {
+                "path": "service.http.type",
+                "value": "LoadBalancer"
+              },
+              {
+                "path": "service.http.clusterIP",
+                "value": ""
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "storage",
+        "title": "Storage",
+        "help": "The volume Gitea keeps repositories and uploads on.",
+        "options": [
+          {
+            "id": "default",
+            "title": "The chart's default (10 Gi)",
+            "default": true,
+            "set": []
+          },
+          {
+            "id": "size",
+            "title": "A size of my own",
+            "fields": [
+              {
+                "key": "size",
+                "label": "Size",
+                "required": true,
+                "default": "20Gi",
+                "pattern": "^[0-9]+(Mi|Gi|Ti)$",
+                "placeholder": "20Gi",
+                "help": "Mi, Gi or Ti."
+              }
+            ],
+            "set": [
+              {
+                "path": "persistence.size",
+                "value": "{size}"
+              }
+            ]
+          }
         ]
       }
+    ],
+    "after": [
+      "Gitea is at the address you chose (inside the cluster: the Service {release}-http in {namespace}, port 3000).",
+      "The data volume is kept when the release is uninstalled (the chart marks it so). Delete the namespace to remove it too."
     ]
   },
-
   "nextcloud/nextcloud": {
     "summary": "Nextcloud (files and collaboration). By default it keeps its data in a small SQLite file, which is only for trials.",
     "guide": [
@@ -187,54 +774,662 @@
     ],
     "sections": [
       {
-        "id": "database", "title": "Database", "discover": "postgres",
+        "id": "database",
+        "title": "Database",
+        "discover": "postgres",
         "help": "Where Nextcloud keeps its data.",
         "options": [
-          {"id": "builtin", "title": "Built-in SQLite", "default": true,
-           "note": "A file inside the data volume. For trials only.", "set": []},
-          {"id": "external", "title": "My own PostgreSQL",
-           "fields": [
-             {"key": "host", "label": "Host", "required": true, "placeholder": "postgres.db.svc.cluster.local", "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"},
-             {"key": "port", "label": "Port", "default": "5432", "kind": "number"},
-             {"key": "database", "label": "Database name", "default": "nextcloud", "required": true, "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"},
-             {"key": "passwordSecret", "label": "Secret with the credentials", "required": true, "kind": "secret", "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$", "help": "An existing Secret holding the user name and the password."},
-             {"key": "usernameKey", "label": "Key of the user name", "default": "db-username", "required": true, "pattern": "^[A-Za-z0-9._-]+$"},
-             {"key": "passwordKey", "label": "Key of the password", "default": "db-password", "required": true, "pattern": "^[A-Za-z0-9._-]+$"}
-           ],
-           "set": [
-             {"path": "internalDatabase.enabled", "value": false},
-             {"path": "externalDatabase.enabled", "value": true},
-             {"path": "externalDatabase.type", "value": "postgresql"},
-             {"path": "externalDatabase.host", "value": "{host}:{port}"},
-             {"path": "externalDatabase.database", "value": "{database}"},
-             {"path": "externalDatabase.existingSecret.enabled", "value": true},
-             {"path": "externalDatabase.existingSecret.secretName", "value": "{passwordSecret}"},
-             {"path": "externalDatabase.existingSecret.usernameKey", "value": "{usernameKey}"},
-             {"path": "externalDatabase.existingSecret.passwordKey", "value": "{passwordKey}"}
-           ]}
+          {
+            "id": "builtin",
+            "title": "Built-in SQLite",
+            "default": true,
+            "note": "A file inside the data volume. For trials only.",
+            "set": []
+          },
+          {
+            "id": "external",
+            "title": "My own PostgreSQL",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host",
+                "required": true,
+                "placeholder": "postgres.db.svc.cluster.local",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "port",
+                "label": "Port",
+                "default": "5432",
+                "kind": "number"
+              },
+              {
+                "key": "database",
+                "label": "Database name",
+                "default": "nextcloud",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+              },
+              {
+                "key": "passwordSecret",
+                "label": "Secret with the credentials",
+                "required": true,
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "An existing Secret holding the user name and the password."
+              },
+              {
+                "key": "usernameKey",
+                "label": "Key of the user name",
+                "default": "db-username",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              },
+              {
+                "key": "passwordKey",
+                "label": "Key of the password",
+                "default": "db-password",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "internalDatabase.enabled",
+                "value": false
+              },
+              {
+                "path": "externalDatabase.enabled",
+                "value": true
+              },
+              {
+                "path": "externalDatabase.type",
+                "value": "postgresql"
+              },
+              {
+                "path": "externalDatabase.host",
+                "value": "{host}:{port}"
+              },
+              {
+                "path": "externalDatabase.database",
+                "value": "{database}"
+              },
+              {
+                "path": "externalDatabase.existingSecret.enabled",
+                "value": true
+              },
+              {
+                "path": "externalDatabase.existingSecret.secretName",
+                "value": "{passwordSecret}"
+              },
+              {
+                "path": "externalDatabase.existingSecret.usernameKey",
+                "value": "{usernameKey}"
+              },
+              {
+                "path": "externalDatabase.existingSecret.passwordKey",
+                "value": "{passwordKey}"
+              }
+            ]
+          }
         ]
       },
       {
-        "id": "access", "title": "How to reach it",
+        "id": "admin",
+        "title": "Administrator account",
+        "help": "Who can sign in as the first administrator.",
+        "options": [
+          {
+            "id": "builtin",
+            "title": "The chart's default account",
+            "default": true,
+            "note": "User \"admin\" with the password \"changeme\" — change it before real use.",
+            "set": []
+          },
+          {
+            "id": "secret",
+            "title": "From an existing Secret",
+            "fields": [
+              {
+                "key": "adminSecret",
+                "label": "Secret with the credentials",
+                "required": true,
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+              },
+              {
+                "key": "adminUserKey",
+                "label": "Key of the user name",
+                "default": "nextcloud-username",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              },
+              {
+                "key": "adminPasswordKey",
+                "label": "Key of the password",
+                "default": "nextcloud-password",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "nextcloud.existingSecret.enabled",
+                "value": true
+              },
+              {
+                "path": "nextcloud.existingSecret.secretName",
+                "value": "{adminSecret}"
+              },
+              {
+                "path": "nextcloud.existingSecret.usernameKey",
+                "value": "{adminUserKey}"
+              },
+              {
+                "path": "nextcloud.existingSecret.passwordKey",
+                "value": "{adminPasswordKey}"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "access",
+        "title": "How to reach it",
         "help": "How people get to Nextcloud.",
         "options": [
-          {"id": "none", "title": "Only inside the cluster", "default": true, "set": []},
-          {"id": "ingress", "title": "Ingress (a host name)",
-           "fields": [
-             {"key": "host", "label": "Host name", "required": true, "placeholder": "cloud.example.com", "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"},
-             {"key": "className", "label": "Ingress class", "kind": "ingressclass"},
-             {"key": "tlsSecret", "label": "TLS Secret", "kind": "secret", "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"}
-           ],
-           "set": [
-             {"path": "nextcloud.host", "value": "{host}"},
-             {"path": "ingress.enabled", "value": true},
-             {"path": "ingress.className", "value": "{className}"},
-             {"path": "ingress.tls", "value": [{"hosts": ["{host}"], "secretName": "{tlsSecret}"}]}
-           ]},
-          {"id": "nodeport", "title": "NodePort (a port on every node)", "set": [{"path": "service.type", "value": "NodePort"}]},
-          {"id": "loadbalancer", "title": "LoadBalancer (an external address)", "set": [{"path": "service.type", "value": "LoadBalancer"}]}
+          {
+            "id": "none",
+            "title": "Only inside the cluster",
+            "default": true,
+            "set": []
+          },
+          {
+            "id": "ingress",
+            "title": "Ingress (a host name)",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host name",
+                "required": true,
+                "placeholder": "cloud.example.com",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "className",
+                "label": "Ingress class",
+                "kind": "ingressclass"
+              },
+              {
+                "key": "tlsSecret",
+                "label": "TLS Secret",
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+              }
+            ],
+            "set": [
+              {
+                "path": "nextcloud.host",
+                "value": "{host}"
+              },
+              {
+                "path": "ingress.enabled",
+                "value": true
+              },
+              {
+                "path": "ingress.className",
+                "value": "{className}"
+              },
+              {
+                "path": "ingress.tls",
+                "value": [
+                  {
+                    "hosts": [
+                      "{host}"
+                    ],
+                    "secretName": "{tlsSecret}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "nodeport",
+            "title": "NodePort (a port on every node)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "NodePort"
+              }
+            ]
+          },
+          {
+            "id": "loadbalancer",
+            "title": "LoadBalancer (an external address)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "LoadBalancer"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "storage",
+        "title": "Storage",
+        "help": "Where Nextcloud keeps the files.",
+        "options": [
+          {
+            "id": "default",
+            "title": "No volume (the chart's default)",
+            "default": true,
+            "note": "Files live inside the pod and are lost when it is replaced. For trials only.",
+            "set": []
+          },
+          {
+            "id": "persist",
+            "title": "A persistent volume",
+            "fields": [
+              {
+                "key": "size",
+                "label": "Size",
+                "required": true,
+                "default": "20Gi",
+                "pattern": "^[0-9]+(Mi|Gi|Ti)$",
+                "placeholder": "20Gi",
+                "help": "Mi, Gi or Ti."
+              }
+            ],
+            "set": [
+              {
+                "path": "persistence.enabled",
+                "value": true
+              },
+              {
+                "path": "persistence.size",
+                "value": "{size}"
+              }
+            ]
+          }
         ]
       }
+    ],
+    "after": [
+      "Nextcloud is at the address you chose (inside the cluster: the Service {release} in {namespace}, port 8080). The first start takes a few minutes while it sets itself up."
+    ]
+  },
+  "metabase/metabase": {
+    "summary": "Metabase (business intelligence). By default it keeps its own data in an H2 file, which is only for trials.",
+    "guide": [
+      "Database: Metabase stores its questions and dashboards in an application database. H2 is a single file — fine to try it out, not for real use. Pick \"My own PostgreSQL\" to use one you already run; the user name and password are read from an existing Secret."
+    ],
+    "sections": [
+      {
+        "id": "database",
+        "title": "Application database",
+        "discover": "postgres",
+        "help": "Where Metabase keeps its own data (not the databases you analyse).",
+        "options": [
+          {
+            "id": "builtin",
+            "title": "Built-in H2 file",
+            "default": true,
+            "note": "A file inside the pod. For trials only: the data is lost when the pod is replaced.",
+            "set": []
+          },
+          {
+            "id": "external",
+            "title": "My own PostgreSQL",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host",
+                "required": true,
+                "placeholder": "postgres.db.svc.cluster.local",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "port",
+                "label": "Port",
+                "default": "5432",
+                "kind": "number"
+              },
+              {
+                "key": "database",
+                "label": "Database name",
+                "default": "metabase",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+              },
+              {
+                "key": "passwordSecret",
+                "label": "Secret with the credentials",
+                "required": true,
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "An existing Secret holding the user name and the password."
+              },
+              {
+                "key": "usernameKey",
+                "label": "Key of the user name",
+                "default": "username",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              },
+              {
+                "key": "passwordKey",
+                "label": "Key of the password",
+                "default": "password",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "database.type",
+                "value": "postgres"
+              },
+              {
+                "path": "database.host",
+                "value": "{host}"
+              },
+              {
+                "path": "database.port",
+                "value": "{port}",
+                "as": "number"
+              },
+              {
+                "path": "database.dbname",
+                "value": "{database}"
+              },
+              {
+                "path": "database.existingSecret",
+                "value": "{passwordSecret}"
+              },
+              {
+                "path": "database.existingSecretUsernameKey",
+                "value": "{usernameKey}"
+              },
+              {
+                "path": "database.existingSecretPasswordKey",
+                "value": "{passwordKey}"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "access",
+        "title": "How to reach it",
+        "help": "How people get to the web interface.",
+        "options": [
+          {
+            "id": "none",
+            "title": "Only inside the cluster",
+            "default": true,
+            "set": []
+          },
+          {
+            "id": "ingress",
+            "title": "Ingress (a host name)",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host name",
+                "required": true,
+                "placeholder": "bi.example.com",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "tlsSecret",
+                "label": "TLS Secret",
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "A kubernetes.io/tls Secret; empty serves plain HTTP."
+              }
+            ],
+            "set": [
+              {
+                "path": "ingress.enabled",
+                "value": true
+              },
+              {
+                "path": "ingress.hosts",
+                "value": [
+                  "{host}"
+                ]
+              },
+              {
+                "path": "ingress.tls",
+                "value": [
+                  {
+                    "hosts": [
+                      "{host}"
+                    ],
+                    "secretName": "{tlsSecret}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "nodeport",
+            "title": "NodePort (a port on every node)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "NodePort"
+              }
+            ]
+          },
+          {
+            "id": "loadbalancer",
+            "title": "LoadBalancer (an external address)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "LoadBalancer"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "after": [
+      "Metabase is at the address you chose (inside the cluster: the Service {release} in {namespace}, port 80). The first start takes a minute or two; the setup wizard asks for the first administrator."
+    ]
+  },
+  "grafana/grafana": {
+    "summary": "Grafana (dashboards). By default the data lives inside the pod and the administrator password is generated into a Secret.",
+    "guide": [
+      "Storage: without a persistent volume, dashboards and users you create are lost when the pod is replaced. Switch on a volume for anything you want to keep.",
+      "Administrator: by default the chart generates a password and stores it in the Secret named after the release. To choose your own, point it at an existing Secret."
+    ],
+    "sections": [
+      {
+        "id": "admin",
+        "title": "Administrator account",
+        "help": "Who can sign in as the first administrator.",
+        "options": [
+          {
+            "id": "generated",
+            "title": "A generated password",
+            "default": true,
+            "note": "The chart stores it in the Secret named after the release (key admin-password).",
+            "set": []
+          },
+          {
+            "id": "secret",
+            "title": "From an existing Secret",
+            "fields": [
+              {
+                "key": "adminSecret",
+                "label": "Secret with the credentials",
+                "required": true,
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+              },
+              {
+                "key": "adminUserKey",
+                "label": "Key of the user name",
+                "default": "admin-user",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              },
+              {
+                "key": "adminPasswordKey",
+                "label": "Key of the password",
+                "default": "admin-password",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "admin.existingSecret",
+                "value": "{adminSecret}"
+              },
+              {
+                "path": "admin.userKey",
+                "value": "{adminUserKey}"
+              },
+              {
+                "path": "admin.passwordKey",
+                "value": "{adminPasswordKey}"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "storage",
+        "title": "Storage",
+        "help": "Where Grafana keeps dashboards, users and plugins.",
+        "options": [
+          {
+            "id": "none",
+            "title": "No volume (the chart's default)",
+            "default": true,
+            "note": "Everything is lost when the pod is replaced. For trials only.",
+            "set": []
+          },
+          {
+            "id": "persist",
+            "title": "A persistent volume",
+            "fields": [
+              {
+                "key": "size",
+                "label": "Size",
+                "required": true,
+                "default": "10Gi",
+                "pattern": "^[0-9]+(Mi|Gi|Ti)$",
+                "placeholder": "10Gi",
+                "help": "Mi, Gi or Ti."
+              }
+            ],
+            "set": [
+              {
+                "path": "persistence.enabled",
+                "value": true
+              },
+              {
+                "path": "persistence.size",
+                "value": "{size}"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "access",
+        "title": "How to reach it",
+        "help": "How people get to the web interface.",
+        "options": [
+          {
+            "id": "none",
+            "title": "Only inside the cluster",
+            "default": true,
+            "set": []
+          },
+          {
+            "id": "ingress",
+            "title": "Ingress (a host name)",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host name",
+                "required": true,
+                "placeholder": "grafana.example.com",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "className",
+                "label": "Ingress class",
+                "kind": "ingressclass",
+                "help": "Empty uses the cluster default."
+              },
+              {
+                "key": "tlsSecret",
+                "label": "TLS Secret",
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "A kubernetes.io/tls Secret; empty serves plain HTTP."
+              }
+            ],
+            "set": [
+              {
+                "path": "ingress.enabled",
+                "value": true
+              },
+              {
+                "path": "ingress.ingressClassName",
+                "value": "{className}"
+              },
+              {
+                "path": "ingress.hosts",
+                "value": [
+                  "{host}"
+                ]
+              },
+              {
+                "path": "ingress.tls",
+                "value": [
+                  {
+                    "hosts": [
+                      "{host}"
+                    ],
+                    "secretName": "{tlsSecret}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "nodeport",
+            "title": "NodePort (a port on every node)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "NodePort"
+              }
+            ]
+          },
+          {
+            "id": "loadbalancer",
+            "title": "LoadBalancer (an external address)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "LoadBalancer"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "after": [
+      "Grafana is at the address you chose (inside the cluster: the Service {release} in {namespace}, port 80). With the generated password, the user is \"admin\" and the password is in the Secret {release} in {namespace} (open the Secrets page; reading a value is audited)."
     ]
   }
 }

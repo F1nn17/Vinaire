@@ -39,34 +39,43 @@ export type RecipeSection = {
 export type Recipe = {
   summary?: string;
   guide?: string[];
+  // shown once the install is done; {release} and {namespace} are filled in
+  after?: string[];
   sections: RecipeSection[];
 };
 
 export type FieldValues = Record<string, string>;
 
-const placeholderRe = /\{([a-zA-Z][a-zA-Z0-9]*)\}/g;
+const placeholderRe = /\{(\??)([a-zA-Z][a-zA-Z0-9]*)\}/g;
+const optionalOnly = /^\{\?[a-zA-Z][a-zA-Z0-9]*\}$/;
 
 // Substitute {field} placeholders. `undefined` = a placeholder names a field that is empty, so
 // the whole entry is skipped (an empty Ingress class must not become `ingressClassName: ""`).
 export function substitute(value: unknown, fields: FieldValues): unknown {
   if (typeof value === "string") {
     let missing = false;
-    const out = value.replace(placeholderRe, (_, k: string) => {
+    const out = value.replace(placeholderRe, (_, opt: string, k: string) => {
       const v = (fields[k] ?? "").trim();
-      if (v === "") missing = true;
+      if (v === "" && opt !== "?") missing = true;
       return v;
     });
+    // a value that is only an optional placeholder, left empty, is "not there" (the caller
+    // drops the key) rather than an empty string
+    if (!missing && out === "" && optionalOnly.test(value)) return null;
     return missing ? undefined : out;
   }
   if (Array.isArray(value)) {
     const items = value.map((v) => substitute(v, fields));
-    return items.some((v) => v === undefined) ? undefined : items;
+    return items.some((v) => v === undefined)
+      ? undefined
+      : items.filter((v) => v !== null);
   }
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       const s = substitute(v, fields);
       if (s === undefined) return undefined;
+      if (s === null) continue; // an optional field left empty: the key is left out
       out[k] = s;
     }
     return out;
@@ -80,7 +89,7 @@ export function patchesFor(option: RecipeOption, fields: FieldValues): Patch[] {
   const out: Patch[] = [];
   for (const s of option.set) {
     let v = substitute(s.value, fields);
-    if (v === undefined) continue;
+    if (v === undefined || v === null) continue;
     if (s.as === "number") {
       const n = Number(v);
       if (!Number.isFinite(n)) continue;

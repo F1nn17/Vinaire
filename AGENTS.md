@@ -179,6 +179,13 @@ flow.
     namespace or the volume claims itself** — it reports them (`namespaceCreated`,
     `leftovers`) and the UI offers the existing, audited namespace delete (Phase 27,
     name typed). Pod rows are read as the caller.
+  - **Install recipes** (Roadmap Phase 59, `internal/helm/recipes.json`, `CATALOG_RECIPES`): data that turns a
+    few answers ("my own PostgreSQL", "publish via Ingress") into **values for the same chart being installed** — they
+    install, create and name nothing themselves. Like the repositories they come only from Vinaire's data or the operator's
+    file, **never from a request**, and are validated (a field that can reach YAML text must carry a pattern; a password is
+    never a field — only the name of an existing Secret and a key). The checks around the install (what it will create,
+    default StorageClass, IngressClass, Service endpoints, Secret key names) are reads as the caller; a Secret's values are
+    never read for them. Deleting individual PersistentVolumeClaims is **not** a write Vinaire has.
   - A **deprecated** chart is hidden from search and refused on install unless the
     request carries `allowDeprecated` (the UI's explicit "install anyway").
   - `GET /api/v1/catalog/icons/{repo}/{chart}` serves a chart's icon so the browser

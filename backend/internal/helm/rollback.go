@@ -128,6 +128,15 @@ func leftoverClaims(ctx context.Context, cfg *rest.Config, namespace, release st
 	return out
 }
 
+// LeftoverClaims names the PersistentVolumeClaims of a release that Helm does not remove on
+// uninstall (read as the caller) — shown after an uninstall so the data left behind is noticed.
+func LeftoverClaims(ctx context.Context, cfg *rest.Config, namespace, release string) []string {
+	if !releaseNameRe.MatchString(release) || !dnsLabelRe.MatchString(namespace) {
+		return nil
+	}
+	return leftoverClaims(ctx, cfg, namespace, release)
+}
+
 // RollbackFailed undoes an install that failed after Helm had started, on request (the same
 // DELETE that cancels a running one). It reports whether a rollback was started; a job that
 // isn't eligible, or already rolled back, is left alone.

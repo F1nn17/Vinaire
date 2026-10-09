@@ -12,6 +12,7 @@ import {
   type InstallRequest,
 } from "@/lib/api/catalog";
 import { friendlyErrorMessage } from "@/lib/api/errors";
+import { t } from "@/lib/i18n/translate";
 import { useChart } from "@/lib/hooks/useCatalog";
 import { useNamespaces } from "@/lib/hooks/useNamespaces";
 import { useNodes } from "@/lib/hooks/useWorkloads";
@@ -22,6 +23,7 @@ import { InstallProgress } from "@/components/marketplace/InstallProgress";
 import { PermissionsCheck } from "@/components/marketplace/PermissionsCheck";
 import { RollbackNote } from "@/components/marketplace/RollbackNote";
 import { RecipePanel } from "@/components/marketplace/RecipePanel";
+import { InstallPlan } from "@/components/marketplace/InstallPlan";
 import { ValuesForm } from "@/components/marketplace/ValuesForm";
 import { buildSections } from "@/lib/values/schemaForm";
 import { PillTabs } from "@/components/ui/Tabs";
@@ -513,6 +515,20 @@ function InstallInner() {
                         {job.result.notes}
                       </pre>
                     )}
+                    {chart.recipe?.after && (
+                      <div className="mt-2 flex flex-col gap-1.5 text-text-muted">
+                        {chart.recipe.after.map((line, i) => (
+                          <p key={i}>
+                            {t(line)
+                              .replaceAll("{release}", job.result!.release.name)
+                              .replaceAll(
+                                "{namespace}",
+                                job.result!.release.namespace,
+                              )}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                     <Link
                       href="/marketplace"
                       className="mt-2 inline-block text-accent-text underline"
@@ -529,6 +545,7 @@ function InstallInner() {
                   missing={missing}
                   unchecked={preflight?.unchecked}
                 />
+                <InstallPlan preflight={preflight} />
                 <div className="flex justify-end">
                   <button
                     type="button"

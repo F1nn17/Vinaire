@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Marketplace install: what it will create, and what the cluster lacks (Roadmap Phase 59, second stage).** Before Install the page lists
+  the objects and the storage the chart will create and warns about a missing default StorageClass or ingress controller; under a
+  "my own PostgreSQL" it checks that the Service has ready pods and that the Secret exists with the keys. New recipe sections
+  (administrator account, storage size, resources, Gateway API HTTPRoute), recipes for Metabase and Grafana, "where to go next" hints
+  after an install, and `CATALOG_RECIPES` for the operator's own recipes. After an uninstall the volume claims Helm leaves behind are listed.
 - **Guided Marketplace setup (Roadmap Phase 59, first stage).** For Keycloak (both charts), Gitea and Nextcloud the install page now
   asks the questions that matter: *database* — the bundled one, or **your own PostgreSQL** (host, port, database, user and the name of
   an existing Secret holding the password; PostgreSQL Services found in the cluster are offered) — and *how to reach it* (Ingress with

@@ -241,13 +241,28 @@ function InstalledTab() {
   const [removing, setRemoving] = useState<HelmRelease | null>(null);
   const [busy, setBusy] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  // volume claims Helm left behind by the last uninstall (Roadmap Phase 59)
+  const [left, setLeft] = useState<{
+    release: string;
+    namespace: string;
+    claims: string[];
+  } | null>(null);
 
   async function remove() {
     if (!removing) return;
     setBusy(true);
     setRemoveError(null);
     try {
-      await uninstallRelease(removing.namespace, removing.name);
+      const res = await uninstallRelease(removing.namespace, removing.name);
+      setLeft(
+        res?.leftovers && res.leftovers.length > 0
+          ? {
+              release: removing.name,
+              namespace: removing.namespace,
+              claims: res.leftovers,
+            }
+          : null,
+      );
       setRemoving(null);
       await mutate();
     } catch (err) {
@@ -384,6 +399,33 @@ function InstalledTab() {
         />
       )}
 
+      {left && (
+        <div className="mb-3 flex flex-col gap-2 rounded-lg border border-warn/40 bg-surface p-3 text-xs">
+          <div>
+            {t("{r} was uninstalled.", { r: left.release })}{" "}
+            {t(
+              "Helm leaves these volume claims (your data) in place: {names}. They are removed only together with their namespace.",
+              { names: left.claims.join(", ") },
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <a
+              href={`/namespaces/detail?name=${encodeURIComponent(left.namespace)}`}
+              className="text-accent-text underline"
+            >
+              {t("Open namespace {ns}", { ns: left.namespace })}
+            </a>
+            <button
+              type="button"
+              onClick={() => setLeft(null)}
+              className="text-text-muted hover:text-text"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {upgrading && (
         <UpgradeModal
           release={upgrading}
@@ -402,7 +444,7 @@ function InstalledTab() {
         <TypeToConfirmModal
           title={t("Uninstall {name}", { name: removing.name })}
           message={t(
-            "Removes release {name} and the resources its chart created in namespace {ns}. Data in persistent volumes the chart created may be deleted with it. This can't be undone.",
+            "Removes release {name} and the resources its chart created in namespace {ns}. Volume claims that a StatefulSet created stay and are listed afterwards. This can't be undone.",
             { name: removing.name, ns: removing.namespace },
           )}
           expected={removing.name}
