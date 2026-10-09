@@ -60,6 +60,12 @@ export default function MarketplacePage() {
     <div className="flex flex-col gap-[18px] px-8 py-7">
       <div className="flex items-center justify-between">
         <div className="text-[15px] font-semibold">Marketplace</div>
+        <Link
+          href="/marketplace/image"
+          className="ml-auto mr-3 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-accent-text hover:border-accent"
+        >
+          {t("Install from an image")}
+        </Link>
         <PillTabs
           items={[
             { key: "catalog", label: "Catalog" },

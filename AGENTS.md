@@ -73,6 +73,11 @@ flow.
   spelled out because client-go's default for batch/v1 orphans them). A StatefulSet's volume claims stay. Names are
   validated, each call is audited (`delete-statefulset`/`delete-daemonset`/`delete-job`), and the UI's bulk run makes
   the user type the number of objects. The chart's `-installer` role grants these verbs; `-viewer` does not.
+- "Install from an image" (Roadmap Phase 67, `frontend/src/lib/images/presets.ts`, `app/(shell)/marketplace/image`) adds **no
+  write path**: the page builds a StatefulSet, a Secret and a Service and creates them one by one through the generic YAML create
+  above, as the caller. Rules to keep: the presets name only the publishers' official images; every typed value is validated by a
+  pattern before it reaches YAML; passwords are generated in the browser, written only into the Secret and never put in an
+  environment value or shown in the preview; the Secret and the Service carry an `ownerReference` to the StatefulSet.
 - `DELETE /api/v1/secrets/{namespace}/{name}` (owner's decision of 2026-10-09, so that what an uninstalled chart
   leaves behind — a database's password Secret — can be removed) — a plain `Delete()` on one Secret, as the caller
   (`internal/api/secrets.go`). The body must repeat the Secret's name (`{"confirmName": ...}`), `kube-system`/

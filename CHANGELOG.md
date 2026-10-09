@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Install one instance from a publisher's image (Roadmap Phase 67).** Marketplace → "Install from an image": PostgreSQL, MySQL, MariaDB, Redis, Valkey, RabbitMQ, MongoDB or any image, with every value explained and checked and the three objects (StatefulSet, Secret with a generated password, Service) shown before they are created. Applied through the generic YAML create, as the caller — no new write path; the Secret and Service belong to the StatefulSet, so deleting it removes them.
 - **Marketplace: filter by type — single instance / cluster / operator.** Every chart is told apart (by the operator's `roles` list in `catalog.json`, then by name: `*operator*`, `*-ha`, `*-cluster`, `*-db`) and a filter row separates what works once installed from clusters and operators, with a line explaining each; cards carry an `operator`/`cluster` badge. `GET /api/v1/catalog/charts?role=single|cluster|operator`.
 - **Delete a Secret** (owner's decision of 2026-10-09): `DELETE /api/v1/secrets/{namespace}/{name}` and a Delete button on the Secrets page, for what an uninstalled chart leaves behind. The name is typed, system namespaces and Helm release records are refused; audited as `delete-secret`.
 - **A list page remembers its tab** (Workloads tab and namespace, Marketplace, Storage, Network, Nodes, Settings, Access control) while you look at a detail page and come back; the detail pages' breadcrumbs name their tab.
