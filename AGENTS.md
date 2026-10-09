@@ -73,6 +73,14 @@ flow.
   apart (`PodDetailResponse.HasController`) and shows "Restart" vs.
   "Delete" accordingly — the backend's `Delete()` call is identical either
   way.
+- `DELETE /api/v1/pvcs/{namespace}/{name}` (owner's decision of 2026-10-09, so that the volume claims
+  Helm leaves behind after an uninstall or a rolled-back install can be removed) — a plain `Delete()` on one
+  PersistentVolumeClaim, as the caller. Irreversible (with the usual `Delete` reclaim policy the data goes
+  with the claim), so, in `internal/api/storage.go`: the body must repeat the claim's name
+  (`{"confirmName": ...}` — the UI makes the user type it), `kube-system`/`kube-public`/`kube-node-lease`
+  are refused, and a claim that a pod still mounts is refused with `409` naming the pods. Audited as
+  `delete-pvc` (namespace, name, the PersistentVolume and the class — never anything from inside the
+  volume). The chart's `-installer` role grants the verb; `-viewer` does not.
 - `POST /api/v1/resources`, `PUT /api/v1/resources`, and the non-mutating
   `POST /api/v1/resources/dry-run` (Roadmap Phase 25) — generic YAML
   create/update for **any kind the cluster serves** (dynamic client), used
@@ -185,7 +193,8 @@ flow.
     file, **never from a request**, and are validated (a field that can reach YAML text must carry a pattern; a password is
     never a field — only the name of an existing Secret and a key). The checks around the install (what it will create,
     default StorageClass, IngressClass, Service endpoints, Secret key names) are reads as the caller; a Secret's values are
-    never read for them. Deleting individual PersistentVolumeClaims is **not** a write Vinaire has.
+    never read for them. The volume claims left after an uninstall are listed and can be deleted one by one through
+    `DELETE /api/v1/pvcs/…` (above).
   - A **deprecated** chart is hidden from search and refused on install unless the
     request carries `allowDeprecated` (the UI's explicit "install anyway").
   - `GET /api/v1/catalog/icons/{repo}/{chart}` serves a chart's icon so the browser

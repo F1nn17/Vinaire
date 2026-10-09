@@ -121,6 +121,7 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/projects/{name}` | yes | — |
 | GET | `/api/v1/provision/options` | yes | — |
 | GET | `/api/v1/pvcs` | yes | — |
+| DELETE | `/api/v1/pvcs/{namespace}/{name}` | yes | yes |
 | GET | `/api/v1/pvcs/{namespace}/{name}` | yes | — |
 | GET | `/api/v1/pvs` | yes | — |
 | POST | `/api/v1/rbac/bindings` | yes | yes |

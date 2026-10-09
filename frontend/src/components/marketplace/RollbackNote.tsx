@@ -6,6 +6,7 @@ import type { InstallJob } from "@/lib/api/catalog";
 import { deleteNamespace } from "@/lib/api/namespaces";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { TypeToConfirmModal } from "@/components/ui/TypeToConfirmModal";
+import { DeletePVCModal } from "@/components/storage/DeletePVCModal";
 
 // Roadmap Phase 60: what a cancelled (or rolled-back) install did and what it left. The
 // release is uninstalled by the backend; the namespace the install created, and any volume
@@ -17,6 +18,9 @@ export function RollbackNote({ job }: { job: InstallJob }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [removed, setRemoved] = useState(false);
+  // volume claims already deleted from here, and the one being deleted
+  const [gone, setGone] = useState<string[]>([]);
+  const [deletingClaim, setDeletingClaim] = useState<string | null>(null);
 
   if (!job.rolledBack && !job.rollbackError) return null;
 
@@ -45,13 +49,42 @@ export function RollbackNote({ job }: { job: InstallJob }) {
           {t("The rollback did not finish:")} {job.rollbackError}
         </div>
       )}
-      {job.leftovers && job.leftovers.length > 0 && (
-        <div className="text-text-muted">
-          {t(
-            "Helm leaves these volume claims (your data) in place: {names}. They are removed only together with their namespace.",
-            { names: job.leftovers.join(", ") },
-          )}
-        </div>
+      {job.leftovers &&
+        job.leftovers.filter((c) => !gone.includes(c)).length > 0 && (
+          <div className="flex flex-col gap-1.5 text-text-muted">
+            <div>
+              {t(
+                "Helm leaves these volume claims (your data) in place — delete the ones you don't need:",
+              )}
+            </div>
+            <ul className="flex flex-col gap-1 font-mono">
+              {job.leftovers
+                .filter((c) => !gone.includes(c))
+                .map((c) => (
+                  <li key={c} className="flex items-center gap-3">
+                    <span>{c}</span>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingClaim(c)}
+                      className="rounded-md border border-err/50 px-2 py-0.5 text-[11px] text-err hover:border-err"
+                    >
+                      Delete
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
+      {deletingClaim && (
+        <DeletePVCModal
+          namespace={job.namespace}
+          name={deletingClaim}
+          onClose={() => setDeletingClaim(null)}
+          onDeleted={() => {
+            setGone([...gone, deletingClaim]);
+            setDeletingClaim(null);
+          }}
+        />
       )}
       {job.namespaceCreated && job.rolledBack && !removed && (
         <div className="flex flex-wrap items-center gap-3 text-text-muted">

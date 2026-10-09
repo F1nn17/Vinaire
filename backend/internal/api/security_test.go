@@ -72,6 +72,7 @@ type fakeAPI struct {
 	seen    []string       // Authorization headers of every request
 	canned  map[string]any // path -> JSON answered to a GET (tests that need real objects)
 	asked   []string       // "group/resource/verb" of every SelfSubjectAccessReview
+	deleted []string       // path of every DELETE
 }
 
 func newFakeAPI(t *testing.T) *fakeAPI {
@@ -99,6 +100,11 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 				"kind": "SelfSubjectAccessReview", "apiVersion": "authorization.k8s.io/v1",
 				"status": map[string]any{"allowed": f.allowed[token][key]},
 			})
+			return
+		}
+		if r.Method == http.MethodDelete {
+			f.deleted = append(f.deleted, r.URL.Path)
+			_ = json.NewEncoder(w).Encode(map[string]any{"kind": "Status", "apiVersion": "v1", "status": "Success"})
 			return
 		}
 		if v, ok := f.canned[r.URL.Path]; ok && r.Method == http.MethodGet {

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Delete a volume claim (owner's decision of 2026-10-09).** `DELETE /api/v1/pvcs/{namespace}/{name}`, from the PVC page and from the list of
+  volume claims left behind after an uninstall or a rolled-back install. Irreversible, so the claim's name must be typed, system
+  namespaces are refused, and a claim a pod still mounts is refused with the pods named. Audited as `delete-pvc`; the chart's `-installer`
+  role grants the verb.
 - **Marketplace install: what it will create, and what the cluster lacks (Roadmap Phase 59, second stage).** Before Install the page lists
   the objects and the storage the chart will create and warns about a missing default StorageClass or ingress controller; under a
   "my own PostgreSQL" it checks that the Service has ready pods and that the Secret exists with the keys. New recipe sections

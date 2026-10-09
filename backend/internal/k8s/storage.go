@@ -29,6 +29,18 @@ func GetPersistentVolumeClaim(ctx context.Context, clientset *kubernetes.Clients
 	return pvc, nil
 }
 
+// DeletePersistentVolumeClaim is a plain Delete() on one PVC (owner's decision of 2026-10-09: the
+// volume claims Helm leaves behind after an uninstall must be removable). What happens to the data
+// is the volume's reclaim policy: Delete (the usual for dynamic provisioning) removes it with the
+// claim, Retain keeps the PersistentVolume. internal/api adds the guard rails (the name typed, no
+// pod still using the claim); this function just deletes.
+func DeletePersistentVolumeClaim(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) error {
+	if err := clientset.CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("delete persistentvolumeclaim %s/%s: %w", namespace, name, err)
+	}
+	return nil
+}
+
 // ListPersistentVolumes returns every PersistentVolume — cluster-scoped,
 // unlike PersistentVolumeClaims, so this takes no namespace argument.
 func ListPersistentVolumes(ctx context.Context, clientset *kubernetes.Clientset) ([]corev1.PersistentVolume, error) {

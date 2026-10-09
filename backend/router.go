@@ -200,6 +200,8 @@ func newRouter(d routerDeps) *chi.Mux {
 			w.Post("/deployments/{namespace}/{name}/resume", workloadsHandler.ResumeDeploymentRollout)
 			w.Post("/statefulsets/{namespace}/{name}/scale", workloadsHandler.ScaleStatefulSet)
 			w.Delete("/pods/{namespace}/{name}", workloadsHandler.DeletePod)
+			// the volume claims Helm leaves behind after an uninstall — see AGENTS.md
+			w.Delete("/pvcs/{namespace}/{name}", workloadsHandler.DeletePVC)
 			// Roadmap Phase 27: irreversible, cascading — see AGENTS.md and
 			// internal/k8s/namespaces.go.
 			w.Delete("/namespaces/{name}", workloadsHandler.DeleteNamespace)

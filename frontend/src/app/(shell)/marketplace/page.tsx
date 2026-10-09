@@ -20,6 +20,7 @@ import { TypeToConfirmModal } from "@/components/ui/TypeToConfirmModal";
 import { SearchIcon } from "@/components/icons";
 import { UpgradeModal } from "@/components/marketplace/UpgradeModal";
 import { RollbackModal } from "@/components/marketplace/RollbackModal";
+import { DeletePVCModal } from "@/components/storage/DeletePVCModal";
 import type { StatusColor } from "@/lib/types";
 
 type Tab = "catalog" | "installed";
@@ -247,6 +248,7 @@ function InstalledTab() {
     namespace: string;
     claims: string[];
   } | null>(null);
+  const [deletingClaim, setDeletingClaim] = useState<string | null>(null);
 
   async function remove() {
     if (!removing) return;
@@ -404,10 +406,23 @@ function InstalledTab() {
           <div>
             {t("{r} was uninstalled.", { r: left.release })}{" "}
             {t(
-              "Helm leaves these volume claims (your data) in place: {names}. They are removed only together with their namespace.",
-              { names: left.claims.join(", ") },
+              "Helm leaves these volume claims (your data) in place — delete the ones you don't need:",
             )}
           </div>
+          <ul className="flex flex-col gap-1 font-mono">
+            {left.claims.map((c) => (
+              <li key={c} className="flex items-center gap-3">
+                <span>{c}</span>
+                <button
+                  type="button"
+                  onClick={() => setDeletingClaim(c)}
+                  className="rounded-md border border-err/50 px-2 py-0.5 text-[11px] text-err hover:border-err"
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
           <div className="flex items-center gap-3">
             <a
               href={`/namespaces/detail?name=${encodeURIComponent(left.namespace)}`}
@@ -426,6 +441,18 @@ function InstalledTab() {
         </div>
       )}
 
+      {left && deletingClaim && (
+        <DeletePVCModal
+          namespace={left.namespace}
+          name={deletingClaim}
+          onClose={() => setDeletingClaim(null)}
+          onDeleted={() => {
+            const rest = left.claims.filter((c) => c !== deletingClaim);
+            setLeft(rest.length > 0 ? { ...left, claims: rest } : null);
+            setDeletingClaim(null);
+          }}
+        />
+      )}
       {upgrading && (
         <UpgradeModal
           release={upgrading}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { usePVC } from "@/lib/hooks/useStorage";
 import { friendlyErrorMessage } from "@/lib/api/errors";
@@ -9,6 +9,9 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
+import { ActionBar, ActionButton } from "@/components/ui/ActionBar";
+import { TrashIcon } from "@/components/icons";
+import { DeletePVCModal } from "@/components/storage/DeletePVCModal";
 
 type Tab = "overview" | "events" | "yaml";
 
@@ -38,6 +41,8 @@ function PVCDetailPage() {
   const name = searchParams.get("name") ?? "";
   const { data: pvc, isLoading, error, mutate } = usePVC(namespace, name);
   const [tab, setTab] = useState<Tab>("overview");
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
 
   if (error) {
     return (
@@ -75,6 +80,15 @@ function PVCDetailPage() {
             </span>
           </div>
         </div>
+        <ActionBar>
+          <ActionButton
+            icon={<TrashIcon />}
+            label="Delete"
+            hint="Delete the volume claim — the data on it is lost with the usual reclaim policy"
+            danger
+            onClick={() => setDeleting(true)}
+          />
+        </ActionBar>
       </div>
 
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
@@ -139,6 +153,14 @@ function PVCDetailPage() {
 
       {tab === "yaml" && (
         <YamlPanel yaml={pvc.yaml} onApplied={() => mutate()} />
+      )}
+      {deleting && (
+        <DeletePVCModal
+          namespace={pvc.namespace}
+          name={pvc.name}
+          onClose={() => setDeleting(false)}
+          onDeleted={() => router.push("/storage")}
+        />
       )}
     </div>
   );

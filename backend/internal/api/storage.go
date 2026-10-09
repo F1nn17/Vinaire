@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -334,6 +335,64 @@ func buildPVCDetail(pvc corev1.PersistentVolumeClaim, pods []corev1.Pod, events 
 		Events:       eventRows,
 		YAML:         yaml,
 	}
+}
+
+type deletePVCRequest struct {
+	ConfirmName string `json:"confirmName"`
+}
+
+// DeletePVC handles DELETE /api/v1/pvcs/{namespace}/{name}: removes one PersistentVolumeClaim, as the
+// caller. It is irreversible — with the usual "Delete" reclaim policy the data goes with it — so:
+// the body must repeat the claim's name, the cluster's own namespaces are refused, and a claim that
+// a pod still mounts is refused with the pods named (Kubernetes would only mark it Terminating and
+// keep the data until they go; saying so up front is clearer). Audited as delete-pvc.
+func (h *Handler) DeletePVC(w http.ResponseWriter, r *http.Request) {
+	_, clientset, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+	if !k8sNameRe.MatchString(namespace) || !k8sNameRe.MatchString(name) {
+		respondError(w, http.StatusBadRequest, "invalid namespace or claim name")
+		return
+	}
+	if reservedNamespaces[namespace] {
+		respondError(w, http.StatusBadRequest, "namespace "+namespace+" is a system namespace; its claims can't be deleted from Vinaire")
+		return
+	}
+	var req deletePVCRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil || req.ConfirmName != name {
+		respondError(w, http.StatusBadRequest, `request body must be {"confirmName": "<the claim's name>"}`)
+		return
+	}
+	pvc, err := k8s.GetPersistentVolumeClaim(r.Context(), clientset, namespace, name)
+	if err != nil {
+		respondK8sError(w, err)
+		return
+	}
+	// a caller who may not list pods gets no pre-check; the cluster's own protection still applies
+	if pods, perr := k8s.ListPods(r.Context(), clientset, namespace); perr == nil {
+		if using := pvcMountingPods(pods, name); len(using) > 0 {
+			names := make([]string, 0, len(using))
+			for _, p := range using {
+				names = append(names, p.Name)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": "the claim is still used by: " + strings.Join(names, ", ") + " — stop or delete them first",
+				"pods":  names,
+			})
+			return
+		}
+	}
+	if err := k8s.DeletePersistentVolumeClaim(r.Context(), clientset, namespace, name); err != nil {
+		respondK8sError(w, err)
+		return
+	}
+	h.auditLog(r, "delete-pvc", namespace, name, "volume", pvc.Spec.VolumeName, "storageClass", pvcStorageClassName(*pvc))
+	respondJSON(w, map[string]string{"status": "ok"})
 }
 
 func pvcMountingPods(pods []corev1.Pod, pvcName string) []PVCMountingPod {
