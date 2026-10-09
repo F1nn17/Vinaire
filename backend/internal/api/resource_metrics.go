@@ -112,40 +112,71 @@ func podSelector(namespace, podMatcher string, containerFilter bool) string {
 	return sel
 }
 
+// nodeSelectors are the ways a node's cAdvisor series can name their node. Which one a cluster
+// has depends on how Prometheus scrapes the kubelet: kube-prometheus-stack relabels a `node`
+// label on, the community prometheus chart scrapes through the API server and leaves the node's
+// name in `instance` (and its labels, like kubernetes_io_hostname), and a scrape straight at the
+// kubelet has `instance` as address:port. Each is tried in turn (joined with `or`, so the first
+// that has samples wins and the rest add nothing) — Roadmap Phase 61: with only `node`, a
+// perfectly healthy Prometheus answered "no data".
+func nodeSelectors(name string) []string {
+	q := regexp.QuoteMeta(name)
+	return []string{
+		`id="/",node=` + promString(name),
+		`id="/",instance=~` + promString(q+`(:[0-9]+)?`),
+		`id="/",kubernetes_io_hostname=` + promString(name),
+		`id="/",nodename=` + promString(name),
+	}
+}
+
+// orJoin joins alternative queries: the left one's series, and the right ones' only where the
+// left has none with the same labels.
+func orJoin(qs []string) string {
+	return strings.Join(qs, " or ")
+}
+
 func planFor(kind, namespace, name, metricType string) (metricPlan, bool) {
-	var sel func(containerFilter bool) string
+	var sels func(containerFilter bool) []string
 	nodeLevel := false
 	switch kind {
 	case "pods":
-		sel = func(cf bool) string { return podSelector(namespace, "pod="+promString(name), cf) }
+		sels = func(cf bool) []string { return []string{podSelector(namespace, "pod="+promString(name), cf)} }
 	case "deployments":
 		// A Deployment's pods are <name>-<replicaset hash>-<pod hash>. Matching
 		// the name pattern (rather than today's pod list) keeps pods from
 		// earlier rollouts in the history.
 		matcher := "pod=~" + promString("^"+regexp.QuoteMeta(name)+"-[a-z0-9]{6,10}-[a-z0-9]{5}$")
-		sel = func(cf bool) string { return podSelector(namespace, matcher, cf) }
+		sels = func(cf bool) []string { return []string{podSelector(namespace, matcher, cf)} }
 	case "nodes":
 		nodeLevel = true
-		sel = func(bool) string { return `id="/",node=` + promString(name) }
+		sels = func(bool) []string { return nodeSelectors(name) }
 	default:
 		return metricPlan{}, false
+	}
+	// build renders one query per selector and joins them
+	build := func(containerFilter bool, format string, extra ...any) string {
+		var qs []string
+		for _, sel := range sels(containerFilter) {
+			qs = append(qs, fmt.Sprintf(format, append([]any{sel}, extra...)...))
+		}
+		return orJoin(qs)
 	}
 
 	switch metricType {
 	case "cpu":
-		return metricPlan{"cores", []metricQuery{{name: "cpu", promql: fmt.Sprintf(`sum(rate(container_cpu_usage_seconds_total{%s}[%s]))`, sel(true), rateWindow)}}}, true
+		return metricPlan{"cores", []metricQuery{{name: "cpu", promql: build(true, `sum(rate(container_cpu_usage_seconds_total{%s}[%s]))`, rateWindow)}}}, true
 	case "memory":
-		return metricPlan{"bytes", []metricQuery{{name: "memory", promql: fmt.Sprintf(`sum(container_memory_working_set_bytes{%s})`, sel(true))}}}, true
+		return metricPlan{"bytes", []metricQuery{{name: "memory", promql: build(true, `sum(container_memory_working_set_bytes{%s})`)}}}, true
 	case "network":
 		return metricPlan{"bytes/s", []metricQuery{
-			{name: "receive", promql: fmt.Sprintf(`sum(rate(container_network_receive_bytes_total{%s}[%s]))`, sel(false), rateWindow)},
-			{name: "transmit", promql: fmt.Sprintf(`sum(rate(container_network_transmit_bytes_total{%s}[%s]))`, sel(false), rateWindow)},
+			{name: "receive", promql: build(false, `sum(rate(container_network_receive_bytes_total{%s}[%s]))`, rateWindow)},
+			{name: "transmit", promql: build(false, `sum(rate(container_network_transmit_bytes_total{%s}[%s]))`, rateWindow)},
 		}}, true
 	case "filesystem":
 		if nodeLevel {
-			return metricPlan{"bytes", []metricQuery{{promql: fmt.Sprintf(`sum by (device) (container_fs_usage_bytes{%s})`, sel(false)), splitBy: "device"}}}, true
+			return metricPlan{"bytes", []metricQuery{{promql: build(false, `sum by (device) (container_fs_usage_bytes{%s})`), splitBy: "device"}}}, true
 		}
-		return metricPlan{"bytes", []metricQuery{{name: "filesystem", promql: fmt.Sprintf(`sum(container_fs_usage_bytes{%s})`, sel(true))}}}, true
+		return metricPlan{"bytes", []metricQuery{{name: "filesystem", promql: build(true, `sum(container_fs_usage_bytes{%s})`)}}}, true
 	}
 	return metricPlan{}, false
 }
@@ -286,9 +317,53 @@ func (h *Handler) serveResourceMetrics(w http.ResponseWriter, r *http.Request, k
 	resp.Available = true
 	if len(resp.Series) == 0 {
 		resp.NoData = true
-		resp.Reason = "Prometheus has no samples for this resource — the metric may not be exported on this cluster"
+		resp.Reason = explainNoData(r.Context(), fetch, kind)
 	}
 	respondJSON(w, resp)
+}
+
+// explainNoData says why there is nothing to draw, by asking Prometheus whether it holds
+// container metrics at all (Roadmap Phase 61): "your Prometheus doesn't scrape the kubelet" and
+// "it does, but none of it names this node" call for different fixes.
+func explainNoData(ctx context.Context, fetch promFetch, kind string) string {
+	const generic = "Prometheus has no samples for this resource — the metric may not be exported on this cluster"
+	n, err := promCount(ctx, fetch, `container_cpu_usage_seconds_total`)
+	switch {
+	case err != nil:
+		return generic
+	case n == 0:
+		return "Prometheus is running but holds no container metrics — it isn't scraping the kubelet's cAdvisor endpoint. Check its scrape targets (the Metrics stack page can install a Prometheus that does)."
+	case kind == "nodes":
+		return "Prometheus holds container metrics, but none it can tie to this node: Vinaire looks for the node's name in the labels node, instance, kubernetes_io_hostname and nodename, and the scrape config here labels it differently."
+	}
+	return generic
+}
+
+// promCount returns how many series match the selector.
+func promCount(ctx context.Context, fetch promFetch, selector string) (int, error) {
+	params := url.Values{}
+	params.Set("query", "count("+selector+")")
+	body, err := fetch(ctx, "/api/v1/query", params)
+	if err != nil {
+		return 0, err
+	}
+	var m struct {
+		Status string `json:"status"`
+		Data   struct {
+			Result []struct {
+				Value [2]any `json:"value"`
+			} `json:"result"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &m); err != nil || m.Status != "success" {
+		return 0, fmt.Errorf("unreadable prometheus answer")
+	}
+	if len(m.Data.Result) == 0 {
+		return 0, nil // count() of nothing is an empty result
+	}
+	str, _ := m.Data.Result[0].Value[1].(string)
+	f, err := strconv.ParseFloat(str, 64)
+	return int(f), err
 }
 
 // PodMetrics handles GET /api/v1/pods/{namespace}/{name}/metrics.

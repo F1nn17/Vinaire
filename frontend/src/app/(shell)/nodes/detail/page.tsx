@@ -27,12 +27,11 @@ import {
 } from "@/components/icons";
 import { cordonNode, deleteNode, uncordonNode } from "@/lib/api/nodeActions";
 
-type Tab = "overview" | "pods" | "metrics" | "yaml";
+type Tab = "overview" | "pods" | "yaml";
 
 const tabs: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "pods", label: "Pods" },
-  { key: "metrics", label: "Metrics" },
   { key: "yaml", label: "YAML" },
 ];
 
@@ -225,7 +224,7 @@ function NodeDetailPage() {
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
-        <div className="flex max-w-3xl flex-col gap-4">
+        <div className="flex max-w-5xl flex-col gap-4">
           <div className="rounded-[10px] border border-border bg-surface p-5">
             <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
             <div className="flex flex-col gap-2.5">
@@ -268,6 +267,13 @@ function NodeDetailPage() {
                 />
               </div>
             )}
+          </div>
+
+          <div className="rounded-[10px] border border-border bg-surface p-5">
+            <div className="mb-3.5 text-[13px] font-semibold">
+              Usage history
+            </div>
+            <MetricsPanel resourceType="nodes" namespace="" name={name} />
           </div>
 
           <div className="rounded-[10px] border border-border bg-surface p-5">
@@ -333,10 +339,6 @@ function NodeDetailPage() {
           }
           emptyLabel="No pods scheduled on this node."
         />
-      )}
-
-      {tab === "metrics" && (
-        <MetricsPanel resourceType="nodes" namespace="" name={name} />
       )}
 
       {tab === "yaml" && (

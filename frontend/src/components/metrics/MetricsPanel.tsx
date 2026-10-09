@@ -15,6 +15,7 @@ import {
 import { PillTabs } from "@/components/ui/Tabs";
 import { useResourceMetrics } from "@/lib/hooks/useResourceMetrics";
 import { friendlyErrorMessage } from "@/lib/api/errors";
+import { tm } from "@/lib/i18n/messages";
 import type {
   MetricRange,
   MetricResolution,
@@ -93,6 +94,12 @@ function toRows(data: ResourceMetrics): Record<string, number>[] {
     }
   }
   return [...byTs.values()].sort((a, b) => a.t - b.t);
+}
+
+// the server's explanation, translated, without its own final full stop (the sentence around
+// it adds one)
+function reasonText(reason: string): string {
+  return tm(reason).replace(/[.。]$/, "");
 }
 
 const selectClass =
@@ -176,7 +183,7 @@ export function MetricsPanel({
         ) : !data.available ? (
           <Message>
             Metrics unavailable
-            {data.reason ? ` — ${data.reason}` : ""}.{" "}
+            {data.reason ? ` — ${reasonText(data.reason)}` : ""}.{" "}
             <Link href="/metrics-stack" className="text-accent-text underline">
               Set up the metrics stack →
             </Link>
@@ -184,7 +191,10 @@ export function MetricsPanel({
         ) : data.noData ? (
           <Message>
             No {type} data for this {resourceType.replace(/s$/, "")} —{" "}
-            {data.reason}.
+            {reasonText(data.reason ?? "")}.{" "}
+            <Link href="/metrics-stack" className="text-accent-text underline">
+              Open the metrics stack →
+            </Link>
           </Message>
         ) : (
           <>
