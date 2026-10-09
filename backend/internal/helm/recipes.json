@@ -615,7 +615,12 @@
                 "label": "Secret with username and password",
                 "required": true,
                 "kind": "secret",
-                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "generate": {
+                  "userKey": "username",
+                  "user": "gitea_admin",
+                  "passwordKey": "password"
+                }
               }
             ],
             "set": [
@@ -895,7 +900,12 @@
                 "label": "Secret with the credentials",
                 "required": true,
                 "kind": "secret",
-                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "generate": {
+                  "userKeyField": "adminUserKey",
+                  "user": "admin",
+                  "passwordKeyField": "adminPasswordKey"
+                }
               },
               {
                 "key": "adminUserKey",
@@ -1268,7 +1278,12 @@
                 "label": "Secret with the credentials",
                 "required": true,
                 "kind": "secret",
-                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "generate": {
+                  "userKeyField": "adminUserKey",
+                  "user": "admin",
+                  "passwordKeyField": "adminPasswordKey"
+                }
               },
               {
                 "key": "adminUserKey",
@@ -1556,7 +1571,10 @@
                 "label": "Secret with the password",
                 "required": true,
                 "kind": "secret",
-                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "generate": {
+                  "passwordKeyField": "adminKey"
+                }
               },
               {
                 "key": "adminKey",

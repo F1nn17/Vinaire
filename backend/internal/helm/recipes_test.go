@@ -110,3 +110,25 @@ func TestOperatorRecipes(t *testing.T) {
 		t.Error("a file with one bad recipe was partly loaded")
 	}
 }
+
+func TestGeneratedSecretsAreOnlyOfferedWhereTheyAreSafe(t *testing.T) {
+	wrap := func(field string) string {
+		return `{"a/b":{"sections":[{"id":"x","title":"X","options":[{"id":"o","title":"O","default":true,"fields":[` + field + `],"set":[]},{"id":"p","title":"P","set":[]}]}]}}`
+	}
+	good := wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKeyField":"k"}},{"key":"k","label":"K"}`)
+	if _, err := loadRecipes([]byte(good)); err != nil {
+		t.Errorf("rejected: %v", err)
+	}
+	for name, doc := range map[string]string{
+		"not a secret field": wrap(`{"key":"s","label":"S","generate":{"passwordKey":"p"}}`),
+		"no password key":    wrap(`{"key":"s","label":"S","kind":"secret","generate":{}}`),
+		"both password keys": wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"p","passwordKeyField":"k"}},{"key":"k","label":"K"}`),
+		"user without a key": wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"p","user":"admin"}}`),
+		"unknown key field":  wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKeyField":"ghost"}}`),
+		"odd key":            wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"a b"}}`),
+	} {
+		if _, err := loadRecipes([]byte(doc)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

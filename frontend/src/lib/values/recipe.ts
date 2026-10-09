@@ -15,6 +15,14 @@ export type RecipeField = {
   required?: boolean;
   kind?: "" | "number" | "secret" | "ingressclass";
   pattern?: string;
+  // a secret field that can be filled by creating the Secret with a generated password
+  generate?: {
+    passwordKey?: string;
+    passwordKeyField?: string;
+    user?: string;
+    userKey?: string;
+    userKeyField?: string;
+  };
 };
 
 export type RecipeSet = { path: string; value: unknown; as?: "number" };

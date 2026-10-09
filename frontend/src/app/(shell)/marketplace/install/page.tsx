@@ -338,6 +338,7 @@ function InstallInner() {
                 key={`${repo}/${chartName}`}
                 recipe={chart.recipe}
                 installNamespace={namespace.trim()}
+                release={release.trim()}
                 values={values}
                 onValues={setValues}
               />

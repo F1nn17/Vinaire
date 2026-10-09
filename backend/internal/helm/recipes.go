@@ -66,9 +66,24 @@ type RecipeField struct {
 	// Kind: "" (text), "number", "secret" (the name of an existing Secret — offered from the
 	// namespace's own), "ingressclass" (offered from the cluster's classes).
 	Kind string `json:"kind,omitempty"`
+	// Generate (secret fields only) lets the interface offer "create this Secret with a generated
+	// password" — for an administrator account, where nothing outside the cluster has to agree with
+	// the password. It says which keys the new Secret gets.
+	Generate *RecipeGenerate `json:"generate,omitempty"`
 	// Pattern (a regular expression) is what the interface and the tests hold the value to; every
 	// value ends up inside YAML, so a field that can reach a text template is always constrained.
 	Pattern string `json:"pattern,omitempty"`
+}
+
+// RecipeGenerate names the keys of a Secret the interface may create with a generated password:
+// the password's key (a literal, or the field that holds it), and optionally a user name with its
+// key (the same two ways).
+type RecipeGenerate struct {
+	PasswordKey      string `json:"passwordKey,omitempty"`
+	PasswordKeyField string `json:"passwordKeyField,omitempty"`
+	User             string `json:"user,omitempty"`
+	UserKey          string `json:"userKey,omitempty"`
+	UserKeyField     string `json:"userKeyField,omitempty"`
 }
 
 // RecipeSet puts one value at a path ("a.b.0.c": numbers index lists). Strings (also inside
@@ -231,6 +246,36 @@ func (o RecipeOption) validate() error {
 			}
 		}
 		fields[f.Key] = f
+	}
+	for _, f := range o.Fields {
+		if f.Generate == nil {
+			continue
+		}
+		g := f.Generate
+		if f.Kind != "secret" {
+			return fmt.Errorf("field %s: only a secret field can have a generated password", f.Key)
+		}
+		if (g.PasswordKey == "") == (g.PasswordKeyField == "") {
+			return fmt.Errorf("field %s: generate needs exactly one of passwordKey and passwordKeyField", f.Key)
+		}
+		if g.User != "" && (g.UserKey == "") == (g.UserKeyField == "") {
+			return fmt.Errorf("field %s: a generated user name needs exactly one of userKey and userKeyField", f.Key)
+		}
+		for _, lit := range []string{g.PasswordKey, g.UserKey} {
+			if lit != "" && !regexp.MustCompile(`^[A-Za-z0-9._-]+$`).MatchString(lit) {
+				return fmt.Errorf("field %s: generate key %q", f.Key, lit)
+			}
+		}
+		if g.User != "" && !regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`).MatchString(g.User) {
+			return fmt.Errorf("field %s: generate user %q", f.Key, g.User)
+		}
+		for _, ref := range []string{g.PasswordKeyField, g.UserKeyField} {
+			if ref != "" {
+				if _, ok := fields[ref]; !ok {
+					return fmt.Errorf("field %s: generate refers to field %q, which the option doesn't have", f.Key, ref)
+				}
+			}
+		}
 	}
 	for _, s := range o.Set {
 		if !recipePathRe.MatchString(s.Path) {
