@@ -34,8 +34,13 @@ export function BulkBar({
   // drop them from the selection
   onFinished: (done: string[]) => void;
 }) {
-  const [action, setAction] = useState<Action | null>(null);
-  if (items.length === 0) return null;
+  // the window keeps its own copy of what it was opened for: while it runs, the objects
+  // disappear from the live list (and from the selection), and the window must not go with them
+  const [open, setOpen] = useState<{
+    action: Action;
+    items: BulkItem[];
+  } | null>(null);
+  if (items.length === 0 && !open) return null;
   return (
     <div className="flex items-center gap-3 rounded-lg border border-accent/40 bg-surface-2 px-4 py-2 text-xs">
       <span className="font-semibold">
@@ -44,7 +49,7 @@ export function BulkBar({
       {kind === "deployments" && (
         <button
           type="button"
-          onClick={() => setAction("restart")}
+          onClick={() => setOpen({ action: "restart", items })}
           className="rounded-md border border-border bg-surface px-3 py-1.5 hover:border-accent"
         >
           Restart
@@ -52,7 +57,7 @@ export function BulkBar({
       )}
       <button
         type="button"
-        onClick={() => setAction("delete")}
+        onClick={() => setOpen({ action: "delete", items })}
         className="rounded-md border border-err/50 bg-surface px-3 py-1.5 text-err hover:border-err"
       >
         Delete
@@ -64,13 +69,13 @@ export function BulkBar({
       >
         Clear selection
       </button>
-      {action && (
+      {open && (
         <BulkModal
           kind={kind}
-          action={action}
-          items={items}
+          action={open.action}
+          items={open.items}
           onClose={(done) => {
-            setAction(null);
+            setOpen(null);
             if (done.length > 0) onFinished(done);
           }}
         />
