@@ -206,6 +206,8 @@ func newRouter(d routerDeps) *chi.Mux {
 			w.Delete("/pods/{namespace}/{name}", workloadsHandler.DeletePod)
 			// the volume claims Helm leaves behind after an uninstall — see AGENTS.md
 			w.Delete("/pvcs/{namespace}/{name}", workloadsHandler.DeletePVC)
+			// what an uninstalled chart leaves behind (a database's password) — see AGENTS.md
+			w.Delete("/secrets/{namespace}/{name}", workloadsHandler.DeleteSecret)
 			// Roadmap Phase 27: irreversible, cascading — see AGENTS.md and
 			// internal/k8s/namespaces.go.
 			w.Delete("/namespaces/{name}", workloadsHandler.DeleteNamespace)

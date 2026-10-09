@@ -26,6 +26,8 @@ export type ChartSummary = {
   deprecated?: boolean;
   // the repository's images are no longer updated
   unmaintained?: boolean;
+  // "operator", "cluster", or absent for one ordinary instance
+  role?: "operator" | "cluster";
   category?: string;
   // an icon the backend serves (see components/marketplace/ChartIcon)
   hasIcon?: boolean;
@@ -92,6 +94,7 @@ export function searchCatalog(
   category = "",
   includeDeprecated = false,
   includeUnmaintained = false,
+  role = "",
 ): Promise<CatalogSearch> {
   const p = new URLSearchParams();
   if (includeDeprecated) p.set("deprecated", "true");
@@ -99,6 +102,7 @@ export function searchCatalog(
   if (search) p.set("search", search);
   if (repo) p.set("repo", repo);
   if (category) p.set("category", category);
+  if (role) p.set("role", role);
   return apiFetch(`/api/v1/catalog/charts?${p.toString()}`);
 }
 

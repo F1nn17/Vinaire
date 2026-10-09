@@ -1,5 +1,6 @@
 "use client";
 
+import { useRememberedState } from "@/lib/hooks/useRememberedState";
 import { t } from "@/lib/i18n/translate";
 import { ChartIcon } from "@/components/marketplace/ChartIcon";
 import Link from "next/link";
@@ -34,8 +35,27 @@ function releaseColor(status: string): StatusColor {
   return "warn";
 }
 
+const ROLE_FILTERS = [
+  { id: "", label: "Any", help: "" },
+  {
+    id: "single",
+    label: "Single instance",
+    help: "One ordinary instance (one database, one application) that works once installed — what you usually want.",
+  },
+  {
+    id: "cluster",
+    label: "Cluster",
+    help: "A ready-made group of instances (high availability) or a database that an operator runs — the operator has to be installed first.",
+  },
+  {
+    id: "operator",
+    label: "Operator",
+    help: "A controller that creates and looks after databases or applications for you. It runs nothing useful by itself: install it once, then install a Cluster chart that uses it.",
+  },
+];
+
 export default function MarketplacePage() {
-  const [tab, setTab] = useState<Tab>("catalog");
+  const [tab, setTab] = useRememberedState<Tab>("marketplace-tab", "catalog");
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
       <div className="flex items-center justify-between">
@@ -64,12 +84,14 @@ function CatalogTab() {
   const { data: repos } = useCatalogRepos();
   const [showDeprecated, setShowDeprecated] = useState(false);
   const [showUnmaintained, setShowUnmaintained] = useState(false);
+  const [role, setRole] = useState("");
   const { data, error, isLoading } = useCatalogSearch(
     search,
     repo,
     category,
     showDeprecated,
     showUnmaintained,
+    role,
   );
   const categories = Array.from(
     new Set(
@@ -174,6 +196,31 @@ function CatalogTab() {
         </div>
       )}
 
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[12px] text-text-muted">{t("Type")}:</span>
+          {ROLE_FILTERS.map((f) => (
+            <button
+              key={f.id || "any"}
+              type="button"
+              onClick={() => setRole(f.id)}
+              className={`rounded-full border px-3 py-1 text-[12px] ${
+                role === f.id
+                  ? "border-accent bg-surface-2 text-accent-text"
+                  : "border-border text-text-muted hover:border-accent"
+              }`}
+            >
+              {t(f.label)}
+            </button>
+          ))}
+        </div>
+        {ROLE_FILTERS.find((f) => f.id === role)?.help && (
+          <div className="text-xs text-text-muted">
+            {t(ROLE_FILTERS.find((f) => f.id === role)!.help)}
+          </div>
+        )}
+      </div>
+
       {data?.pending && data.pending.length > 0 && (
         <div className="rounded-lg border border-border bg-surface-2 p-3 text-xs text-text-muted">
           Still loading {data.pending.length} repositor
@@ -236,7 +283,14 @@ function CatalogTab() {
                   {c.description || "No description."}
                 </div>
                 <div className="mt-auto flex items-center justify-between text-[11px] text-text-faint">
-                  <span>{c.repo}</span>
+                  <span>
+                    {c.repo}
+                    {c.role && (
+                      <span className="ml-1.5 rounded border border-border px-1 text-text-muted">
+                        {t(c.role === "operator" ? "operator" : "cluster")}
+                      </span>
+                    )}
+                  </span>
                   {c.deprecated && (
                     <span className="text-warn">deprecated</span>
                   )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRememberedState } from "@/lib/hooks/useRememberedState";
 import Link from "next/link";
 import { useState } from "react";
 import { useNodes, useCapacity } from "@/lib/hooks/useWorkloads";
@@ -233,7 +234,7 @@ const addNodeAdviceByType: Partial<Record<ClusterType, string>> = {
 };
 
 export default function NodesPage() {
-  const [tab, setTab] = useState<Tab>("nodes");
+  const [tab, setTab] = useRememberedState<Tab>("nodes-tab", "nodes");
   const { data, isLoading, error, mutate } = useNodes();
   useNodesStream();
   const [addOpen, setAddOpen] = useState(false);

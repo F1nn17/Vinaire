@@ -8,6 +8,22 @@ export function getSecrets(namespace = ""): Promise<SecretDetail[]> {
   return apiFetch<SecretDetail[]>(`/api/v1/secrets${query}`);
 }
 
+// Deleting one Secret (owner's decision of 2026-10-09). `confirmName` must equal `name`; the
+// backend re-checks it and refuses a Helm release record (409).
+export async function deleteSecret(
+  namespace: string,
+  name: string,
+): Promise<void> {
+  await apiFetch(
+    `/api/v1/secrets/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`,
+    {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmName: name }),
+    },
+  );
+}
+
 // Explicit, audited reveal of one key's decoded value. Every call is logged
 // server-side; the value returned here should only ever live in local
 // component state, never in the SWR cache, so it's re-masked on navigation.

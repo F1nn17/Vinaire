@@ -1,5 +1,6 @@
 "use client";
 
+import { useRememberedState } from "@/lib/hooks/useRememberedState";
 import { useState } from "react";
 import { useGatewayResources, useIngresses } from "@/lib/hooks/useNetwork";
 import { friendlyErrorMessage } from "@/lib/api/errors";
@@ -89,7 +90,7 @@ const gatewayColumns: DataTableColumn<GatewayRow>[] = [
 ];
 
 export default function NetworkPage() {
-  const [tab, setTab] = useState<Tab>("ingress");
+  const [tab, setTab] = useRememberedState<Tab>("network-tab", "ingress");
   const [namespace, setNamespace] = useState("");
   const {
     data: ingressRows,

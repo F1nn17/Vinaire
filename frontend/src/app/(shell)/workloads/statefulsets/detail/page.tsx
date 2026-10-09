@@ -109,7 +109,7 @@ function StatefulSetDetailPage() {
         <div>
           <div className="font-mono text-xs text-text-faint">
             <Link href="/workloads">Workloads</Link> /{" "}
-            <Link href="/workloads">StatefulSets</Link>
+            <Link href="/workloads?tab=statefulsets">StatefulSets</Link>
           </div>
           <div className="mt-1.5 flex items-center gap-2.5">
             <span className="font-mono text-lg font-semibold">{sts.name}</span>

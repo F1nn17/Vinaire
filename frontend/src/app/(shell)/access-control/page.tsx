@@ -1,5 +1,6 @@
 "use client";
 
+import { useRememberedState } from "@/lib/hooks/useRememberedState";
 import { useState } from "react";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import {
@@ -256,7 +257,10 @@ function removeColumn<T extends { name: string }>(
 }
 
 export default function AccessControlPage() {
-  const [tab, setTab] = useState<AccessControlTab>("roles");
+  const [tab, setTab] = useRememberedState<AccessControlTab>(
+    "access-control-tab",
+    "roles",
+  );
   const [namespace, setNamespace] = useState("");
   const [bindOpen, setBindOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(

@@ -22,6 +22,7 @@ export function useCatalogSearch(
   category: string,
   includeDeprecated = false,
   includeUnmaintained = false,
+  role = "",
 ) {
   return useSWR(
     [
@@ -31,6 +32,7 @@ export function useCatalogSearch(
       category,
       includeDeprecated,
       includeUnmaintained,
+      role,
     ],
     () =>
       searchCatalog(
@@ -39,6 +41,7 @@ export function useCatalogSearch(
         category,
         includeDeprecated,
         includeUnmaintained,
+        role,
       ),
     {
       revalidateOnFocus: false,

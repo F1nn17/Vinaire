@@ -40,10 +40,12 @@ type Repo struct {
 	// Unmaintained marks a repository whose charts still work but whose images are no longer
 	// updated (Bitnami's, since it moved its free images to an archive): it is left out of a
 	// search unless asked for, and the install page says so.
-	Unmaintained bool                `json:"unmaintained,omitempty"`
-	Category     string              `json:"category,omitempty"`
-	ChartTags    map[string][]string `json:"chartTags,omitempty"`
-	Charts       []string            `json:"charts,omitempty"` // OCI sources only
+	Unmaintained bool `json:"unmaintained,omitempty"`
+	// Roles overrides the guessed kind of a chart by name ("operator" or "cluster"; see Role).
+	Roles     map[string]string   `json:"roles,omitempty"`
+	Category  string              `json:"category,omitempty"`
+	ChartTags map[string][]string `json:"chartTags,omitempty"`
+	Charts    []string            `json:"charts,omitempty"` // OCI sources only
 }
 
 // IsOCI reports whether the source is an OCI registry.

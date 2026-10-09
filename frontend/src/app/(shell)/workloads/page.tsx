@@ -2,7 +2,8 @@
 
 import { t } from "@/lib/i18n/translate";
 import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useRememberedState } from "@/lib/hooks/useRememberedState";
 import { useWorkloads } from "@/lib/hooks/useWorkloads";
 import { useProjects } from "@/lib/api/projects";
 import { useWorkloadsStream } from "@/lib/hooks/useWorkloadsStream";
@@ -85,14 +86,27 @@ export default function WorkloadsPage() {
 // A link may open the list on a namespace and a tab (?namespace=app&tab=pods).
 function WorkloadsInner() {
   const params = useSearchParams();
+  const router = useRouter();
   const linkedTab = params.get("tab") as WorkloadKind | null;
   const linkedNs = params.get("namespace") ?? "";
-  const [tab, setTab] = useState<WorkloadKind>(
-    linkedTab && kinds.includes(linkedTab) ? linkedTab : "deployments",
+  // the tab and the namespace filter are remembered, so coming back from a detail page lands
+  // where the user was; a link that names them wins
+  const [rememberedTab, rememberTab] = useRememberedState<WorkloadKind>(
+    "workloads-tab",
+    "deployments",
   );
-  const [namespace, setNamespace] = useState(
-    /^[a-z0-9.-]+$/.test(linkedNs) ? linkedNs : "",
-  );
+  const [rememberedNs, rememberNs] = useRememberedState("workloads-ns", "");
+  const tab: WorkloadKind =
+    linkedTab && kinds.includes(linkedTab) ? linkedTab : rememberedTab;
+  const setTab = (k: WorkloadKind) => {
+    rememberTab(k);
+    router.replace(`/workloads?tab=${k}`);
+  };
+  const namespace = /^[a-z0-9.-]+$/.test(linkedNs) ? linkedNs : rememberedNs;
+  const setNamespace = (v: string) => {
+    rememberNs(v);
+    if (linkedNs) router.replace(`/workloads?tab=${tab}`);
+  };
   const { data, isLoading, error, mutate } = useWorkloads(tab, namespace);
   const [createOpen, setCreateOpen] = useState(false);
   // Roadmap Phase 53: narrow the list to the namespaces of one project

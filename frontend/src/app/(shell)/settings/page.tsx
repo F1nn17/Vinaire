@@ -1,5 +1,6 @@
 "use client";
 
+import { useRememberedState } from "@/lib/hooks/useRememberedState";
 import Link from "next/link";
 import { useState } from "react";
 import { useCRDs } from "@/lib/hooks/useCRDs";
@@ -98,7 +99,7 @@ rules:
 // the backend reports that explicitly via a 503 if not, surfaced below the
 // same way any other "unavailable" state is in this app.
 export default function SettingsPage() {
-  const [tab, setTab] = useState<SettingsTab>("help");
+  const [tab, setTab] = useRememberedState<SettingsTab>("settings-tab", "help");
   const [helpSection, setHelpSection] = useState<HelpSection>("overview");
   const { data: crds, error: crdsError, isLoading: crdsLoading } = useCRDs();
 

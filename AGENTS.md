@@ -73,6 +73,12 @@ flow.
   spelled out because client-go's default for batch/v1 orphans them). A StatefulSet's volume claims stay. Names are
   validated, each call is audited (`delete-statefulset`/`delete-daemonset`/`delete-job`), and the UI's bulk run makes
   the user type the number of objects. The chart's `-installer` role grants these verbs; `-viewer` does not.
+- `DELETE /api/v1/secrets/{namespace}/{name}` (owner's decision of 2026-10-09, so that what an uninstalled chart
+  leaves behind — a database's password Secret — can be removed) — a plain `Delete()` on one Secret, as the caller
+  (`internal/api/secrets.go`). The body must repeat the Secret's name (`{"confirmName": ...}`), `kube-system`/
+  `kube-public`/`kube-node-lease` are refused, and so is a Helm release record (type `helm.sh/release.v1`, `409`: deleting
+  it makes Helm forget a release that is still running — uninstall it instead). Audited as `delete-secret` (namespace,
+  name, type — never a value). The chart's `-installer` role grants the verb; `-viewer` does not.
 - `DELETE /api/v1/pods/{namespace}/{name}` (Phase 33) — a plain `Delete()`
   on the Pod itself (not the Deployment). If the pod has a controller
   (`OwnerReferences` non-empty), the controller recreates it — effectively

@@ -46,7 +46,7 @@ const polling: Middleware = (useSWRNext) => (key, fetcher, config) => {
   const live = typeof name === "string" && LIVE.has(name);
   return useSWRNext(key, fetcher, {
     ...config,
-    refreshInterval: config.refreshInterval ?? (live ? POLL_MS : 0),
+    refreshInterval: config.refreshInterval || (live ? POLL_MS : 0),
   });
 };
 

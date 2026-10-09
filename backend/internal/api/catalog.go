@@ -92,6 +92,7 @@ func (h *Handler) CatalogSearch(w http.ResponseWriter, r *http.Request) {
 		helm.SearchOptions{
 			IncludeDeprecated:   r.URL.Query().Get("deprecated") == "true",
 			IncludeUnmaintained: r.URL.Query().Get("unmaintained") == "true",
+			Role:                r.URL.Query().Get("role"),
 		}))
 }
 

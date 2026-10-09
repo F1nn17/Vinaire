@@ -115,3 +115,50 @@ func (h *Handler) RevealSecretKey(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	respondJSON(w, revealResponse{Value: string(value)})
 }
+
+type deleteSecretRequest struct {
+	ConfirmName string `json:"confirmName"`
+}
+
+// DeleteSecret handles DELETE /api/v1/secrets/{namespace}/{name} (owner's decision of 2026-10-09: what
+// an uninstalled chart leaves behind — a database's password Secret — must be removable): a plain
+// Delete() of one Secret, as the caller. The body must repeat the Secret's name, a system
+// namespace is refused, and so is a Helm release record (type helm.sh/release.v1): deleting that
+// makes Helm forget a release whose objects are still running — uninstall it instead. Audited as
+// delete-secret (namespace, name, type — never a value).
+func (h *Handler) DeleteSecret(w http.ResponseWriter, r *http.Request) {
+	_, clientset, ok := h.resolveCluster(w, r)
+	if !ok {
+		return
+	}
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+	if !k8sNameRe.MatchString(namespace) || !k8sNameRe.MatchString(name) {
+		respondError(w, http.StatusBadRequest, "invalid namespace or secret name")
+		return
+	}
+	if reservedNamespaces[namespace] {
+		respondError(w, http.StatusBadRequest, "namespace "+namespace+" is a system namespace; its secrets can't be deleted from Vinaire")
+		return
+	}
+	var req deleteSecretRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil || req.ConfirmName != name {
+		respondError(w, http.StatusBadRequest, `request body must be {"confirmName": "<the secret's name>"}`)
+		return
+	}
+	typ, err := k8s.GetSecretType(r.Context(), clientset, namespace, name)
+	if err != nil {
+		respondK8sError(w, err)
+		return
+	}
+	if typ == "helm.sh/release.v1" {
+		respondError(w, http.StatusConflict, "this Secret is the record of a Helm release; uninstall the release from the Marketplace instead")
+		return
+	}
+	if err := k8s.DeleteSecret(r.Context(), clientset, namespace, name); err != nil {
+		respondK8sError(w, err)
+		return
+	}
+	h.auditLog(r, "delete-secret", namespace, name, "type", string(typ))
+	respondJSON(w, map[string]string{"status": "ok"})
+}

@@ -499,3 +499,27 @@ func TestRESTGetterCarriesIdentityAndNamespace(t *testing.T) {
 		t.Error("ToRESTConfig exposed the shared config")
 	}
 }
+
+func TestRolesTellOperatorsAndClustersFromSingleInstances(t *testing.T) {
+	cnpg := Repo{Name: "cnpg", Roles: map[string]string{"cloudnative-pg": "operator", "cluster": "cluster"}}
+	for repo, c := range map[string]struct{ chart, want string }{
+		"cnpg-operator":  {"cloudnative-pg", "operator"},
+		"cnpg-cluster":   {"cluster", "cluster"},
+		"name operator":  {"pg-operator", "operator"},
+		"name ha":        {"postgresql-ha", "cluster"},
+		"percona db":     {"pg-db", "cluster"},
+		"plain database": {"postgresql", ""},
+		"plain redis":    {"redis", ""},
+	} {
+		r := Repo{}
+		if strings.HasPrefix(repo, "cnpg") {
+			r = cnpg
+		}
+		if got := Role(r, c.chart); got != c.want {
+			t.Errorf("%s: Role(%q) = %q, want %q", repo, c.chart, got, c.want)
+		}
+	}
+	if !roleMatches("single", "") || roleMatches("single", "operator") || !roleMatches("", "cluster") || !roleMatches("operator", "operator") {
+		t.Error("roleMatches")
+	}
+}

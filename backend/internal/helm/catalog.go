@@ -273,6 +273,10 @@ type ChartSummary struct {
 	// Unmaintained: the repository's images are no longer updated (see Repo.Unmaintained).
 	Unmaintained bool   `json:"unmaintained,omitempty"`
 	Category     string `json:"category,omitempty"`
+	// Role: "operator" (a controller that manages databases or other apps — installs nothing to use
+	// by itself), "cluster" (a ready-made group of instances that an operator runs, or a high
+	// availability setup) or "" for one ordinary, self-contained instance.
+	Role string `json:"role,omitempty"`
 	// HasIcon: the chart names an icon, served by the backend at
 	// /api/v1/catalog/icons/{repo}/{chart} (never fetched by the browser).
 	HasIcon bool `json:"hasIcon,omitempty"`
@@ -282,7 +286,7 @@ func summarize(r Repo, name string, cv *repo.ChartVersion) ChartSummary {
 	return ChartSummary{
 		Repo: r.Name, Name: name, Version: cv.Version, AppVersion: cv.AppVersion,
 		Description: cv.Description, Keywords: cv.Keywords, Deprecated: cv.Deprecated,
-		Unmaintained: r.Unmaintained, Category: r.Category, HasIcon: iconURL(r, cv.Icon) != "",
+		Unmaintained: r.Unmaintained, Category: r.Category, Role: Role(r, name), HasIcon: iconURL(r, cv.Icon) != "",
 	}
 }
 
@@ -306,6 +310,8 @@ type SearchResult struct {
 type SearchOptions struct {
 	IncludeDeprecated   bool
 	IncludeUnmaintained bool
+	// Role limits the result to one kind of chart: "operator", "cluster" or "single" (neither).
+	Role string
 }
 
 // Search lists charts across the configured repositories whose name,
@@ -382,6 +388,9 @@ collect:
 				}
 				if g.r.Unmaintained && !opts.IncludeUnmaintained && repoName == "" {
 					res.HiddenUnmaintained++
+					continue
+				}
+				if !roleMatches(opts.Role, Role(g.r, name)) {
 					continue
 				}
 				res.Charts = append(res.Charts, summarize(g.r, name, cv))

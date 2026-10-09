@@ -1,5 +1,6 @@
 "use client";
 
+import { useRememberedState } from "@/lib/hooks/useRememberedState";
 import { useState } from "react";
 import { usePVCs, usePVs, useStorageClasses } from "@/lib/hooks/useStorage";
 import { friendlyErrorMessage } from "@/lib/api/errors";
@@ -182,7 +183,7 @@ const storageClassColumns: DataTableColumn<StorageClassRow>[] = [
 ];
 
 export default function StoragePage() {
-  const [tab, setTab] = useState<StorageTab>("pvcs");
+  const [tab, setTab] = useRememberedState<StorageTab>("storage-tab", "pvcs");
   const [namespace, setNamespace] = useState("");
 
   const pvcs = usePVCs(namespace, tab === "pvcs");

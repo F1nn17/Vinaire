@@ -99,7 +99,7 @@ function PodDetailPage() {
         <div>
           <div className="font-mono text-xs text-text-faint">
             <Link href="/workloads">Workloads</Link> /{" "}
-            <Link href="/workloads">Pods</Link>
+            <Link href="/workloads?tab=pods">Pods</Link>
           </div>
           <div className="mt-1.5 flex items-center gap-2.5">
             <span className="font-mono text-lg font-semibold">{pod.name}</span>

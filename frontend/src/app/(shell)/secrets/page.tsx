@@ -6,6 +6,7 @@ import { revealSecretKey } from "@/lib/api/secrets";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { ListDetailSplit } from "@/components/ui/ListDetailSplit";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { DeleteSecretModal } from "@/components/secrets/DeleteSecretModal";
 import { CreateResourceModal } from "@/components/editor/CreateResourceModal";
 import { secretTemplates } from "@/components/editor/templates";
 import { PlusIcon, SecretIcon } from "@/components/icons";
@@ -97,6 +98,7 @@ export default function SecretsPage() {
           onSelect={selectSecret}
           revealState={revealState}
           setRevealState={setRevealState}
+          onDeleted={() => void mutate()}
         />
       )}
       {createOpen && (
@@ -116,8 +118,10 @@ function SecretsList({
   onSelect,
   revealState,
   setRevealState,
+  onDeleted,
 }: {
   data: SecretDetail[];
+  onDeleted: () => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
   revealState: Record<string, RevealState>;
@@ -126,6 +130,7 @@ function SecretsList({
   >;
 }) {
   const selected = data.find((s) => s.id === selectedId) ?? data[0];
+  const [deleting, setDeleting] = useState(false);
 
   async function toggleKey(keyId: string, label: string) {
     const current = revealState[keyId];
@@ -186,14 +191,34 @@ function SecretsList({
         </>
       )}
     >
-      <div className="shrink-0">
-        <div className="font-mono text-[15px] font-semibold">
-          {selected.name}
+      <div className="flex shrink-0 items-start justify-between gap-3">
+        <div>
+          <div className="font-mono text-[15px] font-semibold">
+            {selected.name}
+          </div>
+          <div className="mt-0.5 font-mono text-[11px] text-text-faint">
+            ns/{selected.namespace} · {selected.type} · {selected.age}
+          </div>
         </div>
-        <div className="mt-0.5 font-mono text-[11px] text-text-faint">
-          ns/{selected.namespace} · {selected.type} · {selected.age}
-        </div>
+        <button
+          type="button"
+          onClick={() => setDeleting(true)}
+          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-err"
+        >
+          Delete
+        </button>
       </div>
+      {deleting && (
+        <DeleteSecretModal
+          namespace={selected.namespace}
+          name={selected.name}
+          onClose={() => setDeleting(false)}
+          onDeleted={() => {
+            setDeleting(false);
+            onDeleted();
+          }}
+        />
+      )}
       <div className="flex flex-1 flex-col gap-3 overflow-auto">
         {selected.keys.length === 0 ? (
           <div className="text-xs text-text-muted">No keys.</div>

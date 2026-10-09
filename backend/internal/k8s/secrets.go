@@ -31,3 +31,22 @@ func GetSecret(ctx context.Context, clientset *kubernetes.Clientset, namespace, 
 	}
 	return secret, nil
 }
+
+// DeleteSecret removes one Secret. internal/api adds the guard rails (the name typed, no system
+// namespace, never a Helm release record); this function just deletes.
+func DeleteSecret(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) error {
+	if err := clientset.CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("delete secret %s/%s: %w", namespace, name, err)
+	}
+	return nil
+}
+
+// GetSecretType returns a Secret's type without handing its data to the caller of this function
+// any further than it needs: only the type is kept.
+func GetSecretType(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) (corev1.SecretType, error) {
+	s, err := clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("get secret %s/%s: %w", namespace, name, err)
+	}
+	return s.Type, nil
+}
