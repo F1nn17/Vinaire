@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "npm"
@@ -134,7 +134,7 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://localhost:8080/healthz && exit 0; sleep 1; done
           echo "backend never became healthy"; cat backend-e2e.log; exit 1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: "npm"
