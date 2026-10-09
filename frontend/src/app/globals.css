@@ -110,3 +110,10 @@ input::placeholder {
   font-size: 12.5px;
   line-height: 1.55;
 }
+
+/* Small-caps style labels are for Latin text: in Russian, whole words in capitals read as shouting
+   ("УПАВШИЕ ПОДЫ"), so they keep the case the dictionary gave them. */
+html[lang="ru"] .uppercase {
+  text-transform: none;
+  letter-spacing: normal;
+}

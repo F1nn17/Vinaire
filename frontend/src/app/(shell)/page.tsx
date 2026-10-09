@@ -4,6 +4,8 @@ import { useDashboard } from "@/lib/hooks/useDashboard";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatCard } from "@/components/ui/StatCard";
 import { EventRow } from "@/components/ui/EventRow";
+import { MetricsPanel } from "@/components/metrics/MetricsPanel";
+import { t } from "@/lib/i18n/translate";
 
 export default function DashboardPage() {
   const { data, isLoading, error } = useDashboard();
@@ -118,6 +120,13 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-[10px] border border-border bg-surface p-5">
+        <div className="mb-3.5 text-[13px] font-semibold">
+          {t("Cluster usage history")}
+        </div>
+        <MetricsPanel resourceType="cluster" namespace="" name="cluster" />
       </div>
     </div>
   );

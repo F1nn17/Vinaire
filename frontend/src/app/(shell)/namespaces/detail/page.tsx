@@ -19,11 +19,13 @@ import {
   quotaTemplate,
 } from "@/components/editor/templates";
 import { TrashIcon } from "@/components/icons";
+import { NamespaceWorkloads } from "@/components/workloads/NamespaceWorkloads";
 
-type Tab = "overview" | "resources" | "yaml";
+type Tab = "overview" | "workloads" | "resources" | "yaml";
 
 const tabs: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
+  { key: "workloads", label: "Workloads" },
   { key: "resources", label: "Resources" },
   { key: "yaml", label: "YAML" },
 ];
@@ -279,6 +281,8 @@ function NamespaceDetailPage() {
           </div>
         </div>
       )}
+
+      {tab === "workloads" && <NamespaceWorkloads namespace={ns.name} />}
 
       {tab === "resources" && (
         <div className="grid max-w-3xl grid-cols-2 gap-3 sm:grid-cols-3">

@@ -89,3 +89,17 @@ func TestWorkloadMetricsMatchTheirOwnPodNames(t *testing.T) {
 		t.Errorf("too loose: %s", plan.queries[0].promql)
 	}
 }
+
+func TestClusterPlanSumsTheRootCgroupOfEveryNode(t *testing.T) {
+	for _, typ := range []string{"cpu", "memory", "network", "filesystem"} {
+		plan, ok := planFor("cluster", "", "cluster", typ)
+		if !ok || len(plan.queries) == 0 {
+			t.Fatalf("%s: no plan", typ)
+		}
+		for _, q := range plan.queries {
+			if !strings.Contains(q.promql, `id="/"`) || strings.Contains(q.promql, "node=") {
+				t.Errorf("%s: %s must select every node's root cgroup and no single node", typ, q.promql)
+			}
+		}
+	}
+}

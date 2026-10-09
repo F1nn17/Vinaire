@@ -77,7 +77,10 @@ flow.
   write path**: the page builds a StatefulSet, a Secret and a Service and creates them one by one through the generic YAML create
   above, as the caller. Rules to keep: the presets name only the publishers' official images; every typed value is validated by a
   pattern before it reaches YAML; passwords are generated in the browser, written only into the Secret and never put in an
-  environment value or shown in the preview; the Secret and the Service carry an `ownerReference` to the StatefulSet.
+  environment value or shown in the preview; the Secret and the Service carry an `ownerReference` to the StatefulSet. The tag list
+  (`GET /api/v1/images/tags`, `internal/imagetags`) is a read of two fixed public registries (Docker Hub, quay.io) through
+  `internal/netguard`: the request names an image checked against a strict pattern, never a URL or a host, and a `next` link in a
+  registry's answer is followed only if it stays on that registry.
 - `DELETE /api/v1/secrets/{namespace}/{name}` (owner's decision of 2026-10-09, so that what an uninstalled chart
   leaves behind — a database's password Secret — can be removed) — a plain `Delete()` on one Secret, as the caller
   (`internal/api/secrets.go`). The body must repeat the Secret's name (`{"confirmName": ...}`), `kube-system`/

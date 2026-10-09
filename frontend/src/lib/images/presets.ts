@@ -26,7 +26,14 @@ export type PresetField = {
   multiline?: boolean;
 };
 
-export type EnvVar = { name: string; value?: string; secret?: string };
+// A value, a key of the instance's own Secret (`secret`), or a key of a Secret that already exists
+// (`from`, for the password of a database that runs elsewhere).
+export type EnvVar = {
+  name: string;
+  value?: string;
+  secret?: string;
+  from?: { name: string; key: string };
+};
 
 export type Preset = {
   id: string;
@@ -51,6 +58,8 @@ export type Preset = {
     secret: string,
   ) => [string, string][];
   note?: string;
+  // the group that owns the volume, for images that run as a non-root user
+  fsGroup?: number;
   free?: boolean;
 };
 
@@ -292,6 +301,269 @@ export const presets: Preset[] = [
     ),
   },
   {
+    id: "keycloak",
+    title: "Keycloak",
+    summary: T(
+      "Sign-in and identity server. Image `quay.io/keycloak/keycloak`, connected to a PostgreSQL that already exists.",
+    ),
+    image: "quay.io/keycloak/keycloak",
+    tagHint: T("A version, e.g. 26.2.5. Pick one from the list."),
+    defaultTag: "",
+    ports: [{ name: "http", port: 8080 }],
+    fields: [
+      {
+        id: "dbHost",
+        label: T("Database address"),
+        hint: T(
+          "The Service of your PostgreSQL, e.g. cluster-rw (CloudNativePG). Same namespace, or a full name like cluster-rw.cluster.svc.",
+        ),
+        default: "",
+        pattern: /^[a-z0-9]([-a-z0-9.]{0,250}[a-z0-9])?$/,
+      },
+      {
+        id: "dbPort",
+        label: T("Database port"),
+        hint: T("PostgreSQL's usual port is 5432."),
+        default: "5432",
+        pattern: /^[0-9]{1,5}$/,
+      },
+      {
+        id: "dbName",
+        label: T("Database name"),
+        hint: T("An existing, empty database for Keycloak."),
+        default: "app",
+        pattern: word,
+      },
+      {
+        id: "dbUser",
+        label: T("Database user"),
+        hint: T("The account that owns that database."),
+        default: "app",
+        pattern: word,
+      },
+      {
+        id: "dbSecret",
+        label: T("Secret with the database password"),
+        hint: T(
+          "An existing Secret in this namespace (CloudNativePG makes <name>-app). Only its name and key are used; the password is never read by Vinaire.",
+        ),
+        default: "",
+        pattern: /^[a-z0-9]([-a-z0-9.]{0,250}[a-z0-9])?$/,
+      },
+      {
+        id: "dbSecretKey",
+        label: T("Key in that Secret"),
+        hint: T("Usually password."),
+        default: "password",
+        pattern: /^[-._a-zA-Z0-9]{1,253}$/,
+      },
+    ],
+    secrets: ["admin-password"],
+    env: (v) => [
+      { name: "KC_DB", value: "postgres" },
+      { name: "KC_DB_URL_HOST", value: v.dbHost },
+      { name: "KC_DB_URL_PORT", value: v.dbPort },
+      { name: "KC_DB_URL_DATABASE", value: v.dbName },
+      { name: "KC_DB_USERNAME", value: v.dbUser },
+      {
+        name: "KC_DB_PASSWORD",
+        from: { name: v.dbSecret, key: v.dbSecretKey },
+      },
+      { name: "KC_BOOTSTRAP_ADMIN_USERNAME", value: "admin" },
+      { name: "KC_BOOTSTRAP_ADMIN_PASSWORD", secret: "admin-password" },
+      // behind an Ingress or a proxy: plain HTTP inside, the proxy's headers say what the outside saw
+      { name: "KC_HTTP_ENABLED", value: "true" },
+      { name: "KC_HOSTNAME_STRICT", value: "false" },
+      { name: "KC_PROXY_HEADERS", value: "xforwarded" },
+    ],
+    args: () => ["start"],
+    probe: { tcp: 8080 },
+    resources: { cpu: "250m", memory: "768Mi", memoryLimit: "1536Mi" },
+    connect: (_v, host, secret) => [
+      [T("Address"), `${host}:8080`],
+      [T("Administrator"), "admin"],
+      [T("Password"), `${T("Secret")} ${secret}, ${T("key")} admin-password`],
+    ],
+    note: T(
+      "Keeps nothing on its own volume: everything is in the database. Put an Ingress in front of it for real use; the first start takes a minute while it builds its tables.",
+    ),
+  },
+  {
+    id: "nginx",
+    title: "nginx",
+    summary: T(
+      "A web server. Official image `nginx` (shows its welcome page).",
+    ),
+    image: "nginx",
+    tagHint: T("A version, e.g. 1.27."),
+    defaultTag: "1.27",
+    ports: [{ name: "http", port: 80 }],
+    fields: [],
+    secrets: [],
+    env: () => [],
+    probe: { tcp: 80 },
+    resources: { cpu: "20m", memory: "32Mi", memoryLimit: "128Mi" },
+    connect: (_v, host) => [[T("Address"), `${host}:80`]],
+    note: T(
+      "Serves the default page. To serve your own content, change the object afterwards on its YAML tab.",
+    ),
+  },
+  {
+    id: "memcached",
+    title: "Memcached",
+    summary: T("A simple in-memory cache. Official image `memcached`."),
+    image: "memcached",
+    tagHint: T("A version, e.g. 1.6."),
+    defaultTag: "1.6",
+    ports: [{ name: "memcached", port: 11211 }],
+    fields: [],
+    secrets: [],
+    env: () => [],
+    args: () => ["-m", "64"],
+    probe: { tcp: 11211 },
+    resources: { cpu: "20m", memory: "80Mi", memoryLimit: "128Mi" },
+    connect: (_v, host) => [[T("Address"), `${host}:11211`]],
+    note: T(
+      "No password and nothing is kept: use it only for a cache that other pods in the cluster reach.",
+    ),
+  },
+  {
+    id: "nats",
+    title: "NATS",
+    summary: T(
+      "A fast message bus with JetStream persistence. Official image `nats`.",
+    ),
+    image: "nats",
+    tagHint: T("A version, e.g. 2.10."),
+    defaultTag: "2",
+    ports: [
+      { name: "client", port: 4222 },
+      { name: "monitor", port: 8222 },
+    ],
+    dataPath: "/data",
+    fields: [],
+    secrets: [],
+    env: () => [],
+    args: () => ["-js", "-sd", "/data", "-m", "8222"],
+    probe: { tcp: 4222 },
+    resources: { cpu: "50m", memory: "64Mi", memoryLimit: "256Mi" },
+    connect: (_v, host) => [[T("Address"), `nats://${host}:4222`]],
+    note: T("One server, no password: for pods inside the cluster."),
+  },
+  {
+    id: "minio",
+    title: "MinIO",
+    summary: T("S3-compatible object storage. Image `quay.io/minio/minio`."),
+    image: "quay.io/minio/minio",
+    tagHint: T(
+      "A release tag like RELEASE.2025-…; pick the newest from the list.",
+    ),
+    defaultTag: "",
+    ports: [
+      { name: "api", port: 9000 },
+      { name: "console", port: 9001 },
+    ],
+    dataPath: "/data",
+    fields: [
+      {
+        id: "user",
+        label: T("Access key (administrator)"),
+        hint: T("The administrator's name; at least 3 characters."),
+        default: "admin",
+        pattern: /^[a-z][a-z0-9_]{2,30}$/,
+      },
+    ],
+    secrets: ["password"],
+    env: (v) => [
+      { name: "MINIO_ROOT_USER", value: v.user },
+      { name: "MINIO_ROOT_PASSWORD", secret: "password" },
+    ],
+    args: () => ["server", "/data", "--console-address", ":9001"],
+    probe: { tcp: 9000 },
+    resources: { cpu: "100m", memory: "256Mi", memoryLimit: "1Gi" },
+    connect: (v, host, secret) => [
+      [T("S3 address"), `http://${host}:9000`],
+      [T("Console"), `${host}:9001 (${T("use Forward port on the pod")})`],
+      [T("Access key"), v.user],
+      [T("Password"), `${T("Secret")} ${secret}, ${T("key")} password`],
+    ],
+    note: T("One server on one volume. The console is not published outside."),
+  },
+  {
+    id: "grafana",
+    title: "Grafana",
+    summary: T("Dashboards. Official image `grafana/grafana`."),
+    image: "grafana/grafana",
+    tagHint: T("A version, e.g. 11.6.1. Pick one from the list."),
+    defaultTag: "",
+    ports: [{ name: "http", port: 3000 }],
+    dataPath: "/var/lib/grafana",
+    fsGroup: 472,
+    fields: [
+      {
+        id: "user",
+        label: T("Administrator name"),
+        hint: T("The name to sign in with."),
+        default: "admin",
+        pattern: /^[a-z][a-z0-9_]{2,30}$/,
+      },
+    ],
+    secrets: ["password"],
+    env: (v) => [
+      { name: "GF_SECURITY_ADMIN_USER", value: v.user },
+      { name: "GF_SECURITY_ADMIN_PASSWORD", secret: "password" },
+    ],
+    probe: { tcp: 3000 },
+    resources: { cpu: "100m", memory: "256Mi", memoryLimit: "512Mi" },
+    connect: (v, host, secret) => [
+      [T("Address"), `${host}:3000`],
+      [T("User"), v.user],
+      [T("Password"), `${T("Secret")} ${secret}, ${T("key")} password`],
+    ],
+    note: T("Add a data source (Prometheus, Loki) after the first sign-in."),
+  },
+  {
+    id: "adminer",
+    title: "Adminer",
+    summary: T("A web page to look into a database. Official image `adminer`."),
+    image: "adminer",
+    tagHint: T("A version, e.g. 5."),
+    defaultTag: "5",
+    ports: [{ name: "http", port: 8080 }],
+    fields: [],
+    secrets: [],
+    env: () => [],
+    probe: { tcp: 8080 },
+    resources: { cpu: "20m", memory: "64Mi", memoryLimit: "256Mi" },
+    connect: (_v, host) => [
+      [T("Address"), `${host}:8080 (${T("use Forward port on the pod")})`],
+    ],
+    note: T(
+      "It has no sign-in of its own: don't publish it outside; open it with Forward port on the pod and type the database's address and password there.",
+    ),
+  },
+  {
+    id: "uptime-kuma",
+    title: "Uptime Kuma",
+    summary: T(
+      "A status page and uptime monitor. Image `louislam/uptime-kuma`.",
+    ),
+    image: "louislam/uptime-kuma",
+    tagHint: T("A version, e.g. 1."),
+    defaultTag: "1",
+    ports: [{ name: "http", port: 3001 }],
+    dataPath: "/app/data",
+    fields: [],
+    secrets: [],
+    env: () => [],
+    probe: { tcp: 3001 },
+    resources: { cpu: "50m", memory: "128Mi", memoryLimit: "512Mi" },
+    connect: (_v, host) => [[T("Address"), `${host}:3001`]],
+    note: T(
+      "The administrator account is created by whoever opens the page first: open it right after the install.",
+    ),
+  },
+  {
     id: "custom",
     title: T("Any image"),
     summary: T(
@@ -529,10 +801,12 @@ export function build(
   const mountPath = p.free ? f.values.mountPath : p.dataPath;
   const keep = !!mountPath && (p.free ? true : f.persistent);
   const env = p.env(f.values).map((e) =>
-    e.secret
+    e.secret || e.from
       ? {
           name: e.name,
-          valueFrom: { secretKeyRef: { name: f.name, key: e.secret } },
+          valueFrom: {
+            secretKeyRef: e.from ?? { name: f.name, key: e.secret as string },
+          },
         }
       : { name: e.name, value: e.value ?? "" },
   );
@@ -584,7 +858,10 @@ export function build(
         selector: { matchLabels: selector },
         template: {
           metadata: { labels: lab },
-          spec: { containers: [container] },
+          spec: {
+            containers: [container],
+            ...(p.fsGroup ? { securityContext: { fsGroup: p.fsGroup } } : {}),
+          },
         },
         ...(keep
           ? {

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Image wizard: tags from a list, more programs.** The tag field offers the newest versions of the image from Docker Hub or quay.io (`GET /api/v1/images/tags?image=`, anonymous, through the guarded client, cached 10 min; a request names an image, never a URL) and warns about a tag that isn't among them. New presets: Keycloak (connected to an existing PostgreSQL through its Secret), nginx, Memcached, NATS, MinIO, Grafana, Adminer, Uptime Kuma.
+- **Namespace page: a Workloads tab** with the pods (and deployments, StatefulSets, DaemonSets, Jobs) of that namespace.
+- **Overview: cluster usage history** (CPU, memory, network, disk of the whole cluster from Prometheus; `GET /api/v1/cluster/metrics`).
+- **Russian interface: no all-capitals labels** ("УПАВШИЕ ПОДЫ" is now "Упавшие поды").
 - **Install one instance from a publisher's image (Roadmap Phase 67).** Marketplace → "Install from an image": PostgreSQL, MySQL, MariaDB, Redis, Valkey, RabbitMQ, MongoDB or any image, with every value explained and checked and the three objects (StatefulSet, Secret with a generated password, Service) shown before they are created. Applied through the generic YAML create, as the caller — no new write path; the Secret and Service belong to the StatefulSet, so deleting it removes them.
 - **Marketplace: filter by type — single instance / cluster / operator.** Every chart is told apart (by the operator's `roles` list in `catalog.json`, then by name: `*operator*`, `*-ha`, `*-cluster`, `*-db`) and a filter row separates what works once installed from clusters and operators, with a line explaining each; cards carry an `operator`/`cluster` badge. `GET /api/v1/catalog/charts?role=single|cluster|operator`.
 - **Delete a Secret** (owner's decision of 2026-10-09): `DELETE /api/v1/secrets/{namespace}/{name}` and a Delete button on the Secrets page, for what an uninstalled chart leaves behind. The name is typed, system namespaces and Helm release records are refused; audited as `delete-secret`.

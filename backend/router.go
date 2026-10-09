@@ -101,6 +101,7 @@ func newRouter(d routerDeps) *chi.Mux {
 		protected.Get("/catalog/releases", workloadsHandler.CatalogReleases)
 		protected.Get("/catalog/install-jobs/{id}", workloadsHandler.CatalogInstallJob)
 		protected.Get("/catalog/icons/{repo}/{chart}", workloadsHandler.CatalogIcon)
+		protected.Get("/images/tags", workloadsHandler.ImageTags)
 		protected.Get("/catalog/releases/{namespace}/{name}/history", workloadsHandler.CatalogReleaseHistory)
 		protected.Get("/catalog/releases/{namespace}/{name}/values", workloadsHandler.CatalogReleaseValues)
 		// Roadmap Phase 29: GitOps reads; the writes are in the writeLimiter group.
@@ -167,6 +168,7 @@ func newRouter(d routerDeps) *chi.Mux {
 		protected.Get("/daemonsets/{namespace}/{name}/metrics", workloadsHandler.DaemonSetMetrics)
 		protected.Get("/jobs/{namespace}/{name}/metrics", workloadsHandler.JobMetrics)
 		protected.Get("/nodes/{name}/metrics", workloadsHandler.NodeMetrics)
+		protected.Get("/cluster/metrics", workloadsHandler.ClusterMetrics)
 		protected.Get("/alerts", workloadsHandler.Alerts)
 		protected.Get("/dashboard/summary", workloadsHandler.DashboardSummary)
 		protected.Get("/events", workloadsHandler.Events)

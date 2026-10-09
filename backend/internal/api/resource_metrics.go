@@ -158,6 +158,10 @@ func planFor(kind, namespace, name, metricType string) (metricPlan, bool) {
 	case "nodes":
 		nodeLevel = true
 		sels = func(bool) []string { return nodeSelectors(name) }
+	case "cluster":
+		// the whole cluster: the root cgroup of every node added together
+		nodeLevel = true
+		sels = func(bool) []string { return []string{`id="/"`} }
 	default:
 		return metricPlan{}, false
 	}
@@ -273,7 +277,7 @@ func (h *Handler) serveResourceMetrics(w http.ResponseWriter, r *http.Request, k
 	case !planOK:
 		respondError(w, http.StatusBadRequest, "type must be one of cpu, memory, network, filesystem")
 		return
-	case !k8sNameRe.MatchString(name) || (kind != "nodes" && !k8sNameRe.MatchString(namespace)):
+	case !k8sNameRe.MatchString(name) || ((kind != "nodes" && kind != "cluster") && !k8sNameRe.MatchString(namespace)):
 		respondError(w, http.StatusBadRequest, "invalid resource name")
 		return
 	}
@@ -388,6 +392,13 @@ func (h *Handler) DeploymentMetrics(w http.ResponseWriter, r *http.Request) {
 // cluster-scoped, so there's no namespace segment.
 func (h *Handler) NodeMetrics(w http.ResponseWriter, r *http.Request) {
 	h.serveResourceMetrics(w, r, "nodes", "", chi.URLParam(r, "name"))
+}
+
+// ClusterMetrics handles GET /api/v1/cluster/metrics: the usage history of the whole cluster (every
+// node's cAdvisor root cgroup added together), for the Overview page. Same sources and rules as the
+// per-object metrics: Prometheus through the service proxy, as the caller.
+func (h *Handler) ClusterMetrics(w http.ResponseWriter, r *http.Request) {
+	h.serveResourceMetrics(w, r, "cluster", "", "cluster")
 }
 
 // StatefulSetMetrics handles GET /api/v1/statefulsets/{namespace}/{name}/metrics (Roadmap Phase 66).

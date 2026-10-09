@@ -21,9 +21,11 @@ export function getResourceMetrics(
   },
 ): Promise<ResourceMetrics> {
   const base =
-    resourceType === "nodes"
-      ? `/api/v1/nodes/${encodeURIComponent(name)}/metrics`
-      : `/api/v1/${resourceType}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/metrics`;
+    resourceType === "cluster"
+      ? "/api/v1/cluster/metrics"
+      : resourceType === "nodes"
+        ? `/api/v1/nodes/${encodeURIComponent(name)}/metrics`
+        : `/api/v1/${resourceType}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/metrics`;
   const qs = new URLSearchParams(params);
   return apiFetch<ResourceMetrics>(`${base}?${qs.toString()}`);
 }

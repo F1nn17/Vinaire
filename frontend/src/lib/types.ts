@@ -668,7 +668,13 @@ export type MetricType = "cpu" | "memory" | "network" | "filesystem";
 export type MetricRange = "1h" | "6h" | "24h" | "7d";
 export type MetricResolution = "low" | "medium" | "high";
 export type MetricResourceType =
-  "pods" | "deployments" | "statefulsets" | "daemonsets" | "jobs" | "nodes";
+  | "pods"
+  | "deployments"
+  | "statefulsets"
+  | "daemonsets"
+  | "jobs"
+  | "nodes"
+  | "cluster";
 
 export type MetricsSeries = {
   name: string;

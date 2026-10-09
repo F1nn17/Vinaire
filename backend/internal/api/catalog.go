@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/shiraku/vinaire/backend/internal/helm"
+	"github.com/shiraku/vinaire/backend/internal/imagetags"
 )
 
 // Roadmap Phase 28: the application catalog. Browsing charts is read-only and
@@ -596,4 +597,22 @@ func (h *Handler) CatalogCancelInstallJob(w http.ResponseWriter, r *http.Request
 		return
 	}
 	respondError(w, http.StatusConflict, "this install isn't running and has nothing to roll back")
+}
+
+var imageTags = imagetags.New()
+
+// ImageTags handles GET /api/v1/images/tags?image=: the tags of an image on Docker Hub or quay.io,
+// newest versions first, for the "install from an image" page. A read of a public registry,
+// anonymous; the request names an image, never a URL (see internal/imagetags).
+func (h *Handler) ImageTags(w http.ResponseWriter, r *http.Request) {
+	res, err := imageTags.Tags(r.Context(), r.URL.Query().Get("image"))
+	if err != nil {
+		if errors.Is(err, imagetags.ErrUnsupported) {
+			respondJSON(w, imagetags.Result{Tags: []imagetags.Tag{}})
+			return
+		}
+		respondError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	respondJSON(w, res)
 }

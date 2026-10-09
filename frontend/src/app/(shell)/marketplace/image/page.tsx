@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import useSWR from "swr";
+import { getImageTags } from "@/lib/api/imageTags";
 import { t } from "@/lib/i18n/translate";
 import { createResource } from "@/lib/api/resources";
 import { applyErrorMessage } from "@/components/editor/useYamlApply";
@@ -108,15 +110,35 @@ function ImageForm({ preset }: { preset: Preset }) {
   const passwords = useRef<Record<string, string>>({});
   const doneSteps = useRef(new Set<string>());
 
-  const errors = validate(form);
+  // the tags the registry has, so the version is chosen from a list instead of guessed
+  const repo = preset.free ? (form.values.image ?? "") : preset.image;
+  const [lookupRepo, setLookupRepo] = useState(repo);
+  useEffect(() => {
+    const id = setTimeout(() => setLookupRepo(repo), 500);
+    return () => clearTimeout(id);
+  }, [repo]);
+  const tagList = useSWR(
+    lookupRepo && /^[a-z0-9][a-z0-9._/:-]*$/.test(lookupRepo)
+      ? ["image-tags", lookupRepo]
+      : null,
+    () => getImageTags(lookupRepo),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+  const tags = useMemo(() => tagList.data?.tags ?? [], [tagList.data]);
+  // a preset without a safe default takes the newest version the registry lists
+  const eff: Form = form.tag
+    ? form
+    : { ...form, tag: tags.length > 0 ? tags[0].name : "" };
+
+  const errors = validate(eff);
   const valid = Object.keys(errors).length === 0;
   const masked = Object.fromEntries(
     preset.secrets.map((k) => [k, "<generated>"]),
   );
   const docs: Doc[] = useMemo(
-    () => (valid ? build(form, masked) : []),
+    () => (valid ? build(eff, masked) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [form, valid],
+    [eff, valid],
   );
   const shown = docs.find((d) => d.kind === view) ?? docs[0];
   const finished =
@@ -148,7 +170,7 @@ function ImageForm({ preset }: { preset: Preset }) {
       if (!id) throw new Error("the StatefulSet has no uid yet");
       return id;
     };
-    const first = build(form, passwords.current).find(
+    const first = build(eff, passwords.current).find(
       (d) => d.kind === "StatefulSet",
     )!;
     const plan: { key: string; run: () => Promise<unknown> }[] = [
@@ -157,7 +179,7 @@ function ImageForm({ preset }: { preset: Preset }) {
       ...(["Secret", "Service"] as const).map((kind) => ({
         key: kind,
         run: async () => {
-          const d = build(form, passwords.current, await uid()).find(
+          const d = build(eff, passwords.current, await uid()).find(
             (x) => x.kind === kind,
           );
           if (d) await createResource(d.yaml);
@@ -250,11 +272,52 @@ function ImageForm({ preset }: { preset: Preset }) {
         <Field label="Tag" hint={preset.tagHint} error={errors.tag}>
           <input
             className={inputClass}
-            value={form.tag}
+            value={eff.tag}
+            list="image-tags"
             onChange={(e) => set({ tag: e.target.value })}
           />
         </Field>
-        {form.tag === "latest" && (
+        <datalist id="image-tags">
+          {tags.map((x) => (
+            <option key={x.name} value={x.name} />
+          ))}
+        </datalist>
+        {tags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+            <span className="text-text-muted">{t("Newest:")}</span>
+            {tags.slice(0, 10).map((x) => (
+              <button
+                key={x.name}
+                type="button"
+                onClick={() => set({ tag: x.name })}
+                className={`rounded-md border px-1.5 py-0.5 font-mono ${
+                  eff.tag === x.name
+                    ? "border-accent text-accent-text"
+                    : "border-border text-text-muted hover:border-accent"
+                }`}
+              >
+                {x.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {tags.length > 0 &&
+          eff.tag &&
+          !tags.some((x) => x.name === eff.tag) && (
+            <div className="text-[11px] text-warn">
+              {t(
+                "This tag is not among the newest the registry lists — check that it exists, or the pod won't start (ImagePullBackOff).",
+              )}
+            </div>
+          )}
+        {tagList.error && (
+          <div className="text-[11px] text-text-muted">
+            {t(
+              "The registry's tag list could not be read; type the tag yourself.",
+            )}
+          </div>
+        )}
+        {eff.tag === "latest" && (
           <div className="text-[11px] text-warn">
             {t(
               "latest moves without warning: the next restart may run another version.",
@@ -439,7 +502,7 @@ function ImageForm({ preset }: { preset: Preset }) {
       <div className="flex min-w-0 flex-col gap-2">
         <div className="text-xs text-text-muted">
           {t("What will be created")} ·{" "}
-          {valid ? imageOf(form) : t("fix the fields marked in red")}
+          {valid ? imageOf(eff) : t("fix the fields marked in red")}
         </div>
         {docs.length > 0 && shown && (
           <>

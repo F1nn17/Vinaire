@@ -39,6 +39,7 @@ named, with the reason, in `backend/router_test.go`.
 | POST | `/api/v1/catalog/releases/{namespace}/{name}/upgrade` | yes | yes |
 | GET | `/api/v1/catalog/releases/{namespace}/{name}/values` | yes | — |
 | GET | `/api/v1/catalog/repos` | yes | — |
+| GET | `/api/v1/cluster/metrics` | yes | — |
 | GET | `/api/v1/clusterrolebindings` | yes | — |
 | GET | `/api/v1/clusterroles` | yes | — |
 | GET | `/api/v1/clusters` | yes | — |
@@ -83,6 +84,7 @@ named, with the reason, in `backend/router_test.go`.
 | DELETE | `/api/v1/gitops/sources/{id}` | yes | yes |
 | GET | `/api/v1/gitops/sources/{id}` | yes | — |
 | POST | `/api/v1/gitops/sources/{id}/sync` | yes | yes |
+| GET | `/api/v1/images/tags` | yes | — |
 | GET | `/api/v1/ingresses` | yes | — |
 | GET | `/api/v1/jobs` | yes | — |
 | DELETE | `/api/v1/jobs/{namespace}/{name}` | yes | yes |
