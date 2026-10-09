@@ -168,3 +168,54 @@ function pruneEmptyParents(
     } else break;
   }
 }
+
+// ---- charts without a recipe --------------------------------------------------------
+// Many charts (the Bitnami family above all) bundle a database as a sub-chart switched by
+// `<db>.enabled` and take their own through an `externalDatabase` block. A chart without a recipe
+// that follows this convention still gets a hint and one button: switch the bundled database off
+// and drop the chart's own `externalDatabase` skeleton (as its defaults write it) into the values,
+// to be filled in. It guesses nothing about the values — it only copies what the chart documents.
+
+const bundledDatabases = ["postgresql", "postgresql-ha", "mariadb", "mysql"];
+
+export type ExternalDbHint = {
+  bundled: string;
+  skeleton: Record<string, unknown>;
+};
+
+export function detectExternalDb(defaultsText: string): ExternalDbHint | null {
+  let defaults: unknown;
+  try {
+    defaults = parseDocument(defaultsText).toJS();
+  } catch {
+    return null;
+  }
+  if (!defaults || typeof defaults !== "object") return null;
+  const d = defaults as Record<string, unknown>;
+  const ext = d.externalDatabase;
+  if (!ext || typeof ext !== "object" || Array.isArray(ext)) return null;
+  const bundled = bundledDatabases.find((k) => {
+    const v = d[k];
+    return (
+      v &&
+      typeof v === "object" &&
+      (v as Record<string, unknown>).enabled === true
+    );
+  });
+  if (!bundled) return null;
+  return { bundled, skeleton: { ...(ext as Record<string, unknown>) } };
+}
+
+// Switch the bundled database off and add the externalDatabase skeleton (keys already in the
+// values are kept as they are).
+export function applyExternalDb(text: string, hint: ExternalDbHint): string {
+  const doc = parseDocument(text);
+  doc.setIn([hint.bundled, "enabled"], false);
+  for (const [k, v] of Object.entries(hint.skeleton)) {
+    if (!doc.hasIn(["externalDatabase", k]))
+      doc.setIn(["externalDatabase", k], v);
+  }
+  if ("enabled" in hint.skeleton)
+    doc.setIn(["externalDatabase", "enabled"], true);
+  return doc.toString();
+}

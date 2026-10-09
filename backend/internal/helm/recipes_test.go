@@ -11,7 +11,7 @@ func TestEmbeddedRecipesAreValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"keycloak/keycloakx", "keycloak/keycloak", "gitea/gitea", "nextcloud/nextcloud", "metabase/metabase", "grafana/grafana"} {
+	for _, key := range []string{"keycloak/keycloakx", "keycloak/keycloak", "gitea/gitea", "nextcloud/nextcloud", "metabase/metabase", "grafana/grafana", "bitnami-apps/keycloak", "bitnami-apps/wordpress"} {
 		if r[key] == nil {
 			t.Errorf("no recipe for %s", key)
 		}

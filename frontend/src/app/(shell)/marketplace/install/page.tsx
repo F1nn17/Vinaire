@@ -24,6 +24,7 @@ import { PermissionsCheck } from "@/components/marketplace/PermissionsCheck";
 import { RollbackNote } from "@/components/marketplace/RollbackNote";
 import { RecipePanel } from "@/components/marketplace/RecipePanel";
 import { InstallPlan } from "@/components/marketplace/InstallPlan";
+import { ExternalDbHint } from "@/components/marketplace/ExternalDbHint";
 import { ValuesForm } from "@/components/marketplace/ValuesForm";
 import { buildSections } from "@/lib/values/schemaForm";
 import { PillTabs } from "@/components/ui/Tabs";
@@ -321,6 +322,15 @@ function InstallInner() {
                 set the chart&apos;s own scheduling value in the values (see the
                 defaults tab).
               </div>
+            )}
+
+            {!chart.recipe && !jobId && (
+              <ExternalDbHint
+                key={`${repo}/${chartName}`}
+                defaults={chart.values}
+                values={values}
+                onValues={setValues}
+              />
             )}
 
             {chart.recipe && !jobId && (

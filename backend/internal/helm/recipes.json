@@ -1431,5 +1431,455 @@
     "after": [
       "Grafana is at the address you chose (inside the cluster: the Service {release} in {namespace}, port 80). With the generated password, the user is \"admin\" and the password is in the Secret {release} in {namespace} (open the Secrets page; reading a value is audited)."
     ]
+  },
+  "bitnami-apps/keycloak": {
+    "summary": "Keycloak from Bitnami. By default it starts its own PostgreSQL next to Keycloak.",
+    "guide": [
+      "Database: the chart brings a PostgreSQL of its own. To use one you already run, pick \"My own PostgreSQL\": the bundled one is not installed, and Keycloak is pointed at yours; the password is read from an existing Secret (it never passes through this form).",
+      "Administrator: by default the chart creates the user \"user\" and generates a password into a Secret named after the release (key admin-password). To choose your own, point it at an existing Secret.",
+      "Bitnami's free images are published as :latest only — fine for development, not for pinned production use."
+    ],
+    "sections": [
+      {
+        "id": "database",
+        "title": "Database",
+        "discover": "postgres",
+        "help": "Where Keycloak keeps its data.",
+        "options": [
+          {
+            "id": "builtin",
+            "title": "Bundled PostgreSQL",
+            "default": true,
+            "note": "The chart starts a PostgreSQL pod of its own, with a volume.",
+            "set": []
+          },
+          {
+            "id": "external",
+            "title": "My own PostgreSQL",
+            "note": "The bundled PostgreSQL is not installed.",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host",
+                "required": true,
+                "placeholder": "postgres.db.svc.cluster.local",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "port",
+                "label": "Port",
+                "default": "5432",
+                "kind": "number"
+              },
+              {
+                "key": "database",
+                "label": "Database name",
+                "default": "bitnami_keycloak",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+              },
+              {
+                "key": "username",
+                "label": "User",
+                "default": "bn_keycloak",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
+              },
+              {
+                "key": "passwordSecret",
+                "label": "Secret with the password",
+                "required": true,
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "An existing Secret in the install namespace."
+              },
+              {
+                "key": "passwordKey",
+                "label": "Key in that Secret",
+                "default": "password",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "postgresql.enabled",
+                "value": false
+              },
+              {
+                "path": "externalDatabase.host",
+                "value": "{host}"
+              },
+              {
+                "path": "externalDatabase.port",
+                "value": "{port}",
+                "as": "number"
+              },
+              {
+                "path": "externalDatabase.database",
+                "value": "{database}"
+              },
+              {
+                "path": "externalDatabase.user",
+                "value": "{username}"
+              },
+              {
+                "path": "externalDatabase.existingSecret",
+                "value": "{passwordSecret}"
+              },
+              {
+                "path": "externalDatabase.existingSecretPasswordKey",
+                "value": "{passwordKey}"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "admin",
+        "title": "Administrator account",
+        "help": "Who can sign in as the first administrator.",
+        "options": [
+          {
+            "id": "generated",
+            "title": "A generated password",
+            "default": true,
+            "note": "User \"user\"; the password is in the Secret named after the release (key admin-password).",
+            "set": []
+          },
+          {
+            "id": "secret",
+            "title": "From an existing Secret",
+            "fields": [
+              {
+                "key": "adminSecret",
+                "label": "Secret with the password",
+                "required": true,
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+              },
+              {
+                "key": "adminKey",
+                "label": "Key in that Secret",
+                "default": "admin-password",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "auth.existingSecret",
+                "value": "{adminSecret}"
+              },
+              {
+                "path": "auth.passwordSecretKey",
+                "value": "{adminKey}"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "access",
+        "title": "How to reach it",
+        "help": "How people get to the web interface.",
+        "options": [
+          {
+            "id": "none",
+            "title": "Only inside the cluster",
+            "default": true,
+            "set": []
+          },
+          {
+            "id": "ingress",
+            "title": "Ingress (a host name)",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host name",
+                "required": true,
+                "placeholder": "keycloak.example.com",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "className",
+                "label": "Ingress class",
+                "kind": "ingressclass",
+                "help": "Empty uses the cluster default."
+              },
+              {
+                "key": "tlsSecret",
+                "label": "TLS Secret",
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "A kubernetes.io/tls Secret; empty serves plain HTTP."
+              }
+            ],
+            "set": [
+              {
+                "path": "ingress.enabled",
+                "value": true
+              },
+              {
+                "path": "ingress.hostname",
+                "value": "{host}"
+              },
+              {
+                "path": "ingress.ingressClassName",
+                "value": "{className}"
+              },
+              {
+                "path": "ingress.extraTls",
+                "value": [
+                  {
+                    "hosts": [
+                      "{host}"
+                    ],
+                    "secretName": "{tlsSecret}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "nodeport",
+            "title": "NodePort (a port on every node)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "NodePort"
+              }
+            ]
+          },
+          {
+            "id": "loadbalancer",
+            "title": "LoadBalancer (an external address)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "LoadBalancer"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "after": [
+      "Keycloak is at the address you chose (inside the cluster: the Service {release} in {namespace}, port 80). The first start takes a few minutes.",
+      "With a generated administrator password: the user is \"user\" and the password is in the Secret {release} in {namespace} (open the Secrets page; reading a value is audited)."
+    ]
+  },
+  "bitnami-apps/wordpress": {
+    "summary": "WordPress from Bitnami. By default it starts its own MariaDB next to it.",
+    "guide": [
+      "Database: the chart brings a MariaDB of its own. To use a MySQL or MariaDB you already run, pick \"My own MySQL / MariaDB\": the bundled one is not installed. The password is read from an existing Secret that must hold the key \"mariadb-password\".",
+      "Storage: the site's files live on a volume (10 Gi by default)."
+    ],
+    "sections": [
+      {
+        "id": "database",
+        "title": "Database",
+        "help": "Where WordPress keeps its posts and settings.",
+        "options": [
+          {
+            "id": "builtin",
+            "title": "Bundled MariaDB",
+            "default": true,
+            "note": "The chart starts a MariaDB pod of its own, with a volume.",
+            "set": []
+          },
+          {
+            "id": "external",
+            "title": "My own MySQL / MariaDB",
+            "note": "The bundled MariaDB is not installed.",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host",
+                "required": true,
+                "placeholder": "mysql.db.svc.cluster.local",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "port",
+                "label": "Port",
+                "default": "3306",
+                "kind": "number"
+              },
+              {
+                "key": "database",
+                "label": "Database name",
+                "default": "bitnami_wordpress",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+              },
+              {
+                "key": "username",
+                "label": "User",
+                "default": "bn_wordpress",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
+              },
+              {
+                "key": "passwordSecret",
+                "label": "Secret with the password",
+                "required": true,
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "An existing Secret holding the key \"mariadb-password\"."
+              }
+            ],
+            "set": [
+              {
+                "path": "mariadb.enabled",
+                "value": false
+              },
+              {
+                "path": "externalDatabase.host",
+                "value": "{host}"
+              },
+              {
+                "path": "externalDatabase.port",
+                "value": "{port}",
+                "as": "number"
+              },
+              {
+                "path": "externalDatabase.database",
+                "value": "{database}"
+              },
+              {
+                "path": "externalDatabase.user",
+                "value": "{username}"
+              },
+              {
+                "path": "externalDatabase.existingSecret",
+                "value": "{passwordSecret}"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "storage",
+        "title": "Storage",
+        "help": "Where WordPress keeps the site's files.",
+        "options": [
+          {
+            "id": "default",
+            "title": "The chart's default (10 Gi)",
+            "default": true,
+            "set": []
+          },
+          {
+            "id": "size",
+            "title": "A size of my own",
+            "fields": [
+              {
+                "key": "size",
+                "label": "Size",
+                "required": true,
+                "default": "20Gi",
+                "pattern": "^[0-9]+(Mi|Gi|Ti)$",
+                "placeholder": "20Gi",
+                "help": "Mi, Gi or Ti."
+              }
+            ],
+            "set": [
+              {
+                "path": "persistence.size",
+                "value": "{size}"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "access",
+        "title": "How to reach it",
+        "help": "How people get to the web interface.",
+        "options": [
+          {
+            "id": "none",
+            "title": "Only inside the cluster",
+            "default": true,
+            "set": []
+          },
+          {
+            "id": "ingress",
+            "title": "Ingress (a host name)",
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host name",
+                "required": true,
+                "placeholder": "blog.example.com",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$"
+              },
+              {
+                "key": "className",
+                "label": "Ingress class",
+                "kind": "ingressclass",
+                "help": "Empty uses the cluster default."
+              },
+              {
+                "key": "tlsSecret",
+                "label": "TLS Secret",
+                "kind": "secret",
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "A kubernetes.io/tls Secret; empty serves plain HTTP."
+              }
+            ],
+            "set": [
+              {
+                "path": "ingress.enabled",
+                "value": true
+              },
+              {
+                "path": "ingress.hostname",
+                "value": "{host}"
+              },
+              {
+                "path": "ingress.ingressClassName",
+                "value": "{className}"
+              },
+              {
+                "path": "ingress.extraTls",
+                "value": [
+                  {
+                    "hosts": [
+                      "{host}"
+                    ],
+                    "secretName": "{tlsSecret}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "nodeport",
+            "title": "NodePort (a port on every node)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "NodePort"
+              }
+            ]
+          },
+          {
+            "id": "loadbalancer",
+            "title": "LoadBalancer (an external address)",
+            "set": [
+              {
+                "path": "service.type",
+                "value": "LoadBalancer"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "after": [
+      "WordPress is at the address you chose (inside the cluster: the Service {release} in {namespace}, port 80). The administrator's user and password are in the Secret {release} in {namespace} (open the Secrets page; reading a value is audited)."
+    ]
   }
 }
