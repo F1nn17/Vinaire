@@ -472,6 +472,19 @@ function InstallInner() {
                         {job.error}
                       </div>
                     )}
+                    {/deadline exceeded|timed out/i.test(job.error ?? "") && (
+                      <div className="rounded-lg border border-border bg-surface p-3 text-xs text-text-muted">
+                        {t(
+                          "The install timed out waiting for the pods to become ready. The pod's Events and Logs say why — most often a wrong database user, password or name, or an image that is still downloading.",
+                        )}{" "}
+                        <Link
+                          href={`/workloads?namespace=${encodeURIComponent(job.namespace)}&tab=pods`}
+                          className="text-accent-text underline"
+                        >
+                          {t("Open the pods in {ns}", { ns: job.namespace })}
+                        </Link>
+                      </div>
+                    )}
                     <RollbackNote job={job} />
                     <div className="flex gap-2">
                       {job.canRollBack && (

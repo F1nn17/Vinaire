@@ -1,7 +1,8 @@
 "use client";
 
 import { t } from "@/lib/i18n/translate";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useWorkloads } from "@/lib/hooks/useWorkloads";
 import { useProjects } from "@/lib/api/projects";
 import { useWorkloadsStream } from "@/lib/hooks/useWorkloadsStream";
@@ -63,9 +64,35 @@ const columns: DataTableColumn<WorkloadRow>[] = [
   },
 ];
 
+const kinds: WorkloadKind[] = [
+  "deployments",
+  "pods",
+  "statefulsets",
+  "daemonsets",
+  "jobs",
+];
+
 export default function WorkloadsPage() {
-  const [tab, setTab] = useState<WorkloadKind>("deployments");
-  const [namespace, setNamespace] = useState("");
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-sm text-text-muted">Loading…</div>}
+    >
+      <WorkloadsInner />
+    </Suspense>
+  );
+}
+
+// A link may open the list on a namespace and a tab (?namespace=app&tab=pods).
+function WorkloadsInner() {
+  const params = useSearchParams();
+  const linkedTab = params.get("tab") as WorkloadKind | null;
+  const linkedNs = params.get("namespace") ?? "";
+  const [tab, setTab] = useState<WorkloadKind>(
+    linkedTab && kinds.includes(linkedTab) ? linkedTab : "deployments",
+  );
+  const [namespace, setNamespace] = useState(
+    /^[a-z0-9.-]+$/.test(linkedNs) ? linkedNs : "",
+  );
   const { data, isLoading, error, mutate } = useWorkloads(tab, namespace);
   const [createOpen, setCreateOpen] = useState(false);
   // Roadmap Phase 53: narrow the list to the namespaces of one project

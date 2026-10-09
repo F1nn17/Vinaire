@@ -135,25 +135,95 @@ export async function findCredentialSources(
   return out;
 }
 
+// What the database itself says about its account: the environment of the workload that runs it
+// (plain values only; a key the password comes from is named, its value never read here). It tells
+// the user name and database a Bitnami-style PostgreSQL was started with, and which Secret key holds
+// that user's password — which a Secret alone doesn't say.
+export type DatabaseHints = {
+  username?: string;
+  database?: string;
+  passwordKey?: string;
+};
+
+type EnvVar = {
+  name: string;
+  value?: string;
+  valueFrom?: { secretKeyRef?: { name?: string; key?: string } };
+};
+
+export async function databaseHints(
+  namespace: string,
+  serviceName: string,
+  secretName: string,
+): Promise<DatabaseHints> {
+  const base = serviceName.replace(
+    /-(rw|ro|r|primary|pooler-rw|headless|hl|postgresql)$/,
+    "",
+  );
+  const candidates: [string, string][] = [
+    ["apps/v1/statefulsets", base],
+    ["apps/v1/statefulsets", `${base}-postgresql`],
+    ["apps/v1/deployments", base],
+    ["apps/v1/deployments", `${base}-postgresql`],
+  ];
+  for (const [kind, name] of candidates) {
+    try {
+      const obj = await getResourceObject(kind, namespace, name);
+      const doc = parse(obj.yaml) as {
+        spec?: { template?: { spec?: { containers?: { env?: EnvVar[] }[] } } };
+      } | null;
+      const env = (doc?.spec?.template?.spec?.containers ?? []).flatMap(
+        (c) => c.env ?? [],
+      );
+      const val = (...names: string[]) =>
+        env.find((e) => names.includes(e.name) && e.value)?.value;
+      const pw = env.find(
+        (e) =>
+          ["POSTGRES_PASSWORD", "POSTGRESQL_PASSWORD"].includes(e.name) &&
+          e.valueFrom?.secretKeyRef?.name === secretName,
+      );
+      const out: DatabaseHints = {
+        username: val("POSTGRES_USER", "POSTGRESQL_USERNAME"),
+        database: val("POSTGRES_DB", "POSTGRESQL_DATABASE"),
+        passwordKey: pw?.valueFrom?.secretKeyRef?.key,
+      };
+      if (out.username || out.database || out.passwordKey) return out;
+    } catch {
+      // not that workload
+    }
+  }
+  return {};
+}
+
 // Copy the source's credentials into a new Secret in the install namespace (revealing each value
 // through the audited reveal, then creating the new Secret) and report what the form can fill in.
 export async function copyCredentials(
   source: CredentialSource,
+  serviceName: string,
   target: { namespace: string; name: string },
 ): Promise<{
   username: string;
   database: string;
   createdNamespace: boolean;
   superuser: boolean;
+  // the account could not be told from the Secret or from the database's own settings
+  userUnknown: boolean;
 }> {
+  const hints = source.hasUsername
+    ? {}
+    : await databaseHints(source.namespace, serviceName, source.name);
+  const passwordKey =
+    hints.passwordKey && source.keys.includes(hints.passwordKey)
+      ? hints.passwordKey
+      : source.passwordKey;
   const password = await revealSecretKey(
     source.namespace,
     source.name,
-    source.passwordKey,
+    passwordKey,
   );
-  const superuser = source.passwordKey === "postgres-password";
-  let username = superuser ? "postgres" : "";
-  let database = "";
+  const superuser = passwordKey === "postgres-password";
+  let username = superuser ? "postgres" : (hints.username ?? "");
+  let database = hints.database ?? "";
   if (source.hasUsername)
     username = await revealSecretKey(source.namespace, source.name, "username");
   if (source.keys.includes("dbname"))
@@ -165,5 +235,11 @@ export async function copyCredentials(
     target.name,
     data,
   );
-  return { username, database, createdNamespace, superuser };
+  return {
+    username,
+    database,
+    createdNamespace,
+    superuser,
+    userUnknown: !username,
+  };
 }

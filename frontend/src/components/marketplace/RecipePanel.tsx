@@ -463,7 +463,7 @@ function CredentialsOffer({
     setBusy(true);
     setMsg(null);
     try {
-      const r = await copyCredentials(source, {
+      const r = await copyCredentials(source, picked.name, {
         namespace: installNamespace,
         name: secretName,
       });
@@ -474,7 +474,7 @@ function CredentialsOffer({
         ...(r.database ? { database: r.database } : {}),
       });
       setMsg({
-        ok: true,
+        ok: !r.userUnknown,
         text:
           t("Secret {name} created in {ns} and the form filled in.", {
             name: secretName,
@@ -484,6 +484,12 @@ function CredentialsOffer({
             ? " " +
               t(
                 "These are the database's administrator credentials — for anything beyond a trial, create a dedicated user and use its credentials instead.",
+              )
+            : "") +
+          (r.userUnknown
+            ? " ⚠ " +
+              t(
+                "The user name couldn't be told — enter the user this password belongs to (and check the database name) before installing, or the application won't be able to sign in and the install will time out.",
               )
             : ""),
       });
