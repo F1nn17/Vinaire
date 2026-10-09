@@ -132,3 +132,20 @@ func TestGeneratedSecretsAreOnlyOfferedWhereTheyAreSafe(t *testing.T) {
 		}
 	}
 }
+
+func TestAutoOnlyOnADefaultOptionWithoutFields(t *testing.T) {
+	mk := func(opt string) string {
+		return `{"a/b":{"sections":[{"id":"x","title":"X","options":[` + opt + `,{"id":"p","title":"P","set":[]}]}]}}`
+	}
+	if _, err := loadRecipes([]byte(mk(`{"id":"o","title":"O","default":true,"auto":true,"set":[{"path":"a.b","value":true}]}`))); err != nil {
+		t.Errorf("rejected: %v", err)
+	}
+	for name, doc := range map[string]string{
+		"not default": `{"a/b":{"sections":[{"id":"x","title":"X","options":[{"id":"o","title":"O","default":true,"set":[]},{"id":"p","title":"P","auto":true,"set":[]}]}]}}`,
+		"has fields":  mk(`{"id":"o","title":"O","default":true,"auto":true,"fields":[{"key":"k","label":"K"}],"set":[]}`),
+	} {
+		if _, err := loadRecipes([]byte(doc)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

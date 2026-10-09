@@ -47,12 +47,17 @@ type RecipeSection struct {
 
 // RecipeOption is one answer to a section.
 type RecipeOption struct {
-	ID      string        `json:"id"`
-	Title   string        `json:"title"`
-	Note    string        `json:"note,omitempty"`
-	Default bool          `json:"default,omitempty"`
-	Fields  []RecipeField `json:"fields,omitempty"`
-	Set     []RecipeSet   `json:"set"`
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Note    string `json:"note,omitempty"`
+	Default bool   `json:"default,omitempty"`
+	// Auto (on a default option, without fields) is written into the values as soon as the install
+	// page opens — for a setting without which the chart does not work at all (an image that no
+	// longer exists under its default name). It is visible in "Your values" and can be undone by
+	// choosing another option.
+	Auto   bool          `json:"auto,omitempty"`
+	Fields []RecipeField `json:"fields,omitempty"`
+	Set    []RecipeSet   `json:"set"`
 }
 
 // RecipeField is a value the person types for an option.
@@ -210,6 +215,9 @@ func (r *Recipe) validate() error {
 			seenOption[o.ID] = true
 			if o.Default {
 				defaults++
+			}
+			if o.Auto && (!o.Default || len(o.Fields) > 0) {
+				return fmt.Errorf("section %s, option %s: auto is only for a default option with no fields", s.ID, o.ID)
 			}
 			if err := o.validate(); err != nil {
 				return fmt.Errorf("section %s, option %s: %w", s.ID, o.ID, err)

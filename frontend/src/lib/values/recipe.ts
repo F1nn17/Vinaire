@@ -32,6 +32,8 @@ export type RecipeOption = {
   title: string;
   note?: string;
   default?: boolean;
+  // written into the values as soon as the page opens (see the backend's RecipeOption.Auto)
+  auto?: boolean;
   fields?: RecipeField[];
   set: RecipeSet[];
 };

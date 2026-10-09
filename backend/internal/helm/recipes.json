@@ -1456,6 +1456,40 @@
     ],
     "sections": [
       {
+        "id": "images",
+        "title": "Container images",
+        "help": "Where the images are pulled from.",
+        "options": [
+          {
+            "id": "legacy",
+            "title": "Bitnami's legacy repository (bitnamilegacy)",
+            "default": true,
+            "auto": true,
+            "note": "Bitnami removed its versioned images from Docker Hub (docker.io/bitnami/…: not found); the same images are kept under bitnamilegacy. They are no longer updated — fine to try things out, not for real use.",
+            "set": [
+              {
+                "path": "global.security.allowInsecureImages",
+                "value": true
+              },
+              {
+                "path": "image.repository",
+                "value": "bitnamilegacy/keycloak"
+              },
+              {
+                "path": "postgresql.image.repository",
+                "value": "bitnamilegacy/postgresql"
+              }
+            ]
+          },
+          {
+            "id": "default",
+            "title": "The chart's default images (bitnami/…)",
+            "note": "Pods fail with ImagePullBackOff unless you serve these images from a registry of your own.",
+            "set": []
+          }
+        ]
+      },
+      {
         "id": "database",
         "title": "Database",
         "discover": "postgres",
@@ -1694,6 +1728,40 @@
       "Storage: the site's files live on a volume (10 Gi by default)."
     ],
     "sections": [
+      {
+        "id": "images",
+        "title": "Container images",
+        "help": "Where the images are pulled from.",
+        "options": [
+          {
+            "id": "legacy",
+            "title": "Bitnami's legacy repository (bitnamilegacy)",
+            "default": true,
+            "auto": true,
+            "note": "Bitnami removed its versioned images from Docker Hub (docker.io/bitnami/…: not found); the same images are kept under bitnamilegacy. They are no longer updated — fine to try things out, not for real use.",
+            "set": [
+              {
+                "path": "global.security.allowInsecureImages",
+                "value": true
+              },
+              {
+                "path": "image.repository",
+                "value": "bitnamilegacy/wordpress"
+              },
+              {
+                "path": "mariadb.image.repository",
+                "value": "bitnamilegacy/mariadb"
+              }
+            ]
+          },
+          {
+            "id": "default",
+            "title": "The chart's default images (bitnami/…)",
+            "note": "Pods fail with ImagePullBackOff unless you serve these images from a registry of your own.",
+            "set": []
+          }
+        ]
+      },
       {
         "id": "database",
         "title": "Database",

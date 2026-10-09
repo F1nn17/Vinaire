@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { t } from "@/lib/i18n/translate";
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/allResources";
 import {
   applyOption,
+  patchesFor,
   defaultFields,
   fieldsError,
   type FieldValues,
@@ -53,7 +54,35 @@ export function RecipePanel({
   onValues: (next: string) => void;
 }) {
   // per section: what is applied to the values now (so choosing another option can take it back)
-  const [applied, setApplied] = useState<Record<string, Applied>>({});
+  const [applied, setApplied] = useState<Record<string, Applied>>(() =>
+    // options that are written into the values on open (see the effect below) count as applied
+    Object.fromEntries(
+      recipe.sections.flatMap((s) => {
+        const o = s.options.find((x) => x.default && x.auto);
+        return o
+          ? [
+              [
+                s.id,
+                { optionId: o.id, paths: patchesFor(o, {}).map((p) => p.path) },
+              ],
+            ]
+          : [];
+      }),
+    ),
+  );
+  const autoDone = useRef(false);
+  useEffect(() => {
+    if (autoDone.current) return;
+    autoDone.current = true;
+    let text = values;
+    for (const s of recipe.sections) {
+      const o = s.options.find((x) => x.default && x.auto);
+      if (o) text = applyOption(text, [], o, {}).text;
+    }
+    if (text !== values) onValues(text);
+    // once, when the panel opens
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [selected, setSelected] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       recipe.sections.map((s) => [
