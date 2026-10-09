@@ -141,132 +141,141 @@ function NamespaceDetailPage() {
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
-        <div className="flex max-w-3xl flex-col gap-4">
-          <div className="rounded-[10px] border border-border bg-surface p-5">
-            <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
-            <Row label="Age" value={ns.age} />
-            <div className="mt-4 border-t border-border pt-4">
-              <div className="mb-2 text-xs text-text-muted">Labels</div>
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(ns.labels).map(([k, v]) => (
-                  <span
-                    key={k}
-                    className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
-                  >
-                    {k}={v}
-                  </span>
-                ))}
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+          <div className="flex flex-col gap-4">
+            <div className="rounded-[10px] border border-border bg-surface p-5">
+              <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
+              <Row label="Age" value={ns.age} />
+              <div className="mt-4 border-t border-border pt-4">
+                <div className="mb-2 text-xs text-text-muted">Labels</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(ns.labels).map(([k, v]) => (
+                    <span
+                      key={k}
+                      className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
+                    >
+                      {k}={v}
+                    </span>
+                  ))}
+                </div>
               </div>
+            </div>
+
+            <div className="rounded-[10px] border border-border bg-surface p-5">
+              <div className="mb-3.5 flex items-center justify-between">
+                <div className="text-[13px] font-semibold">Limit ranges</div>
+                <button
+                  type="button"
+                  onClick={() => setAdding("limitrange")}
+                  className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-xs"
+                >
+                  + Add limit range
+                </button>
+              </div>
+              {ns.limitRanges.length === 0 ? (
+                <div className="text-xs text-text-muted">No LimitRange.</div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {ns.limitRanges.map((lr) => (
+                    <div key={lr.name} className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs">{lr.name}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditing(
+                              editing === `l:${lr.name}`
+                                ? null
+                                : `l:${lr.name}`,
+                            )
+                          }
+                          className="text-xs text-accent-text"
+                        >
+                          {editing === `l:${lr.name}`
+                            ? "Hide YAML"
+                            : "Edit YAML"}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr] gap-2 font-mono text-[11px]">
+                        {[
+                          "Type",
+                          "Resource",
+                          "Min",
+                          "Max",
+                          "Default",
+                          "Request",
+                        ].map((h) => (
+                          <div key={h} className="text-text-muted">
+                            {h}
+                          </div>
+                        ))}
+                        {lr.limits.flatMap((l, i) => [
+                          <div key={`${i}t`}>{l.type}</div>,
+                          <div key={`${i}r`}>{l.resource}</div>,
+                          <div key={`${i}a`}>{l.min || "—"}</div>,
+                          <div key={`${i}b`}>{l.max || "—"}</div>,
+                          <div key={`${i}c`}>{l.default || "—"}</div>,
+                          <div key={`${i}d`}>{l.defaultRequest || "—"}</div>,
+                        ])}
+                      </div>
+                      {editing === `l:${lr.name}` && (
+                        <YamlPanel yaml={lr.yaml} onApplied={() => mutate()} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-
-          <div className="rounded-[10px] border border-border bg-surface p-5">
-            <div className="mb-3.5 flex items-center justify-between">
-              <div className="text-[13px] font-semibold">Resource quotas</div>
-              <button
-                type="button"
-                onClick={() => setAdding("quota")}
-                className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-xs"
-              >
-                + Add quota
-              </button>
+          <div className="flex flex-col gap-4">
+            <div className="rounded-[10px] border border-border bg-surface p-5">
+              <div className="mb-3.5 flex items-center justify-between">
+                <div className="text-[13px] font-semibold">Resource quotas</div>
+                <button
+                  type="button"
+                  onClick={() => setAdding("quota")}
+                  className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-xs"
+                >
+                  + Add quota
+                </button>
+              </div>
+              {ns.quotas.length === 0 ? (
+                <div className="text-xs text-text-muted">
+                  No ResourceQuota — pods here aren&apos;t limited in aggregate.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {ns.quotas.map((q) => (
+                    <div key={q.name} className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs">{q.name}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditing(
+                              editing === `q:${q.name}` ? null : `q:${q.name}`,
+                            )
+                          }
+                          className="text-xs text-accent-text"
+                        >
+                          {editing === `q:${q.name}`
+                            ? "Hide YAML"
+                            : "Edit YAML"}
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-x-6 gap-y-3">
+                        {q.items.map((i) => (
+                          <QuotaBar key={i.resource} row={i} wide />
+                        ))}
+                      </div>
+                      {editing === `q:${q.name}` && (
+                        <YamlPanel yaml={q.yaml} onApplied={() => mutate()} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            {ns.quotas.length === 0 ? (
-              <div className="text-xs text-text-muted">
-                No ResourceQuota — pods here aren&apos;t limited in aggregate.
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {ns.quotas.map((q) => (
-                  <div key={q.name} className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs">{q.name}</span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setEditing(
-                            editing === `q:${q.name}` ? null : `q:${q.name}`,
-                          )
-                        }
-                        className="text-xs text-accent-text"
-                      >
-                        {editing === `q:${q.name}` ? "Hide YAML" : "Edit YAML"}
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-x-6 gap-y-3">
-                      {q.items.map((i) => (
-                        <QuotaBar key={i.resource} row={i} wide />
-                      ))}
-                    </div>
-                    {editing === `q:${q.name}` && (
-                      <YamlPanel yaml={q.yaml} onApplied={() => mutate()} />
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-[10px] border border-border bg-surface p-5">
-            <div className="mb-3.5 flex items-center justify-between">
-              <div className="text-[13px] font-semibold">Limit ranges</div>
-              <button
-                type="button"
-                onClick={() => setAdding("limitrange")}
-                className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-xs"
-              >
-                + Add limit range
-              </button>
-            </div>
-            {ns.limitRanges.length === 0 ? (
-              <div className="text-xs text-text-muted">No LimitRange.</div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {ns.limitRanges.map((lr) => (
-                  <div key={lr.name} className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs">{lr.name}</span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setEditing(
-                            editing === `l:${lr.name}` ? null : `l:${lr.name}`,
-                          )
-                        }
-                        className="text-xs text-accent-text"
-                      >
-                        {editing === `l:${lr.name}` ? "Hide YAML" : "Edit YAML"}
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr] gap-2 font-mono text-[11px]">
-                      {[
-                        "Type",
-                        "Resource",
-                        "Min",
-                        "Max",
-                        "Default",
-                        "Request",
-                      ].map((h) => (
-                        <div key={h} className="text-text-muted">
-                          {h}
-                        </div>
-                      ))}
-                      {lr.limits.flatMap((l, i) => [
-                        <div key={`${i}t`}>{l.type}</div>,
-                        <div key={`${i}r`}>{l.resource}</div>,
-                        <div key={`${i}a`}>{l.min || "—"}</div>,
-                        <div key={`${i}b`}>{l.max || "—"}</div>,
-                        <div key={`${i}c`}>{l.default || "—"}</div>,
-                        <div key={`${i}d`}>{l.defaultRequest || "—"}</div>,
-                      ])}
-                    </div>
-                    {editing === `l:${lr.name}` && (
-                      <YamlPanel yaml={lr.yaml} onApplied={() => mutate()} />
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}

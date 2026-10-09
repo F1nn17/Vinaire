@@ -224,107 +224,113 @@ function NodeDetailPage() {
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
-        <div className="flex max-w-5xl flex-col gap-4">
-          <div className="rounded-[10px] border border-border bg-surface p-5">
-            <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
-            <div className="flex flex-col gap-2.5">
-              <Row label="Roles" value={node.roles} />
-              <Row label="Kubelet version" value={node.kubeletVersion} />
-              <Row label="OS" value={node.os} />
-              <Row label="Age" value={node.age} />
-            </div>
-          </div>
-
-          <div className="rounded-[10px] border border-border bg-surface p-5">
-            <div className="mb-3.5 text-[13px] font-semibold">
-              Capacity / Allocatable
-            </div>
-            <div className="grid grid-cols-3 gap-4 text-xs">
-              <div />
-              <div className="text-text-muted">Capacity</div>
-              <div className="text-text-muted">Allocatable</div>
-              <div className="text-text-muted">CPU</div>
-              <div className="font-mono">{node.capacity.cpu}</div>
-              <div className="font-mono">{node.allocatable.cpu}</div>
-              <div className="text-text-muted">Memory</div>
-              <div className="font-mono">{node.capacity.memory}</div>
-              <div className="font-mono">{node.allocatable.memory}</div>
-              <div className="text-text-muted">Pods</div>
-              <div className="font-mono">{node.capacity.pods}</div>
-              <div className="font-mono">{node.allocatable.pods}</div>
-            </div>
-            {node.cpu && node.memory && (
-              <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
-                <UsageRow
-                  label="CPU used"
-                  usage={node.cpu}
-                  color="var(--accent)"
-                />
-                <UsageRow
-                  label="Memory used"
-                  usage={node.memory}
-                  color="var(--warn)"
-                />
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+            <div className="flex flex-col gap-4">
+              <div className="rounded-[10px] border border-border bg-surface p-5">
+                <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
+                <div className="flex flex-col gap-2.5">
+                  <Row label="Roles" value={node.roles} />
+                  <Row label="Kubelet version" value={node.kubeletVersion} />
+                  <Row label="OS" value={node.os} />
+                  <Row label="Age" value={node.age} />
+                </div>
               </div>
-            )}
-          </div>
 
+              <div className="rounded-[10px] border border-border bg-surface p-5">
+                <div className="mb-3.5 text-[13px] font-semibold">
+                  Capacity / Allocatable
+                </div>
+                <div className="grid grid-cols-3 gap-4 text-xs">
+                  <div />
+                  <div className="text-text-muted">Capacity</div>
+                  <div className="text-text-muted">Allocatable</div>
+                  <div className="text-text-muted">CPU</div>
+                  <div className="font-mono">{node.capacity.cpu}</div>
+                  <div className="font-mono">{node.allocatable.cpu}</div>
+                  <div className="text-text-muted">Memory</div>
+                  <div className="font-mono">{node.capacity.memory}</div>
+                  <div className="font-mono">{node.allocatable.memory}</div>
+                  <div className="text-text-muted">Pods</div>
+                  <div className="font-mono">{node.capacity.pods}</div>
+                  <div className="font-mono">{node.allocatable.pods}</div>
+                </div>
+                {node.cpu && node.memory && (
+                  <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
+                    <UsageRow
+                      label="CPU used"
+                      usage={node.cpu}
+                      color="var(--accent)"
+                    />
+                    <UsageRow
+                      label="Memory used"
+                      usage={node.memory}
+                      color="var(--warn)"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-4">
+              <div className="rounded-[10px] border border-border bg-surface p-5">
+                <div className="mb-3.5 text-[13px] font-semibold">
+                  Conditions
+                </div>
+                <div className="flex flex-col gap-2">
+                  {node.conditions.map((c) => (
+                    <div
+                      key={c.type}
+                      className="flex items-start justify-between gap-4 text-xs"
+                    >
+                      <span className="font-mono">{c.type}</span>
+                      <span className="text-right text-text-muted">
+                        {c.status}
+                        {c.reason && ` · ${c.reason}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[10px] border border-border bg-surface p-5">
+                <div className="mb-3.5 text-[13px] font-semibold">Taints</div>
+                {node.taints.length === 0 ? (
+                  <div className="text-xs text-text-faint">No taints.</div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {node.taints.map((t, i) => (
+                      <span
+                        key={i}
+                        className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
+                      >
+                        {t.key}
+                        {t.value && `=${t.value}`}:{t.effect}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-[10px] border border-border bg-surface p-5">
+                <div className="mb-2 text-xs text-text-muted">Labels</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(node.labels).map(([k, v]) => (
+                    <span
+                      key={k}
+                      className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
+                    >
+                      {k}={v}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
           <div className="rounded-[10px] border border-border bg-surface p-5">
             <div className="mb-3.5 text-[13px] font-semibold">
               Usage history
             </div>
             <MetricsPanel resourceType="nodes" namespace="" name={name} />
-          </div>
-
-          <div className="rounded-[10px] border border-border bg-surface p-5">
-            <div className="mb-3.5 text-[13px] font-semibold">Conditions</div>
-            <div className="flex flex-col gap-2">
-              {node.conditions.map((c) => (
-                <div
-                  key={c.type}
-                  className="flex items-start justify-between gap-4 text-xs"
-                >
-                  <span className="font-mono">{c.type}</span>
-                  <span className="text-right text-text-muted">
-                    {c.status}
-                    {c.reason && ` · ${c.reason}`}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-[10px] border border-border bg-surface p-5">
-            <div className="mb-3.5 text-[13px] font-semibold">Taints</div>
-            {node.taints.length === 0 ? (
-              <div className="text-xs text-text-faint">No taints.</div>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {node.taints.map((t, i) => (
-                  <span
-                    key={i}
-                    className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
-                  >
-                    {t.key}
-                    {t.value && `=${t.value}`}:{t.effect}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-[10px] border border-border bg-surface p-5">
-            <div className="mb-2 text-xs text-text-muted">Labels</div>
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(node.labels).map(([k, v]) => (
-                <span
-                  key={k}
-                  className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
-                >
-                  {k}={v}
-                </span>
-              ))}
-            </div>
           </div>
         </div>
       )}
