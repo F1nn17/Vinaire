@@ -358,10 +358,85 @@ const ingress: Converter = {
     null,
 };
 
+// ---- HTTPRoute (Gateway API) --------------------------------------------------
+// One Gateway to attach to, one hostname, one path match, one backend Service — what most
+// routes are (Roadmap Phase 63). Filters, weights and more rules mean YAML.
+
+const httproute: Converter = {
+  defaults: () => ({
+    name: "",
+    namespace: "default",
+    gatewayName: "",
+    gatewayNamespace: "",
+    sectionName: "",
+    hostname: "",
+    path: "/",
+    pathType: "PathPrefix",
+    serviceName: "",
+    servicePort: "",
+  }),
+  toManifest: (s) => {
+    const parent: Manifest = { name: str(s, "gatewayName") };
+    if (str(s, "gatewayNamespace"))
+      parent.namespace = str(s, "gatewayNamespace");
+    if (str(s, "sectionName")) parent.sectionName = str(s, "sectionName");
+    const spec: Manifest = { parentRefs: [parent] };
+    if (str(s, "hostname")) spec.hostnames = [str(s, "hostname")];
+    spec.rules = [
+      {
+        matches: [
+          {
+            path: {
+              type: str(s, "pathType") || "PathPrefix",
+              value: str(s, "path") || "/",
+            },
+          },
+        ],
+        backendRefs: [
+          { name: str(s, "serviceName"), port: Number(str(s, "servicePort")) },
+        ],
+      },
+    ];
+    return {
+      apiVersion: "gateway.networking.k8s.io/v1",
+      kind: "HTTPRoute",
+      metadata: { name: str(s, "name"), namespace: str(s, "namespace") },
+      spec,
+    };
+  },
+  fromManifest: (m) => ({
+    name: asStr(at(m, "metadata", "name")),
+    namespace: asStr(at(m, "metadata", "namespace")),
+    gatewayName: asStr(at(m, "spec", "parentRefs", 0, "name")),
+    gatewayNamespace: asStr(at(m, "spec", "parentRefs", 0, "namespace")),
+    sectionName: asStr(at(m, "spec", "parentRefs", 0, "sectionName")),
+    hostname: asStr(at(m, "spec", "hostnames", 0)),
+    path: asStr(at(m, "spec", "rules", 0, "matches", 0, "path", "value")),
+    pathType: asStr(at(m, "spec", "rules", 0, "matches", 0, "path", "type")),
+    serviceName: asStr(at(m, "spec", "rules", 0, "backendRefs", 0, "name")),
+    servicePort: asStr(at(m, "spec", "rules", 0, "backendRefs", 0, "port")),
+  }),
+  validate: (s) =>
+    (!str(s, "name") && "Name is required") ||
+    (!str(s, "namespace") && "Namespace is required") ||
+    (!str(s, "gatewayName") && "A Gateway to attach to is required") ||
+    (!str(s, "serviceName") && "Backend Service is required") ||
+    (!portNumber.test(str(s, "servicePort")) ||
+    Number(str(s, "servicePort")) < 1 ||
+    Number(str(s, "servicePort")) > 65535
+      ? "Backend port must be a number from 1 to 65535"
+      : null) ||
+    (!str(s, "path").startsWith("/") && str(s, "path") !== ""
+      ? "Path must start with /"
+      : null) ||
+    null,
+};
+
 const converters: Record<string, Converter> = {
   deployment,
   service,
   ingress,
+  httproute,
   configmap: keyValueKind("ConfigMap", "data"),
   secret: keyValueKind("Secret", "stringData"),
   namespace,

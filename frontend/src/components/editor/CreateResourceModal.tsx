@@ -7,6 +7,7 @@ import { ApplyPreviewModal } from "./ApplyPreviewModal";
 import { YamlEditor } from "./YamlEditor";
 import { useYamlApply } from "./useYamlApply";
 import { ResourceForm } from "./forms/ResourceForm";
+import { AppPicker, hasAppPicker } from "./forms/AppPicker";
 import {
   defaultFormState,
   formToYaml,
@@ -134,11 +135,21 @@ export function CreateResourceModal({
             ) : !schema ? (
               <div className="p-6 text-sm text-text-muted">Loading form…</div>
             ) : (
-              <ResourceForm
-                schema={schema}
-                state={formState}
-                onChange={setFormState}
-              />
+              <>
+                {hasAppPicker(formType) && (
+                  <AppPicker
+                    key={formType}
+                    formType={formType}
+                    state={formState}
+                    onChange={setFormState}
+                  />
+                )}
+                <ResourceForm
+                  schema={schema}
+                  state={formState}
+                  onChange={setFormState}
+                />
+              </>
             )
           ) : (
             <div className="overflow-hidden rounded-lg border border-border">

@@ -114,6 +114,24 @@ var formSchemas = map[string]FormSchema{
 			{Key: "annotations", Label: "Annotations", Type: FormFieldKeyValue, KeyPlaceholder: "annotation", ValuePlaceholder: "value"},
 		},
 	},
+	// Roadmap Phase 63: Gateway API's counterpart of an Ingress — one hostname, one path, one
+	// backend Service, attached to one Gateway. More rules (filters, weights, several
+	// backends) are YAML.
+	"httproute": {
+		ResourceType: "httproute", Kind: "HTTPRoute", Label: "HTTPRoute (Gateway API)",
+		Fields: []FormField{
+			nameField,
+			namespaceField,
+			{Key: "gatewayName", Label: "Gateway", Type: FormFieldString, Required: true, Placeholder: "my-gateway", Help: "The Gateway this route attaches to."},
+			{Key: "gatewayNamespace", Label: "Gateway namespace", Type: FormFieldString, Placeholder: "same as the route", Help: "Empty = the route's own namespace."},
+			{Key: "sectionName", Label: "Listener", Type: FormFieldString, Placeholder: "http", Help: "Optional: the Gateway listener (by name) to attach to."},
+			{Key: "hostname", Label: "Hostname", Type: FormFieldString, Placeholder: "app.example.com", Help: "Empty matches any hostname the listener allows."},
+			{Key: "path", Label: "Path", Type: FormFieldString, Default: "/"},
+			{Key: "pathType", Label: "Path match", Type: FormFieldSelect, Default: "PathPrefix", Options: []string{"PathPrefix", "Exact"}},
+			{Key: "serviceName", Label: "Backend Service", Type: FormFieldString, Required: true, Placeholder: "my-app"},
+			{Key: "servicePort", Label: "Backend port", Type: FormFieldNumber, Required: true, Placeholder: "80"},
+		},
+	},
 	// The optional ResourceQuota the roadmap mentions is a second object, which
 	// Phase 25's single-document apply can't create atomically — it belongs
 	// with Phase 27's namespace/quota management instead.

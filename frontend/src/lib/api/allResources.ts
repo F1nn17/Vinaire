@@ -58,6 +58,17 @@ function base(key: string): string {
   return `/api/v1/api-resources/${encodeURIComponent(g)}/${encodeURIComponent(v)}/${encodeURIComponent(r)}/objects`;
 }
 
+// One object of any kind, read as the signed-in user (for filling a form from it).
+export function getResourceObject(
+  key: string,
+  namespace: string,
+  name: string,
+): Promise<ResourceObject> {
+  return apiFetch<ResourceObject>(
+    `${base(key)}/${encodeURIComponent(name)}${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ""}`,
+  );
+}
+
 export function useAPIResources() {
   const cluster = useCurrentCluster();
   return useSWR(

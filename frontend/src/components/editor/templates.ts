@@ -190,6 +190,30 @@ spec:
 `,
 };
 
+const httproute: ResourceTemplate = {
+  label: "HTTPRoute (Gateway API)",
+  formType: "httproute",
+  yaml: `apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: my-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: my-gateway
+  hostnames:
+    - my-app.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: my-service
+          port: 80
+`,
+};
+
 export const workloadTemplates: Record<string, ResourceTemplate[]> = {
   deployments: [deployment, namespace],
   statefulsets: [statefulset],
@@ -202,7 +226,7 @@ export const configMapTemplates = [configMap];
 export const secretTemplates = [secret];
 export const networkTemplates: Record<string, ResourceTemplate[]> = {
   ingress: [ingress, service],
-  gateway: [service, ingress],
+  gateway: [httproute, service],
 };
 
 export const namespaceTemplates = [namespace];
