@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **StatefulSet, DaemonSet and Job pages show their pods and usage history (Roadmap Phase 66).** Their Overview now has the table of
+  the object's pods and the CPU / memory / network / disk charts, the way a Deployment's does — one shared component for all four.
+  New `GET /api/v1/{statefulsets,daemonsets,jobs}/{namespace}/{name}/metrics`; the detail responses carry `pods`, listed as the
+  caller by the object's own selector.
 - **Service, Ingress and HTTPRoute forms fill themselves in (Roadmap Phase 63).** Pick the application (or the Service) and the form
   takes its name, namespace, selector, ports, backend and port; an Ingress offers the cluster's Ingress classes, and there is a new
   HTTPRoute (Gateway API) form with a Gateway and Service picker. Everything stays editable and goes through the usual reviewed

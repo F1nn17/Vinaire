@@ -182,19 +182,29 @@ export function MetricsPanel({
           <Message>Loading…</Message>
         ) : !data.available ? (
           <Message>
-            Metrics unavailable
-            {data.reason ? ` — ${reasonText(data.reason)}` : ""}.{" "}
-            <Link href="/metrics-stack" className="text-accent-text underline">
-              Set up the metrics stack →
-            </Link>
+            <span>
+              Metrics unavailable
+              {data.reason ? ` — ${reasonText(data.reason)}` : ""}.{" "}
+              <Link
+                href="/metrics-stack"
+                className="text-accent-text underline"
+              >
+                Set up the metrics stack →
+              </Link>
+            </span>
           </Message>
         ) : data.noData ? (
           <Message>
-            No {type} data for this {resourceType.replace(/s$/, "")} —{" "}
-            {reasonText(data.reason ?? "")}.{" "}
-            <Link href="/metrics-stack" className="text-accent-text underline">
-              Open the metrics stack →
-            </Link>
+            <span>
+              No {type} data for this {resourceType.replace(/s$/, "")} —{" "}
+              {reasonText(data.reason ?? "")}.{" "}
+              <Link
+                href="/metrics-stack"
+                className="text-accent-text underline"
+              >
+                Open the metrics stack →
+              </Link>
+            </span>
           </Message>
         ) : (
           <>
