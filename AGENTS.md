@@ -168,9 +168,17 @@ flow.
     progress (download bytes/speed, checks, install, pods). A job is visible only
     to the identity that started it (`Session.OwnerKey`), capped per identity,
     forgotten 15 minutes after it ends; the outcome is audited exactly like a
-    direct install (`helm-install`/`-failed`, `-refused`, `-cancelled`), and a job
-    can only be cancelled before Helm starts creating objects. Pod rows are read
-    as the caller.
+    direct install (`helm-install`/`-failed`, `-refused`, `-cancelled`). A job can be
+    cancelled at any stage (Roadmap Phase 60): before Helm starts that is all; once it is
+    creating objects Helm is interrupted and — after a short settle, because Helm keeps
+    applying in the background — **the job's own release is uninstalled** (`helm
+    uninstall`, as the caller, audited `helm-install-rollback`/`-failed`); the same
+    `DELETE` undoes an install that already failed after Helm began. Guard rails: the
+    release name must have been free just before the install (otherwise the install
+    fails and an existing release is never touched), and **Vinaire never deletes the
+    namespace or the volume claims itself** — it reports them (`namespaceCreated`,
+    `leftovers`) and the UI offers the existing, audited namespace delete (Phase 27,
+    name typed). Pod rows are read as the caller.
   - A **deprecated** chart is hidden from search and refused on install unless the
     request carries `allowDeprecated` (the UI's explicit "install anyway").
   - `GET /api/v1/catalog/icons/{repo}/{chart}` serves a chart's icon so the browser

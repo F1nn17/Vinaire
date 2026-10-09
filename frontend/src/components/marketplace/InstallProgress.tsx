@@ -36,7 +36,11 @@ function stepState(
 ): "todo" | "active" | "done" | "failed" {
   if (job.stage === "done") return "done";
   const idx = steps.findIndex((s) => s.key === step);
-  if (job.stage === "failed" || job.stage === "cancelled") {
+  if (
+    job.stage === "failed" ||
+    job.stage === "cancelled" ||
+    job.stage === "rollingback"
+  ) {
     const at = steps.findIndex((s) => s.key === job.failedStage);
     if (idx < at) return "done";
     return idx === at ? "failed" : "todo";
@@ -86,7 +90,19 @@ export function InstallProgress({
       ? (job.bytesTotal - job.bytesDone) / job.bytesPerSec
       : NaN;
   const canCancel =
-    (job.stage === "downloading" || job.stage === "checking") && !!onCancel;
+    (job.stage === "downloading" ||
+      job.stage === "checking" ||
+      job.stage === "installing") &&
+    !!onCancel;
+  // Phase 60: the step that takes back what a cancelled or failed install made
+  const rollback: "active" | "done" | "failed" | null =
+    job.stage === "rollingback"
+      ? "active"
+      : job.rolledBack
+        ? "done"
+        : job.rollbackError
+          ? "failed"
+          : null;
 
   return (
     <div
@@ -136,13 +152,20 @@ export function InstallProgress({
             {s.key === "installing" && state === "active" && (
               <div className="ml-5.5 text-[11px] text-text-faint">
                 Helm is creating the release&apos;s objects —{" "}
-                {formatSeconds(job.elapsedSec)} so far. It can&apos;t be
-                cancelled once it has started.
+                {formatSeconds(job.elapsedSec)} so far. You can stop it: what it
+                has created is then taken back.
               </div>
             )}
           </div>
         );
       })}
+
+      {rollback && (
+        <div className="flex items-center gap-2">
+          <Mark state={rollback} />
+          <span>Roll back what was created</span>
+        </div>
+      )}
 
       {pods && pods.length > 0 && (
         <div className="flex flex-col gap-1 border-t border-border pt-3">
@@ -183,7 +206,7 @@ export function InstallProgress({
             onClick={onCancel}
             className="rounded-lg border border-border px-3 py-1.5 text-[11.5px] text-text-muted hover:bg-surface-2"
           >
-            Cancel
+            {job.stage === "installing" ? "Stop and roll back" : "Cancel"}
           </button>
         </div>
       )}

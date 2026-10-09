@@ -20,6 +20,7 @@ import { YamlEditor } from "@/components/editor/YamlEditor";
 import { ChartIcon } from "@/components/marketplace/ChartIcon";
 import { InstallProgress } from "@/components/marketplace/InstallProgress";
 import { PermissionsCheck } from "@/components/marketplace/PermissionsCheck";
+import { RollbackNote } from "@/components/marketplace/RollbackNote";
 import { ValuesForm } from "@/components/marketplace/ValuesForm";
 import { buildSections } from "@/lib/values/schemaForm";
 import { PillTabs } from "@/components/ui/Tabs";
@@ -119,7 +120,7 @@ function InstallInner() {
   const missing = preflight?.missing ?? [];
 
   // Once started the install runs in the background; poll how far it is.
-  const { data: progress } = useSWR(
+  const { data: progress, mutate: refreshJob } = useSWR(
     jobId ? ["install-job", jobId] : null,
     () => getInstallJob(jobId as string),
     {
@@ -145,6 +146,9 @@ function InstallInner() {
     if (!jobId) return;
     try {
       await cancelInstallJob(jobId);
+      // a cancel mid-install (or a rollback of a failed one) starts more work: look again now,
+      // which also restarts the polling that had stopped on "failed"
+      await refreshJob();
     } catch (err) {
       setStartError(applyErrorMessage(err));
     }
@@ -415,7 +419,17 @@ function InstallInner() {
                         {job.error}
                       </div>
                     )}
-                    <div>
+                    <RollbackNote job={job} />
+                    <div className="flex gap-2">
+                      {job.canRollBack && (
+                        <button
+                          type="button"
+                          onClick={() => void cancel()}
+                          className="rounded-lg border border-err/50 px-3 py-1.5 text-xs text-err hover:border-err"
+                        >
+                          Roll back what was created
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={backToForm}
@@ -427,15 +441,22 @@ function InstallInner() {
                   </div>
                 )}
                 {job.stage === "cancelled" && (
-                  <div className="flex items-center gap-3 text-xs text-text-muted">
-                    Cancelled — nothing was installed.
-                    <button
-                      type="button"
-                      onClick={backToForm}
-                      className="rounded-lg border border-border px-3 py-1.5 hover:bg-surface-2"
-                    >
-                      Back to the form
-                    </button>
+                  <div className="flex flex-col gap-3 text-xs text-text-muted">
+                    <div>
+                      {job.failedStage === "installing"
+                        ? "Cancelled while installing."
+                        : "Cancelled — nothing was installed."}
+                    </div>
+                    <RollbackNote job={job} />
+                    <div>
+                      <button
+                        type="button"
+                        onClick={backToForm}
+                        className="rounded-lg border border-border px-3 py-1.5 hover:bg-surface-2"
+                      >
+                        Back to the form
+                      </button>
+                    </div>
                   </div>
                 )}
                 {job.stage === "done" && job.result && (

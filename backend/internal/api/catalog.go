@@ -456,7 +456,11 @@ func (h *Handler) CatalogStartInstallJob(w http.ResponseWriter, r *http.Request)
 		default:
 			h.auditHelm(detached, "helm-install", b.Namespace, b.Release, err, "repo", b.Repo, "chart", b.Chart, "version", b.Version)
 		}
-	})
+	}, helm.WithRollbackHook(func(err error) {
+		// Roadmap Phase 60: the release was taken back (or it couldn't be). Audited on its own,
+		// without values, like every other Helm write.
+		h.auditHelm(detached, "helm-install-rollback", b.Namespace, b.Release, err, "repo", b.Repo, "chart", b.Chart)
+	}))
 	if err != nil {
 		if errors.Is(err, helm.ErrTooManyJobs) {
 			respondError(w, http.StatusTooManyRequests, err.Error())
@@ -533,9 +537,10 @@ func installPods(ctx context.Context, cfg *rest.Config, namespace, release strin
 	return pods
 }
 
-// CatalogCancelInstallJob handles DELETE /api/v1/catalog/install-jobs/{id}:
-// stops an install that is still downloading or checking. Once Helm has started
-// creating objects it can't be stopped without leaving a partial release.
+// CatalogCancelInstallJob handles DELETE /api/v1/catalog/install-jobs/{id}: stops a running
+// install. Before Helm starts that is all; once it is creating objects (Roadmap Phase 60) Helm is
+// interrupted and the release it began is uninstalled — as the caller, like the install. On an
+// install that already failed after Helm began, the same call undoes it. The job's owner only.
 func (h *Handler) CatalogCancelInstallJob(w http.ResponseWriter, r *http.Request) {
 	if !h.installJobsAvailable(w) {
 		return
@@ -545,9 +550,17 @@ func (h *Handler) CatalogCancelInstallJob(w http.ResponseWriter, r *http.Request
 		respondError(w, http.StatusNotFound, "no such install")
 		return
 	}
-	if !job.Cancel() {
-		respondError(w, http.StatusConflict, "the install has already started creating objects and can't be cancelled")
+	if job.Cancel() {
+		respondJSON(w, map[string]bool{"cancelled": true})
 		return
 	}
-	respondJSON(w, map[string]bool{"cancelled": true})
+	_, cfg, ok := h.resolveRESTConfig(w, r)
+	if !ok {
+		return
+	}
+	if h.InstallJobs.RollbackFailed(h.Releases, cfg, job) {
+		respondJSON(w, map[string]bool{"rollingBack": true})
+		return
+	}
+	respondError(w, http.StatusConflict, "this install isn't running and has nothing to roll back")
 }

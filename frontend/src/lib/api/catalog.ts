@@ -240,7 +240,13 @@ export function missingFromError(err: unknown): MissingPermission[] {
 }
 
 export type InstallJobStage =
-  "downloading" | "checking" | "installing" | "done" | "failed" | "cancelled";
+  | "downloading"
+  | "checking"
+  | "installing"
+  | "rollingback"
+  | "done"
+  | "failed"
+  | "cancelled";
 
 export type InstallJob = {
   id: string;
@@ -259,6 +265,13 @@ export type InstallJob = {
   missing?: MissingPermission[];
   unchecked?: string[];
   result?: InstallResult;
+  // Roadmap Phase 60: what a cancel or a rollback did
+  rolledBack?: boolean;
+  rollbackError?: string;
+  namespaceCreated?: boolean;
+  leftovers?: string[];
+  // the install failed after Helm began and its release can be uninstalled
+  canRollBack?: boolean;
 };
 
 export type InstallPod = {

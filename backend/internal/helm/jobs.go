@@ -24,6 +24,7 @@ const (
 	StageDownloading = "downloading"
 	StageChecking    = "checking"
 	StageInstalling  = "installing"
+	StageRollingBack = "rollingback" // Phase 60: taking back what a cancelled or failed install created
 	StageDone        = "done"
 	StageFailed      = "failed"
 	StageCancelled   = "cancelled"
@@ -58,6 +59,24 @@ type InstallJob struct {
 	unchecked  []string
 	result     *InstallResult
 	cancel     context.CancelFunc
+
+	// Phase 60 — cancelling an install that has started, and the rollback after it.
+	userCancelled bool     // the person asked to stop while Helm was installing
+	ownsRelease   bool     // the release name was free just before Helm began: the release is this job's
+	nsCreated     bool     // the install creates the namespace (it didn't exist before)
+	rolledBack    bool     // the release was uninstalled
+	rollbackErr   error    // why it wasn't, if it wasn't
+	leftovers     []string // PersistentVolumeClaims Helm leaves on uninstall
+	onRollback    func(err error)
+}
+
+// JobOption adjusts a job as it is started.
+type JobOption func(*InstallJob)
+
+// WithRollbackHook calls fn once a rollback finishes (nil error = the release was taken
+// back) — the audit hook, like OnFinish is for the install itself.
+func WithRollbackHook(fn func(err error)) JobOption {
+	return func(j *InstallJob) { j.onRollback = fn }
 }
 
 // JobSnapshot is a point-in-time, JSON-friendly view of a job.
@@ -77,6 +96,13 @@ type JobSnapshot struct {
 	Missing     []Needed       `json:"missing,omitempty"`
 	Unchecked   []string       `json:"unchecked,omitempty"`
 	Result      *InstallResult `json:"result,omitempty"`
+	// Phase 60: what a cancel or a rollback did
+	RolledBack       bool     `json:"rolledBack,omitempty"`
+	RollbackError    string   `json:"rollbackError,omitempty"`
+	NamespaceCreated bool     `json:"namespaceCreated,omitempty"`
+	Leftovers        []string `json:"leftovers,omitempty"`
+	// CanRollBack: the install failed after Helm began and its release can be uninstalled
+	CanRollBack bool `json:"canRollBack,omitempty"`
 }
 
 // Finished reports whether the job has ended, one way or another.
@@ -102,6 +128,11 @@ func (j *InstallJob) Snapshot() JobSnapshot {
 		ID: j.ID, Stage: j.stage, FailedStage: j.failedAt, Chart: j.Request.Chart, Release: j.Request.Release, Namespace: j.Request.Namespace,
 		BytesDone: j.done, BytesTotal: j.total, ElapsedSec: end.Sub(j.StartedAt).Seconds(),
 		Missing: j.missing, Unchecked: j.unchecked, Result: j.result,
+		RolledBack: j.rolledBack, NamespaceCreated: j.nsCreated, Leftovers: j.leftovers,
+		CanRollBack: j.stage == StageFailed && j.failedAt == StageInstalling && j.ownsRelease && !j.rolledBack,
+	}
+	if j.rollbackErr != nil {
+		s.RollbackError = j.rollbackErr.Error()
 	}
 	if !j.dlStarted.IsZero() && j.done > 0 {
 		if secs := end.Sub(j.dlStarted).Seconds(); secs > 0 {
@@ -132,13 +163,18 @@ func (j *InstallJob) progress(done, total int64) {
 	j.done, j.total = done, total
 }
 
-// Cancel stops a job that hasn't reached the install step; once Helm is creating
-// objects, stopping it halfway would only leave a partial release behind, so the
-// call is refused and false is returned.
+// Cancel stops a running job. Before the install step nothing exists yet, so that is all
+// there is to it. Once Helm is creating objects (Phase 60) the job is marked as cancelled by
+// the person, Helm is interrupted, and the goroutine that runs the job then rolls the release
+// back. It returns false when the job isn't running, or is already being rolled back.
 func (j *InstallJob) Cancel() bool {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	if j.stage != StageDownloading && j.stage != StageChecking {
+	switch j.stage {
+	case StageDownloading, StageChecking:
+	case StageInstalling:
+		j.userCancelled = true
+	default:
 		return false
 	}
 	if j.cancel != nil {
@@ -188,7 +224,7 @@ func (js *Jobs) sweepLocked() {
 type OnFinish func(res *InstallResult, err error)
 
 // StartInstall begins an install in the background as the caller's own config.
-func (js *Jobs) StartInstall(rl *Releases, cfg *rest.Config, owner string, req InstallRequest, onFinish OnFinish) (*InstallJob, error) {
+func (js *Jobs) StartInstall(rl *Releases, cfg *rest.Config, owner string, req InstallRequest, onFinish OnFinish, opts ...JobOption) (*InstallJob, error) {
 	js.mu.Lock()
 	js.sweepLocked()
 	running, mine := 0, 0
@@ -214,6 +250,9 @@ func (js *Jobs) StartInstall(rl *Releases, cfg *rest.Config, owner string, req I
 		ID: newJobID(), Owner: owner, Request: req, StartedAt: time.Now(),
 		stage: StageDownloading, total: -1, cancel: cancel,
 	}
+	for _, o := range opts {
+		o(j)
+	}
 	js.jobs[j.ID] = j
 	js.mu.Unlock()
 
@@ -221,12 +260,27 @@ func (js *Jobs) StartInstall(rl *Releases, cfg *rest.Config, owner string, req I
 		defer cancel()
 		res, err := js.run(ctx, rl, cfg, j)
 		j.mu.Lock()
+		cancelledInInstall := j.userCancelled
+		j.mu.Unlock()
+		if cancelledInInstall {
+			// Asked to stop while Helm was installing: take back what it made, and call the
+			// outcome a cancel even if Helm happened to finish at that very moment.
+			j.mu.Lock()
+			j.failedAt = StageInstalling
+			j.mu.Unlock()
+			js.rollback(rl, cfg, j, true)
+			res, err = nil, context.Canceled
+		}
+		j.mu.Lock()
 		j.finishedAt = time.Now()
 		switch {
 		case err == nil:
 			j.stage, j.result = StageDone, res
 		case errors.Is(err, context.Canceled):
-			j.failedAt, j.stage, j.err = j.stage, StageCancelled, errors.New("cancelled")
+			if j.failedAt == "" {
+				j.failedAt = j.stage
+			}
+			j.stage, j.err = StageCancelled, errors.New("cancelled")
 		default:
 			j.failedAt, j.stage, j.err = j.stage, StageFailed, err
 		}
@@ -267,5 +321,8 @@ func (js *Jobs) run(ctx context.Context, rl *Releases, cfg *rest.Config, j *Inst
 	j.mu.Unlock()
 	// 3. install (Wait, if asked for, keeps this step open until pods are ready)
 	j.setStage(StageInstalling)
+	if err := prepareInstall(cfg, j); err != nil {
+		return nil, err
+	}
 	return rl.Install(ctx, cfg, req)
 }
