@@ -79,7 +79,7 @@ jobs:
         run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
 
       - name: Install kubectl
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@v5
 
       - name: Create k3d cluster
         run: k3d cluster create vinaire-ci --agents 0 --wait --timeout 120s
