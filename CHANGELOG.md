@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Node metrics on the node's Overview, and they work with the community Prometheus chart (Roadmap Phase 61).** The charts
+  (CPU, memory, network, disk) are now a card on the node's Overview instead of a separate tab. They previously looked for the
+  `node` label only, so a Prometheus that names the node in `instance` / `kubernetes_io_hostname` (the community `prometheus`
+  chart) always showed "No cpu data"; every common labelling is tried now. When there is still no data, the message says
+  whether Prometheus isn't scraping the kubelet at all or has data it can't tie to the node.
 - **Cancel with rollback for Marketplace installs (Roadmap Phase 60).** An install can now be stopped at any stage. Once Helm
   is creating objects, "Stop and roll back" interrupts it and uninstalls the release the install itself made (as the caller,
   audited `helm-install-rollback`); the same button undoes an install that failed halfway. A release that existed before is never
