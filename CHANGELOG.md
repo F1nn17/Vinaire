@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Guided Marketplace setup (Roadmap Phase 59, first stage).** For Keycloak (both charts), Gitea and Nextcloud the install page now
+  asks the questions that matter: *database* — the bundled one, or **your own PostgreSQL** (host, port, database, user and the name of
+  an existing Secret holding the password; PostgreSQL Services found in the cluster are offered) — and *how to reach it* (Ingress with
+  class and TLS Secret, NodePort, LoadBalancer). The answers become values in "Your values" and can be taken back by choosing
+  another option; every generated set of values was checked to render with `helm template`. Also: "Start from the documented defaults"
+  (the chart's own commented values.yaml as a template) and "Load a values file…", and a short guide on what each choice means.
 - **StatefulSet, DaemonSet and Job pages show their pods and usage history (Roadmap Phase 66).** Their Overview now has the table of
   the object's pods and the CPU / memory / network / disk charts, the way a Deployment's does — one shared component for all four.
   New `GET /api/v1/{statefulsets,daemonsets,jobs}/{namespace}/{name}/metrics`; the detail responses carry `pods`, listed as the
