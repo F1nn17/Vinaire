@@ -523,3 +523,10 @@ func TestRolesTellOperatorsAndClustersFromSingleInstances(t *testing.T) {
 		t.Error("roleMatches")
 	}
 }
+
+func TestNotesLoseTheirColourCodes(t *testing.T) {
+	esc := string(rune(27))
+	if got := ansiRe.ReplaceAllString(esc+"[0;34mImage"+esc+"[0m  "+esc+"[0;31mDisabled"+esc+"[0m", ""); got != "Image  Disabled" {
+		t.Errorf("got %q", got)
+	}
+}

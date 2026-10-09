@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import {
   cancelInstallJob,
@@ -124,11 +124,17 @@ function InstallInner() {
   const missing = preflight?.missing ?? [];
 
   // Once started the install runs in the background; poll how far it is.
+  // After a successful finish the pods go on changing (a one-off init Job ends, the real ones
+  // start), so the rows keep refreshing for a minute instead of freezing on the last snapshot.
+  const afterDone = useRef(0);
   const { data: progress, mutate: refreshJob } = useSWR(
     jobId ? ["install-job", jobId] : null,
     () => getInstallJob(jobId as string),
     {
-      refreshInterval: (d) => (d && ended.includes(d.job.stage) ? 0 : 700),
+      refreshInterval: (d) => {
+        if (!d || !ended.includes(d.job.stage)) return 700;
+        return d.job.stage === "done" && afterDone.current++ < 30 ? 2000 : 0;
+      },
       revalidateOnFocus: false,
     },
   );

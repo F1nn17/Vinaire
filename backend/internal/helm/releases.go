@@ -240,10 +240,14 @@ type InstallResult struct {
 	Notes   string  `json:"notes,omitempty"`
 }
 
+// ansiRe matches terminal colour codes: some charts print their notes with them, and a browser shows
+// them as "[0;34m" noise.
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
+
 func result(r *release.Release) *InstallResult {
 	res := &InstallResult{Release: toRelease(r)}
 	if r.Info != nil {
-		res.Notes = truncate(r.Info.Notes, maxNotesBytes)
+		res.Notes = truncate(ansiRe.ReplaceAllString(r.Info.Notes, ""), maxNotesBytes)
 	}
 	return res
 }
