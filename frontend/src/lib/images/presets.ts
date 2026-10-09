@@ -481,7 +481,9 @@ export const presets: Preset[] = [
       [T("User"), v.user],
       [T("Password"), `${T("Secret")} ${secret}, ${T("key")} password`],
     ],
-    note: T("Add a data source (Prometheus, Loki) after the first sign-in."),
+    note: T(
+      "The first start takes a few minutes (it prepares its database). Add a data source (Prometheus, Loki) after the first sign-in.",
+    ),
   },
   {
     id: "adminer",
