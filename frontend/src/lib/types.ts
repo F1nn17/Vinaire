@@ -244,6 +244,7 @@ export type StatefulSetDetail = {
   image: string;
   age: string;
   labels: Record<string, string>;
+  pods: DeploymentPodRow[];
   events: ClusterEvent[];
   yaml: string;
 };
@@ -261,6 +262,7 @@ export type DaemonSetDetail = {
   image: string;
   age: string;
   labels: Record<string, string>;
+  pods: DeploymentPodRow[];
   events: ClusterEvent[];
   yaml: string;
 };
@@ -280,6 +282,7 @@ export type JobDetail = {
   image: string;
   age: string;
   labels: Record<string, string>;
+  pods: DeploymentPodRow[];
   events: ClusterEvent[];
   yaml: string;
 };
@@ -664,7 +667,8 @@ export type NamespaceDetail = {
 export type MetricType = "cpu" | "memory" | "network" | "filesystem";
 export type MetricRange = "1h" | "6h" | "24h" | "7d";
 export type MetricResolution = "low" | "medium" | "high";
-export type MetricResourceType = "pods" | "deployments" | "nodes";
+export type MetricResourceType =
+  "pods" | "deployments" | "statefulsets" | "daemonsets" | "jobs" | "nodes";
 
 export type MetricsSeries = {
   name: string;

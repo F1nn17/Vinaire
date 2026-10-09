@@ -17,20 +17,21 @@ import (
 // CronJob is a distinct resource with a different status shape and isn't
 // covered here (see ROADMAP.md's Phase 12 risk note).
 type JobDetailResponse struct {
-	Name           string            `json:"name"`
-	Namespace      string            `json:"namespace"`
-	Status         string            `json:"status"`
-	StatusColor    string            `json:"statusColor"`
-	Completions    string            `json:"completions"`
-	Active         int32             `json:"active"`
-	Failed         int32             `json:"failed"`
-	StartTime      string            `json:"startTime"`
-	CompletionTime string            `json:"completionTime"`
-	Image          string            `json:"image"`
-	Age            string            `json:"age"`
-	Labels         map[string]string `json:"labels"`
-	Events         []PodEventRow     `json:"events"`
-	YAML           string            `json:"yaml"`
+	Name           string             `json:"name"`
+	Namespace      string             `json:"namespace"`
+	Status         string             `json:"status"`
+	StatusColor    string             `json:"statusColor"`
+	Completions    string             `json:"completions"`
+	Active         int32              `json:"active"`
+	Failed         int32              `json:"failed"`
+	StartTime      string             `json:"startTime"`
+	CompletionTime string             `json:"completionTime"`
+	Image          string             `json:"image"`
+	Age            string             `json:"age"`
+	Labels         map[string]string  `json:"labels"`
+	Pods           []DeploymentPodRow `json:"pods"`
+	Events         []PodEventRow      `json:"events"`
+	YAML           string             `json:"yaml"`
 }
 
 // JobDetail handles GET /api/v1/jobs/{namespace}/{name}.
@@ -56,10 +57,10 @@ func (h *Handler) JobDetail(w http.ResponseWriter, r *http.Request) {
 		events = nil
 	}
 
-	respondJSON(w, buildJobDetail(*job, events))
+	respondJSON(w, buildJobDetail(*job, events, listSelectedPods(r.Context(), clientset, namespace, job.Spec.Selector)))
 }
 
-func buildJobDetail(j batchv1.Job, events []corev1.Event) JobDetailResponse {
+func buildJobDetail(j batchv1.Job, events []corev1.Event, pods *corev1.PodList) JobDetailResponse {
 	completions := jobCompletions(j)
 	status, color := jobStatus(j, completions)
 
@@ -104,6 +105,7 @@ func buildJobDetail(j batchv1.Job, events []corev1.Event) JobDetailResponse {
 		Image:          image,
 		Age:            formatAge(j.CreationTimestamp.Time),
 		Labels:         labels,
+		Pods:           podRowsFor(pods),
 		Events:         eventRows,
 		YAML:           yaml,
 	}

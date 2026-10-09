@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { useJob } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { WorkloadOverview } from "@/components/workloads/WorkloadOverview";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
@@ -81,32 +82,40 @@ function JobDetailPage() {
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
-        <div className="rounded-[10px] border border-border bg-surface p-5">
-          <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
-          <div className="flex flex-col gap-2.5">
-            <Row label="Namespace" value={job.namespace} />
-            <Row label="Completions" value={job.completions} />
-            <Row label="Active" value={String(job.active)} />
-            <Row label="Failed" value={String(job.failed)} />
-            <Row label="Start time" value={job.startTime || "—"} />
-            <Row label="Completion time" value={job.completionTime || "—"} />
-            <Row label="Image" value={job.image} />
-            <Row label="Age" value={job.age} />
-          </div>
-          <div className="mt-4 border-t border-border pt-4">
-            <div className="mb-2 text-xs text-text-muted">Labels</div>
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(job.labels).map(([k, v]) => (
-                <span
-                  key={k}
-                  className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
-                >
-                  {k}={v}
-                </span>
-              ))}
+        <WorkloadOverview
+          resourceType="jobs"
+          namespace={namespace}
+          name={name}
+          pods={job.pods}
+          emptyLabel="No pods — the Job has not started one, or they were cleaned up."
+        >
+          <div className="rounded-[10px] border border-border bg-surface p-5">
+            <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
+            <div className="flex flex-col gap-2.5">
+              <Row label="Namespace" value={job.namespace} />
+              <Row label="Completions" value={job.completions} />
+              <Row label="Active" value={String(job.active)} />
+              <Row label="Failed" value={String(job.failed)} />
+              <Row label="Start time" value={job.startTime || "—"} />
+              <Row label="Completion time" value={job.completionTime || "—"} />
+              <Row label="Image" value={job.image} />
+              <Row label="Age" value={job.age} />
+            </div>
+            <div className="mt-4 border-t border-border pt-4">
+              <div className="mb-2 text-xs text-text-muted">Labels</div>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(job.labels).map(([k, v]) => (
+                  <span
+                    key={k}
+                    className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
+                  >
+                    {k}={v}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        </WorkloadOverview>
       )}
 
       {tab === "events" && (

@@ -163,6 +163,9 @@ func newRouter(d routerDeps) *chi.Mux {
 		// Roadmap Phase 32: per-resource metric series for the Metrics tab.
 		protected.Get("/pods/{namespace}/{name}/metrics", workloadsHandler.PodMetrics)
 		protected.Get("/deployments/{namespace}/{name}/metrics", workloadsHandler.DeploymentMetrics)
+		protected.Get("/statefulsets/{namespace}/{name}/metrics", workloadsHandler.StatefulSetMetrics)
+		protected.Get("/daemonsets/{namespace}/{name}/metrics", workloadsHandler.DaemonSetMetrics)
+		protected.Get("/jobs/{namespace}/{name}/metrics", workloadsHandler.JobMetrics)
 		protected.Get("/nodes/{name}/metrics", workloadsHandler.NodeMetrics)
 		protected.Get("/alerts", workloadsHandler.Alerts)
 		protected.Get("/dashboard/summary", workloadsHandler.DashboardSummary)

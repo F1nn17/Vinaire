@@ -147,6 +147,14 @@ func planFor(kind, namespace, name, metricType string) (metricPlan, bool) {
 		// earlier rollouts in the history.
 		matcher := "pod=~" + promString("^"+regexp.QuoteMeta(name)+"-[a-z0-9]{6,10}-[a-z0-9]{5}$")
 		sels = func(cf bool) []string { return []string{podSelector(namespace, matcher, cf)} }
+	case "statefulsets":
+		// the pods of a StatefulSet are named <name>-<ordinal>
+		matcher := "pod=~" + promString("^"+regexp.QuoteMeta(name)+"-[0-9]+$")
+		sels = func(cf bool) []string { return []string{podSelector(namespace, matcher, cf)} }
+	case "daemonsets", "jobs":
+		// the pods of a DaemonSet or a Job are named <name>-<5 random characters>
+		matcher := "pod=~" + promString("^"+regexp.QuoteMeta(name)+"-[a-z0-9]{5}$")
+		sels = func(cf bool) []string { return []string{podSelector(namespace, matcher, cf)} }
 	case "nodes":
 		nodeLevel = true
 		sels = func(bool) []string { return nodeSelectors(name) }
@@ -380,4 +388,19 @@ func (h *Handler) DeploymentMetrics(w http.ResponseWriter, r *http.Request) {
 // cluster-scoped, so there's no namespace segment.
 func (h *Handler) NodeMetrics(w http.ResponseWriter, r *http.Request) {
 	h.serveResourceMetrics(w, r, "nodes", "", chi.URLParam(r, "name"))
+}
+
+// StatefulSetMetrics handles GET /api/v1/statefulsets/{namespace}/{name}/metrics (Roadmap Phase 66).
+func (h *Handler) StatefulSetMetrics(w http.ResponseWriter, r *http.Request) {
+	h.serveResourceMetrics(w, r, "statefulsets", chi.URLParam(r, "namespace"), chi.URLParam(r, "name"))
+}
+
+// DaemonSetMetrics handles GET /api/v1/daemonsets/{namespace}/{name}/metrics.
+func (h *Handler) DaemonSetMetrics(w http.ResponseWriter, r *http.Request) {
+	h.serveResourceMetrics(w, r, "daemonsets", chi.URLParam(r, "namespace"), chi.URLParam(r, "name"))
+}
+
+// JobMetrics handles GET /api/v1/jobs/{namespace}/{name}/metrics.
+func (h *Handler) JobMetrics(w http.ResponseWriter, r *http.Request) {
+	h.serveResourceMetrics(w, r, "jobs", chi.URLParam(r, "namespace"), chi.URLParam(r, "name"))
 }

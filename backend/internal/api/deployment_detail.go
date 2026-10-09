@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 )
 
 // DeploymentPodRow matches the frontend's DeploymentPodRow type.
@@ -22,6 +24,43 @@ type DeploymentPodRow struct {
 	Status      string `json:"status"`
 	StatusColor string `json:"statusColor"`
 	Age         string `json:"age"`
+}
+
+// podRowsFor turns a pod list into the rows the workload detail pages show (Deployments, and
+// since Roadmap Phase 66 StatefulSets, DaemonSets and Jobs).
+func podRowsFor(pods *corev1.PodList) []DeploymentPodRow {
+	rows := make([]DeploymentPodRow, 0)
+	if pods == nil {
+		return rows
+	}
+	for _, p := range pods.Items {
+		ready, total := podReadyCount(p)
+		pStatus, pColor := podStatus(p)
+		rows = append(rows, DeploymentPodRow{
+			Name:        p.Name,
+			Node:        p.Spec.NodeName,
+			Ready:       fmt.Sprintf("%d/%d", ready, total),
+			Status:      pStatus,
+			StatusColor: string(pColor),
+			Age:         formatAge(p.CreationTimestamp.Time),
+		})
+	}
+	return rows
+}
+
+// listSelectedPods lists the pods a workload selector matches, as the caller. A caller who may
+// not list pods just sees none: the detail page still works, as it does for a Deployment.
+func listSelectedPods(ctx context.Context, cs kubernetes.Interface, namespace string, sel *metav1.LabelSelector) *corev1.PodList {
+	selector, err := metav1.LabelSelectorAsSelector(sel)
+	if err != nil || selector.Empty() {
+		return nil // an empty selector would match every pod in the namespace
+	}
+	list, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector.String()})
+	if err != nil {
+		slog.Warn("list pods for workload failed", "namespace", namespace, "error", err)
+		return nil
+	}
+	return list
 }
 
 // DeploymentRevisionRow matches the frontend's Revision type.
@@ -116,21 +155,7 @@ func buildDeploymentDetail(d appsv1.Deployment, pods *corev1.PodList, replicaSet
 		managedBy = "—"
 	}
 
-	podRows := make([]DeploymentPodRow, 0)
-	if pods != nil {
-		for _, p := range pods.Items {
-			ready, total := podReadyCount(p)
-			pStatus, pColor := podStatus(p)
-			podRows = append(podRows, DeploymentPodRow{
-				Name:        p.Name,
-				Node:        p.Spec.NodeName,
-				Ready:       fmt.Sprintf("%d/%d", ready, total),
-				Status:      pStatus,
-				StatusColor: string(pColor),
-				Age:         formatAge(p.CreationTimestamp.Time),
-			})
-		}
-	}
+	podRows := podRowsFor(pods)
 
 	currentRevision := d.Annotations["deployment.kubernetes.io/revision"]
 	revisionRows := make([]DeploymentRevisionRow, 0)

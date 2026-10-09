@@ -6,12 +6,10 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useDeployment } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
-import type { DeploymentPodRow } from "@/lib/types";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { WorkloadOverview } from "@/components/workloads/WorkloadOverview";
 import { UnderlineTabs } from "@/components/ui/Tabs";
-import { MetricsPanel } from "@/components/metrics/MetricsPanel";
 import { YamlPanel } from "@/components/editor/YamlPanel";
-import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { FillHeight } from "@/components/ui/FillHeight";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Toast, type ToastState } from "@/components/ui/Toast";
@@ -45,43 +43,6 @@ const tabs: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "revisions", label: "Revisions" },
   { key: "yaml", label: "YAML" },
-];
-
-const podColumns: DataTableColumn<DeploymentPodRow>[] = [
-  {
-    header: "Name",
-    width: "2.4fr",
-    render: (r) => <span className="font-mono text-[12.5px]">{r.name}</span>,
-  },
-  {
-    header: "Node",
-    width: "1fr",
-    render: (r) => (
-      <span className="font-mono text-xs text-text-muted">{r.node}</span>
-    ),
-  },
-  {
-    header: "Ready",
-    width: ".8fr",
-    render: (r) => <span className="font-mono text-xs">{r.ready}</span>,
-  },
-  {
-    header: "Status",
-    width: "1.1fr",
-    render: (r) => (
-      <span className="flex items-center gap-1.5 text-xs">
-        <StatusDot color={r.statusColor} />
-        {r.status}
-      </span>
-    ),
-  },
-  {
-    header: "Age",
-    width: ".7fr",
-    render: (r) => (
-      <span className="font-mono text-xs text-text-muted">{r.age}</span>
-    ),
-  },
 ];
 
 // A static export can't pre-render a page per deployment name (unknowable
@@ -282,39 +243,24 @@ function DeploymentDetailPage() {
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
-        <div className="flex flex-col gap-5">
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-            <div className="rounded-[10px] border border-border bg-surface p-5">
-              <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
-              <div className="flex flex-col gap-2.5">
-                <Row label="Namespace" value={deployment.namespace} />
-                <Row label="Replicas" value={deployment.replicas} />
-                <Row label="Strategy" value={deployment.strategy} />
-                <Row label="Image" value={deployment.image} />
-                <Row label="Managed by" value={deployment.managedBy} />
-                <Row label="Age" value={deployment.age} />
-              </div>
-            </div>
-            <div className="min-w-0">
-              <div className="mb-2.5 text-[13px] font-semibold">
-                Pods ({deployment.pods.length})
-              </div>
-              <DataTable
-                columns={podColumns}
-                rows={deployment.pods}
-                rowKey={(r) => r.name}
-                rowHref={(r) =>
-                  `/workloads/pods/detail?namespace=${encodeURIComponent(deploymentNamespace)}&name=${encodeURIComponent(r.name)}`
-                }
-              />
+        <WorkloadOverview
+          resourceType="deployments"
+          namespace={deploymentNamespace}
+          name={deploymentName}
+          pods={deployment.pods}
+        >
+          <div className="rounded-[10px] border border-border bg-surface p-5">
+            <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
+            <div className="flex flex-col gap-2.5">
+              <Row label="Namespace" value={deployment.namespace} />
+              <Row label="Replicas" value={deployment.replicas} />
+              <Row label="Strategy" value={deployment.strategy} />
+              <Row label="Image" value={deployment.image} />
+              <Row label="Managed by" value={deployment.managedBy} />
+              <Row label="Age" value={deployment.age} />
             </div>
           </div>
-          <MetricsPanel
-            resourceType="deployments"
-            namespace={deploymentNamespace}
-            name={deploymentName}
-          />
-        </div>
+        </WorkloadOverview>
       )}
 
       {tab === "revisions" && (

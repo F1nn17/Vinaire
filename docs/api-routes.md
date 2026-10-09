@@ -59,6 +59,7 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/crds/{crdName}/instances/{name}` | yes | — |
 | GET | `/api/v1/daemonsets` | yes | — |
 | GET | `/api/v1/daemonsets/{namespace}/{name}` | yes | — |
+| GET | `/api/v1/daemonsets/{namespace}/{name}/metrics` | yes | — |
 | GET | `/api/v1/dashboard/summary` | yes | — |
 | GET | `/api/v1/deployments` | yes | — |
 | DELETE | `/api/v1/deployments/{namespace}/{name}` | yes | yes |
@@ -83,6 +84,7 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/ingresses` | yes | — |
 | GET | `/api/v1/jobs` | yes | — |
 | GET | `/api/v1/jobs/{namespace}/{name}` | yes | — |
+| GET | `/api/v1/jobs/{namespace}/{name}/metrics` | yes | — |
 | GET | `/api/v1/logging/plan` | yes | — |
 | GET | `/api/v1/logging/status` | yes | — |
 | GET | `/api/v1/metrics/plan` | yes | — |
@@ -140,6 +142,7 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/serviceaccounts` | yes | — |
 | GET | `/api/v1/statefulsets` | yes | — |
 | GET | `/api/v1/statefulsets/{namespace}/{name}` | yes | — |
+| GET | `/api/v1/statefulsets/{namespace}/{name}/metrics` | yes | — |
 | POST | `/api/v1/statefulsets/{namespace}/{name}/scale` | yes | yes |
 | GET | `/api/v1/storageclasses` | yes | — |
 | GET | `/api/v1/stream/workloads` | yes | — |

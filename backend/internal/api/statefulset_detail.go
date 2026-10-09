@@ -21,14 +21,15 @@ type StatefulSetDetailResponse struct {
 	StatusColor string `json:"statusColor"`
 	Ready       string `json:"ready"`
 	// DesiredReplicas backs Roadmap Phase 33's Scale control.
-	DesiredReplicas int32             `json:"desiredReplicas"`
-	ServiceName     string            `json:"serviceName"`
-	UpdateStrategy  string            `json:"updateStrategy"`
-	Image           string            `json:"image"`
-	Age             string            `json:"age"`
-	Labels          map[string]string `json:"labels"`
-	Events          []PodEventRow     `json:"events"`
-	YAML            string            `json:"yaml"`
+	DesiredReplicas int32              `json:"desiredReplicas"`
+	ServiceName     string             `json:"serviceName"`
+	UpdateStrategy  string             `json:"updateStrategy"`
+	Image           string             `json:"image"`
+	Age             string             `json:"age"`
+	Labels          map[string]string  `json:"labels"`
+	Pods            []DeploymentPodRow `json:"pods"`
+	Events          []PodEventRow      `json:"events"`
+	YAML            string             `json:"yaml"`
 }
 
 // StatefulSetDetail handles GET /api/v1/statefulsets/{namespace}/{name}.
@@ -54,10 +55,10 @@ func (h *Handler) StatefulSetDetail(w http.ResponseWriter, r *http.Request) {
 		events = nil
 	}
 
-	respondJSON(w, buildStatefulSetDetail(*sts, events))
+	respondJSON(w, buildStatefulSetDetail(*sts, events, listSelectedPods(r.Context(), clientset, namespace, sts.Spec.Selector)))
 }
 
-func buildStatefulSetDetail(s appsv1.StatefulSet, events []corev1.Event) StatefulSetDetailResponse {
+func buildStatefulSetDetail(s appsv1.StatefulSet, events []corev1.Event, pods *corev1.PodList) StatefulSetDetailResponse {
 	desired := int32(1)
 	if s.Spec.Replicas != nil {
 		desired = *s.Spec.Replicas
@@ -95,6 +96,7 @@ func buildStatefulSetDetail(s appsv1.StatefulSet, events []corev1.Event) Statefu
 		Image:           image,
 		Age:             formatAge(s.CreationTimestamp.Time),
 		Labels:          labels,
+		Pods:            podRowsFor(pods),
 		Events:          eventRows,
 		YAML:            yaml,
 	}

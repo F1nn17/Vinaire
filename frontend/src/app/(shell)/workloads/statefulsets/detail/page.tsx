@@ -7,6 +7,7 @@ import { Suspense, useState } from "react";
 import { useStatefulSet } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { WorkloadOverview } from "@/components/workloads/WorkloadOverview";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
@@ -130,30 +131,38 @@ function StatefulSetDetailPage() {
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
-        <div className="rounded-[10px] border border-border bg-surface p-5">
-          <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
-          <div className="flex flex-col gap-2.5">
-            <Row label="Namespace" value={sts.namespace} />
-            <Row label="Ready" value={sts.ready} />
-            <Row label="Service name" value={sts.serviceName} />
-            <Row label="Update strategy" value={sts.updateStrategy} />
-            <Row label="Image" value={sts.image} />
-            <Row label="Age" value={sts.age} />
-          </div>
-          <div className="mt-4 border-t border-border pt-4">
-            <div className="mb-2 text-xs text-text-muted">Labels</div>
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(sts.labels).map(([k, v]) => (
-                <span
-                  key={k}
-                  className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
-                >
-                  {k}={v}
-                </span>
-              ))}
+        <WorkloadOverview
+          resourceType="statefulsets"
+          namespace={namespace}
+          name={name}
+          pods={sts.pods}
+          emptyLabel="No pods yet."
+        >
+          <div className="rounded-[10px] border border-border bg-surface p-5">
+            <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
+            <div className="flex flex-col gap-2.5">
+              <Row label="Namespace" value={sts.namespace} />
+              <Row label="Ready" value={sts.ready} />
+              <Row label="Service name" value={sts.serviceName} />
+              <Row label="Update strategy" value={sts.updateStrategy} />
+              <Row label="Image" value={sts.image} />
+              <Row label="Age" value={sts.age} />
+            </div>
+            <div className="mt-4 border-t border-border pt-4">
+              <div className="mb-2 text-xs text-text-muted">Labels</div>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(sts.labels).map(([k, v]) => (
+                  <span
+                    key={k}
+                    className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
+                  >
+                    {k}={v}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        </WorkloadOverview>
       )}
 
       {tab === "events" && (

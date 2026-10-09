@@ -65,3 +65,27 @@ func TestExplainNoDataSaysWhatIsMissing(t *testing.T) {
 		t.Errorf("a failed probe falls back to the general message: %q", got)
 	}
 }
+
+// Roadmap Phase 66: the pods of a StatefulSet, a DaemonSet and a Job are told apart by name.
+func TestWorkloadMetricsMatchTheirOwnPodNames(t *testing.T) {
+	cases := map[string]string{
+		"statefulsets": `pod=~"^db-[0-9]+$"`,
+		"daemonsets":   `pod=~"^db-[a-z0-9]{5}$"`,
+		"jobs":         `pod=~"^db-[a-z0-9]{5}$"`,
+	}
+	for kind, want := range cases {
+		plan, ok := planFor(kind, "app", "db", "cpu")
+		if !ok {
+			t.Fatalf("%s: no plan", kind)
+		}
+		q := plan.queries[0].promql
+		if !strings.Contains(q, want) || !strings.Contains(q, `namespace="app"`) {
+			t.Errorf("%s: %q lacks %s", kind, q, want)
+		}
+	}
+	// another workload whose name merely starts with this one's must not match
+	plan, _ := planFor("statefulsets", "app", "db", "cpu")
+	if strings.Contains(plan.queries[0].promql, `db-.*`) {
+		t.Errorf("too loose: %s", plan.queries[0].promql)
+	}
+}

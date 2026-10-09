@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { useDaemonSet } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { WorkloadOverview } from "@/components/workloads/WorkloadOverview";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
@@ -81,31 +82,39 @@ function DaemonSetDetailPage() {
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
 
       {tab === "overview" && (
-        <div className="rounded-[10px] border border-border bg-surface p-5">
-          <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
-          <div className="flex flex-col gap-2.5">
-            <Row label="Namespace" value={ds.namespace} />
-            <Row label="Ready" value={ds.ready} />
-            <Row label="Desired" value={String(ds.desired)} />
-            <Row label="Current" value={String(ds.current)} />
-            <Row label="Update strategy" value={ds.updateStrategy} />
-            <Row label="Image" value={ds.image} />
-            <Row label="Age" value={ds.age} />
-          </div>
-          <div className="mt-4 border-t border-border pt-4">
-            <div className="mb-2 text-xs text-text-muted">Labels</div>
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(ds.labels).map(([k, v]) => (
-                <span
-                  key={k}
-                  className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
-                >
-                  {k}={v}
-                </span>
-              ))}
+        <WorkloadOverview
+          resourceType="daemonsets"
+          namespace={namespace}
+          name={name}
+          pods={ds.pods}
+          emptyLabel="No pods yet — no node matches this DaemonSet."
+        >
+          <div className="rounded-[10px] border border-border bg-surface p-5">
+            <div className="mb-3.5 text-[13px] font-semibold">Metadata</div>
+            <div className="flex flex-col gap-2.5">
+              <Row label="Namespace" value={ds.namespace} />
+              <Row label="Ready" value={ds.ready} />
+              <Row label="Desired" value={String(ds.desired)} />
+              <Row label="Current" value={String(ds.current)} />
+              <Row label="Update strategy" value={ds.updateStrategy} />
+              <Row label="Image" value={ds.image} />
+              <Row label="Age" value={ds.age} />
+            </div>
+            <div className="mt-4 border-t border-border pt-4">
+              <div className="mb-2 text-xs text-text-muted">Labels</div>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(ds.labels).map(([k, v]) => (
+                  <span
+                    key={k}
+                    className="rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-[11px]"
+                  >
+                    {k}={v}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        </WorkloadOverview>
       )}
 
       {tab === "events" && (

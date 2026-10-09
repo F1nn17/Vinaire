@@ -15,19 +15,20 @@ import (
 // DaemonSetDetailResponse matches the frontend's DaemonSetDetail type
 // (frontend/src/lib/types.ts).
 type DaemonSetDetailResponse struct {
-	Name           string            `json:"name"`
-	Namespace      string            `json:"namespace"`
-	Status         string            `json:"status"`
-	StatusColor    string            `json:"statusColor"`
-	Ready          string            `json:"ready"`
-	Desired        int32             `json:"desired"`
-	Current        int32             `json:"current"`
-	UpdateStrategy string            `json:"updateStrategy"`
-	Image          string            `json:"image"`
-	Age            string            `json:"age"`
-	Labels         map[string]string `json:"labels"`
-	Events         []PodEventRow     `json:"events"`
-	YAML           string            `json:"yaml"`
+	Name           string             `json:"name"`
+	Namespace      string             `json:"namespace"`
+	Status         string             `json:"status"`
+	StatusColor    string             `json:"statusColor"`
+	Ready          string             `json:"ready"`
+	Desired        int32              `json:"desired"`
+	Current        int32              `json:"current"`
+	UpdateStrategy string             `json:"updateStrategy"`
+	Image          string             `json:"image"`
+	Age            string             `json:"age"`
+	Labels         map[string]string  `json:"labels"`
+	Pods           []DeploymentPodRow `json:"pods"`
+	Events         []PodEventRow      `json:"events"`
+	YAML           string             `json:"yaml"`
 }
 
 // DaemonSetDetail handles GET /api/v1/daemonsets/{namespace}/{name}.
@@ -53,10 +54,10 @@ func (h *Handler) DaemonSetDetail(w http.ResponseWriter, r *http.Request) {
 		events = nil
 	}
 
-	respondJSON(w, buildDaemonSetDetail(*ds, events))
+	respondJSON(w, buildDaemonSetDetail(*ds, events, listSelectedPods(r.Context(), clientset, namespace, ds.Spec.Selector)))
 }
 
-func buildDaemonSetDetail(ds appsv1.DaemonSet, events []corev1.Event) DaemonSetDetailResponse {
+func buildDaemonSetDetail(ds appsv1.DaemonSet, events []corev1.Event, pods *corev1.PodList) DaemonSetDetailResponse {
 	status, color := readyStatus(ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)
 
 	image := ""
@@ -90,6 +91,7 @@ func buildDaemonSetDetail(ds appsv1.DaemonSet, events []corev1.Event) DaemonSetD
 		Image:          image,
 		Age:            formatAge(ds.CreationTimestamp.Time),
 		Labels:         labels,
+		Pods:           podRowsFor(pods),
 		Events:         eventRows,
 		YAML:           yaml,
 	}
