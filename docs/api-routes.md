@@ -30,6 +30,7 @@ named, with the reason, in `backend/router_test.go`.
 | POST | `/api/v1/catalog/install-jobs` | yes | yes |
 | DELETE | `/api/v1/catalog/install-jobs/{id}` | yes | yes |
 | GET | `/api/v1/catalog/install-jobs/{id}` | yes | — |
+| POST | `/api/v1/catalog/install/manifest` | yes | yes |
 | POST | `/api/v1/catalog/install/preflight` | yes | yes |
 | GET | `/api/v1/catalog/releases` | yes | — |
 | DELETE | `/api/v1/catalog/releases/{namespace}/{name}` | yes | yes |

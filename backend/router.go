@@ -239,6 +239,7 @@ func newRouter(d routerDeps) *chi.Mux {
 			// Roadmap Phase 28: Helm releases — see internal/api/catalog.go and AGENTS.md.
 			w.Post("/catalog/install", workloadsHandler.CatalogInstall)
 			w.Post("/catalog/install/preflight", workloadsHandler.CatalogInstallPreflight)
+			w.Post("/catalog/install/manifest", workloadsHandler.CatalogInstallManifest)
 			w.Post("/catalog/install-jobs", workloadsHandler.CatalogStartInstallJob)
 			w.Delete("/catalog/install-jobs/{id}", workloadsHandler.CatalogCancelInstallJob)
 			w.Post("/catalog/releases/{namespace}/{name}/upgrade", workloadsHandler.CatalogUpgrade)

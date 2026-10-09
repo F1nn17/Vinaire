@@ -1,7 +1,15 @@
 "use client";
 
 import { t } from "@/lib/i18n/translate";
-import type { Preflight } from "@/lib/api/catalog";
+import { useState } from "react";
+import useSWR from "swr";
+import {
+  installManifest,
+  type InstallRequest,
+  type Preflight,
+} from "@/lib/api/catalog";
+import { friendlyErrorMessage } from "@/lib/api/errors";
+import { YamlEditor } from "@/components/editor/YamlEditor";
 
 // Roadmap Phase 59: before pressing Install — what this install will create, the storage it asks
 // for, and what the cluster seems to lack for it. All of it comes from the same client-side render
@@ -30,7 +38,38 @@ function warning(w: { code: string; detail?: string }): string {
   return w.code;
 }
 
-export function InstallPlan({ preflight }: { preflight?: Preflight }) {
+// The full rendered YAML, fetched only when the person opens it (rendering a big chart takes a moment).
+function Manifests({ request }: { request: InstallRequest }) {
+  const { data, error, isLoading } = useSWR(
+    ["install-manifest", JSON.stringify(request)],
+    () => installManifest(request),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+  if (isLoading)
+    return <div className="text-text-faint">{t("Rendering…")}</div>;
+  if (error)
+    return <div className="text-err">{friendlyErrorMessage(error)}</div>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="h-[360px] overflow-hidden rounded-lg border border-border">
+        <YamlEditor value={data?.manifest ?? ""} readOnly height="100%" />
+      </div>
+      <div className="text-text-faint">
+        {t("Secret values are hidden.")}
+        {data?.truncated ? ` ${t("The preview is cut at 512 KiB.")}` : ""}
+      </div>
+    </div>
+  );
+}
+
+export function InstallPlan({
+  preflight,
+  request,
+}: {
+  preflight?: Preflight;
+  request?: InstallRequest;
+}) {
+  const [show, setShow] = useState(false);
   if (!preflight || (preflight.created ?? []).length === 0) return null;
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 text-xs">
@@ -56,6 +95,19 @@ export function InstallPlan({ preflight }: { preflight?: Preflight }) {
                 }`,
             )
             .join(" · ")}
+        </div>
+      )}
+      {request && (
+        <div className="flex flex-col gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShow(!show)}
+            aria-expanded={show}
+            className="w-fit text-accent-text underline"
+          >
+            {show ? t("Hide the manifests") : t("Show the manifests")}
+          </button>
+          {show && <Manifests request={request} />}
         </div>
       )}
       {(preflight.warnings ?? []).map((w, i) => (

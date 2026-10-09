@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Marketplace: "Show the manifests".** In the "This install will create" box, the full YAML the install would apply, rendered locally with the values
+  entered (`POST /api/v1/catalog/install/manifest`, a read as the caller): Secret values are replaced with `<redacted>`, capped at 512 KiB.
 - **Guided setup for Bitnami's Keycloak and WordPress, and a hint for every other chart that bundles a database.** `bitnami-apps/keycloak` and `bitnami-apps/wordpress` now have recipes (own PostgreSQL / MySQL instead of the bundled one, administrator Secret, storage size, Ingress). A chart without a recipe that bundles a database the usual way (a `<db>.enabled` sub-chart plus an `externalDatabase` block) gets a box with a button that switches the bundled one off and adds the chart's own `externalDatabase` skeleton to the values.
 - **Multi-select and delete on every Workloads tab.** The check boxes, the "N selected" bar and the typed-count confirmation now work on StatefulSets,
   DaemonSets and Jobs as well (they were only on Deployments and Pods), and those pages have a Delete button. New

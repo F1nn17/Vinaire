@@ -408,6 +408,32 @@ func (h *Handler) CatalogInstallPreflight(w http.ResponseWriter, r *http.Request
 	respondJSON(w, pf)
 }
 
+// CatalogInstallManifest handles POST /api/v1/catalog/install/manifest: the YAML this install would
+// apply, rendered locally with the given values, Secret values redacted (Roadmap Phase 59). Nothing
+// is created — like the preflight, it is a read as the caller.
+func (h *Handler) CatalogInstallManifest(w http.ResponseWriter, r *http.Request) {
+	if !h.catalogAvailable(w) {
+		return
+	}
+	_, cfg, ok := h.resolveRESTConfig(w, r)
+	if !ok {
+		return
+	}
+	var b installBody
+	if !decodeCatalogBody(w, r, &b) {
+		return
+	}
+	manifest, truncated, err := h.Releases.RenderManifest(r.Context(), cfg, helm.InstallRequest{
+		Repo: b.Repo, Chart: b.Chart, Version: b.Version, Namespace: b.Namespace, Release: b.Release,
+		ValuesYAML: b.Values, NodeName: b.NodeName, CreateNamespace: b.CreateNamespace, AllowDeprecated: b.AllowDeprecated,
+	})
+	if err != nil {
+		respondHelmError(w, err)
+		return
+	}
+	respondJSON(w, map[string]any{"manifest": manifest, "truncated": truncated})
+}
+
 // ---- install jobs (progress) ----------------------------------------------------
 
 func (h *Handler) installJobsAvailable(w http.ResponseWriter) bool {

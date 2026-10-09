@@ -556,7 +556,7 @@ function InstallInner() {
                   missing={missing}
                   unchecked={preflight?.unchecked}
                 />
-                <InstallPlan preflight={preflight} />
+                <InstallPlan preflight={preflight} request={request} />
                 <div className="flex justify-end">
                   <button
                     type="button"

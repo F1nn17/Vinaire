@@ -224,6 +224,17 @@ export type Preflight = {
   warnings: { code: string; detail?: string }[];
 };
 
+// The YAML the install would apply, rendered locally with these values (Secret values redacted).
+export function installManifest(
+  req: InstallRequest,
+): Promise<{ manifest: string; truncated: boolean }> {
+  return apiFetch("/api/v1/catalog/install/manifest", {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify(req),
+  });
+}
+
 export function preflightInstall(req: InstallRequest): Promise<Preflight> {
   return apiFetch("/api/v1/catalog/install/preflight", {
     method: "POST",
