@@ -287,7 +287,13 @@ function CatalogTab() {
                     {c.repo}
                     {c.role && (
                       <span className="ml-1.5 rounded border border-border px-1 text-text-muted">
-                        {t(c.role === "operator" ? "operator" : "cluster")}
+                        {t(
+                          c.role === "operator"
+                            ? "operator"
+                            : c.role === "tool"
+                              ? "add-on"
+                              : "cluster",
+                        )}
                       </span>
                     )}
                   </span>

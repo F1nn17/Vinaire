@@ -365,6 +365,10 @@ collect:
 		case g := <-results:
 			finished[g.r.Name] = true
 			if g.err != nil {
+				// a repository that is left out of this search anyway is not worth an alarm
+				if g.r.Unmaintained && !opts.IncludeUnmaintained && repoName == "" {
+					continue
+				}
 				if res.Errors == nil {
 					res.Errors = map[string]string{}
 				}

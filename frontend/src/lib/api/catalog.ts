@@ -27,7 +27,7 @@ export type ChartSummary = {
   // the repository's images are no longer updated
   unmaintained?: boolean;
   // "operator", "cluster", or absent for one ordinary instance
-  role?: "operator" | "cluster";
+  role?: "operator" | "cluster" | "tool";
   category?: string;
   // an icon the backend serves (see components/marketplace/ChartIcon)
   hasIcon?: boolean;

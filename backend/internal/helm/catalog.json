@@ -27,7 +27,10 @@
       },
       "roles": {
         "cloudnative-pg": "operator",
-        "cluster": "cluster"
+        "cluster": "cluster",
+        "cnpg-sandbox": "tool",
+        "pgbench": "tool",
+        "plugin-barman-cloud": "tool"
       }
     },
     {
