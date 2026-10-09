@@ -33,7 +33,7 @@ jobs:
       id-token: write # keyless signing and the provenance attestation
       attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # ghcr.io names are lower case ("F1nn17/Vinaire" is not a valid image name), and the tag
       # has to agree with the chart so a release can't ship a chart pointing at another image.
