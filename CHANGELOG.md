@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Bulk restart / delete (Roadmap Phase 58).** Tick rows in the Deployments and Pods lists (or "select all" for the filtered rows)
+  and restart or delete them together. Deleting needs the number of selected objects typed. It uses the same endpoints as the
+  single actions — one audited request per object, the caller's own RBAC decides, the write rate limit is waited out rather
+  than loosened — and shows progress and a per-object result. No new write path.
 - **First release plumbing (1.0.0).** The chart and the app are versioned 1.0.0 together; a `v1.0.0` tag builds the image
   (`ghcr.io/f1nn17/vinaire:1.0.0`, lower-cased — the old name would have been rejected), signs it, and now also pushes the Helm
   chart as an OCI artifact (`oci://ghcr.io/f1nn17/charts/vinaire`), signs it, and creates a GitHub Release with the chart and
