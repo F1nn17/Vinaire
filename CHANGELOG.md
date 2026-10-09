@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Multi-select and delete on every Workloads tab.** The check boxes, the "N selected" bar and the typed-count confirmation now work on StatefulSets,
+  DaemonSets and Jobs as well (they were only on Deployments and Pods), and those pages have a Delete button. New
+  `DELETE /api/v1/{statefulsets,daemonsets,jobs}/{namespace}/{name}`: a plain delete as the caller with the pods removed in the background; audited.
 - **Delete a volume claim (owner's decision of 2026-10-09).** `DELETE /api/v1/pvcs/{namespace}/{name}`, from the PVC page and from the list of
   volume claims left behind after an uninstall or a rolled-back install. Irreversible, so the claim's name must be typed, system
   namespaces are refused, and a claim a pod still mounts is refused with the pods named. Audited as `delete-pvc`; the chart's `-installer`

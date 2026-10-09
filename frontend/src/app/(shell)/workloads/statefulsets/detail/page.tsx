@@ -8,6 +8,7 @@ import { useStatefulSet } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { WorkloadOverview } from "@/components/workloads/WorkloadOverview";
+import { DeleteWorkloadAction } from "@/components/workloads/DeleteWorkloadAction";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
@@ -124,6 +125,11 @@ function StatefulSetDetailPage() {
             label="Scale"
             hint="Change the number of replicas"
             onClick={handleOpenScale}
+          />
+          <DeleteWorkloadAction
+            kind="statefulsets"
+            namespace={namespace}
+            name={name}
           />
         </ActionBar>
       </div>

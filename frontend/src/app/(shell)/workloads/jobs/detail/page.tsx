@@ -7,6 +7,8 @@ import { useJob } from "@/lib/hooks/useWorkloads";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { WorkloadOverview } from "@/components/workloads/WorkloadOverview";
+import { DeleteWorkloadAction } from "@/components/workloads/DeleteWorkloadAction";
+import { ActionBar } from "@/components/ui/ActionBar";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
@@ -77,6 +79,9 @@ function JobDetailPage() {
             </span>
           </div>
         </div>
+        <ActionBar>
+          <DeleteWorkloadAction kind="jobs" namespace={namespace} name={name} />
+        </ActionBar>
       </div>
 
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />

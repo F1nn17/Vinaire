@@ -13,12 +13,18 @@ import {
   restartDeployment,
 } from "@/lib/api/deploymentActions";
 import { deletePod } from "@/lib/api/podActions";
+import {
+  deleteDaemonSet,
+  deleteJob,
+  deleteStatefulSet,
+} from "@/lib/api/workloadDelete";
 
 // Roadmap Phase 58: the bar above a list that has rows ticked, and the window that runs the
 // action. Only what already exists can be done in bulk — restart / delete a Deployment and
 // delete a Pod — one request per row, each audited and decided by the caller's own RBAC.
 
-export type BulkKind = "deployments" | "pods";
+export type BulkKind =
+  "deployments" | "pods" | "statefulsets" | "daemonsets" | "jobs";
 type Action = "delete" | "restart";
 
 export function BulkBar({
@@ -86,9 +92,42 @@ export function BulkBar({
 
 function run(kind: BulkKind, action: Action, item: BulkItem): Promise<void> {
   if (action === "restart") return restartDeployment(item.namespace, item.name);
-  return kind === "deployments"
-    ? deleteDeployment(item.namespace, item.name)
-    : deletePod(item.namespace, item.name);
+  switch (kind) {
+    case "deployments":
+      return deleteDeployment(item.namespace, item.name);
+    case "statefulsets":
+      return deleteStatefulSet(item.namespace, item.name);
+    case "daemonsets":
+      return deleteDaemonSet(item.namespace, item.name);
+    case "jobs":
+      return deleteJob(item.namespace, item.name);
+    default:
+      return deletePod(item.namespace, item.name);
+  }
+}
+
+const kindWord: Record<BulkKind, string> = {
+  deployments: "deployments",
+  pods: "pods",
+  statefulsets: "statefulsets",
+  daemonsets: "daemonsets",
+  jobs: "jobs",
+};
+
+// what deleting this kind does, in one sentence
+function deleteNote(kind: BulkKind): string {
+  switch (kind) {
+    case "deployments":
+      return "Each deployment is deleted with its pods. This can't be undone.";
+    case "statefulsets":
+      return "Each StatefulSet is deleted with its pods; the volume claims it created stay. This can't be undone.";
+    case "daemonsets":
+      return "Each DaemonSet is deleted with its pods on every node. This can't be undone.";
+    case "jobs":
+      return "Each Job is deleted with its pods and their logs. This can't be undone.";
+    default:
+      return "A pod that belongs to a controller is recreated (a restart); a bare pod is gone for good.";
+  }
 }
 
 function BulkModal({
@@ -123,9 +162,7 @@ function BulkModal({
   const title =
     action === "restart"
       ? t("Restart {n} deployments", { n: items.length })
-      : kind === "deployments"
-        ? t("Delete {n} deployments", { n: items.length })
-        : t("Delete {n} pods", { n: items.length });
+      : t("Delete {n} {kind}", { n: items.length, kind: t(kindWord[kind]) });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -137,9 +174,7 @@ function BulkModal({
             <div className="mt-2 text-text-muted">
               {action === "restart"
                 ? "Each deployment's pods are replaced one by one, as with a single restart."
-                : kind === "deployments"
-                  ? "Each deployment is deleted with its pods. This can't be undone."
-                  : "A pod that belongs to a controller is recreated (a restart); a bare pod is gone for good."}
+                : deleteNote(kind)}
             </div>
             <ul className="mt-3 max-h-44 overflow-auto rounded-lg border border-border bg-surface-2 p-2 font-mono text-xs">
               {items.map((i) => (

@@ -66,6 +66,13 @@ flow.
   `bind` only for the chart's own roles). `POST /api/v1/rbac/check` (a
   SubjectAccessReview) and `GET /api/v1/rbac/subject` are reads. Audited
   `rbac-bind`, `rbac-bind-failed`, `rbac-unbind`.
+- `DELETE /api/v1/statefulsets/{namespace}/{name}`, `DELETE /api/v1/daemonsets/{namespace}/{name}` and
+  `DELETE /api/v1/jobs/{namespace}/{name}` (owner's decision of 2026-10-09, so that the multi-select and the
+  Delete button work on every Workloads tab, not only Deployments and Pods) — a plain `Delete()` as the caller, with
+  **background propagation** (the pods are removed by the garbage collector, as with `kubectl delete`; a Job needs it
+  spelled out because client-go's default for batch/v1 orphans them). A StatefulSet's volume claims stay. Names are
+  validated, each call is audited (`delete-statefulset`/`delete-daemonset`/`delete-job`), and the UI's bulk run makes
+  the user type the number of objects. The chart's `-installer` role grants these verbs; `-viewer` does not.
 - `DELETE /api/v1/pods/{namespace}/{name}` (Phase 33) — a plain `Delete()`
   on the Pod itself (not the Deployment). If the pod has a controller
   (`OwnerReferences` non-empty), the controller recreates it — effectively

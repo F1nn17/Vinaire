@@ -79,9 +79,9 @@ export default function WorkloadsPage() {
     : (data ?? []);
   useWorkloadsStream(tab, namespace);
 
-  // Roadmap Phase 58: tick rows to restart / delete several at once. Only where an
-  // action endpoint exists (Deployments, Pods); the selection belongs to one tab.
-  const bulkKind = tab === "deployments" || tab === "pods" ? tab : null;
+  // Roadmap Phase 58: tick rows to restart / delete several at once, on every tab; the
+  // selection belongs to one tab.
+  const bulkKind = tab;
   const [picked, setPicked] = useState<{
     tab: WorkloadKind;
     keys: Set<string>;

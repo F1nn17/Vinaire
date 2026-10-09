@@ -199,6 +199,10 @@ func newRouter(d routerDeps) *chi.Mux {
 			w.Post("/deployments/{namespace}/{name}/pause", workloadsHandler.PauseDeploymentRollout)
 			w.Post("/deployments/{namespace}/{name}/resume", workloadsHandler.ResumeDeploymentRollout)
 			w.Post("/statefulsets/{namespace}/{name}/scale", workloadsHandler.ScaleStatefulSet)
+			// the owner's decision of 2026-10-09: delete works on every Workloads tab (see AGENTS.md)
+			w.Delete("/statefulsets/{namespace}/{name}", workloadsHandler.DeleteStatefulSet)
+			w.Delete("/daemonsets/{namespace}/{name}", workloadsHandler.DeleteDaemonSet)
+			w.Delete("/jobs/{namespace}/{name}", workloadsHandler.DeleteJob)
 			w.Delete("/pods/{namespace}/{name}", workloadsHandler.DeletePod)
 			// the volume claims Helm leaves behind after an uninstall — see AGENTS.md
 			w.Delete("/pvcs/{namespace}/{name}", workloadsHandler.DeletePVC)
