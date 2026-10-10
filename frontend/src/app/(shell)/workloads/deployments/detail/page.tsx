@@ -245,6 +245,7 @@ function DeploymentDetailPage() {
       {tab === "overview" && (
         <WorkloadOverview
           resourceType="deployments"
+          yaml={deployment.yaml}
           namespace={deploymentNamespace}
           name={deploymentName}
           pods={deployment.pods}

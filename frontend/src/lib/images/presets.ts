@@ -58,6 +58,12 @@ export type Preset = {
     secret: string,
   ) => [string, string][];
   note?: string;
+  // speaks plain TCP (a database, a broker): an Ingress can't carry it, so the wizard offers to
+  // publish the Service on a node port or through a load balancer
+  tcp?: boolean;
+  // more keys for the Secret besides the generated passwords — the user, the database, the address —
+  // so that everything needed to connect is in one place (none of it is secret on its own)
+  extra?: (v: Record<string, string>, host: string) => Record<string, string>;
   // the group that owns the volume, for images that run as a non-root user
   fsGroup?: number;
   free?: boolean;
@@ -82,6 +88,16 @@ const dbField = (): PresetField => ({
   pattern: word,
 });
 
+// the keys a database's Secret carries besides its password: who, which database, where
+const account =
+  (port: number, db = true) =>
+  (v: Record<string, string>, host: string): Record<string, string> => ({
+    username: v.user,
+    ...(db ? { dbname: v.database } : {}),
+    host,
+    port: String(port),
+  });
+
 const connectSql =
   (port: number) => (v: Record<string, string>, host: string, secret: string) =>
     [
@@ -94,6 +110,7 @@ const connectSql =
 export const presets: Preset[] = [
   {
     id: "postgres",
+    tcp: true,
     title: "PostgreSQL",
     summary: T("A relational database. Official image `postgres`."),
     image: "postgres",
@@ -105,6 +122,7 @@ export const presets: Preset[] = [
     dataPath: "/var/lib/postgresql/data",
     fields: [userField(), dbField()],
     secrets: ["password"],
+    extra: account(5432),
     env: (v) => [
       { name: "POSTGRES_USER", value: v.user },
       { name: "POSTGRES_DB", value: v.database },
@@ -123,6 +141,7 @@ export const presets: Preset[] = [
   },
   {
     id: "mysql",
+    tcp: true,
     title: "MySQL",
     summary: T("A relational database. Official image `mysql`."),
     image: "mysql",
@@ -132,6 +151,7 @@ export const presets: Preset[] = [
     dataPath: "/var/lib/mysql",
     fields: [userField(), dbField()],
     secrets: ["root-password", "password"],
+    extra: account(3306),
     env: (v) => [
       { name: "MYSQL_ROOT_PASSWORD", secret: "root-password" },
       { name: "MYSQL_DATABASE", value: v.database },
@@ -153,6 +173,7 @@ export const presets: Preset[] = [
   },
   {
     id: "mariadb",
+    tcp: true,
     title: "MariaDB",
     summary: T(
       "A relational database (MySQL's fork). Official image `mariadb`.",
@@ -164,6 +185,7 @@ export const presets: Preset[] = [
     dataPath: "/var/lib/mysql",
     fields: [userField(), dbField()],
     secrets: ["root-password", "password"],
+    extra: account(3306),
     env: (v) => [
       { name: "MARIADB_ROOT_PASSWORD", secret: "root-password" },
       { name: "MARIADB_DATABASE", value: v.database },
@@ -179,6 +201,7 @@ export const presets: Preset[] = [
   },
   {
     id: "redis",
+    tcp: true,
     title: "Redis",
     summary: T("An in-memory store and cache. Official image `redis`."),
     image: "redis",
@@ -190,6 +213,7 @@ export const presets: Preset[] = [
     dataPath: "/data",
     fields: [],
     secrets: ["password"],
+    extra: (_v, host) => ({ host, port: "6379" }),
     env: () => [{ name: "REDIS_PASSWORD", secret: "password" }],
     args: () => [
       "redis-server",
@@ -210,6 +234,7 @@ export const presets: Preset[] = [
   },
   {
     id: "valkey",
+    tcp: true,
     title: "Valkey",
     summary: T(
       "A free fork of Redis, compatible with it. Official image `valkey/valkey`.",
@@ -221,6 +246,7 @@ export const presets: Preset[] = [
     dataPath: "/data",
     fields: [],
     secrets: ["password"],
+    extra: (_v, host) => ({ host, port: "6379" }),
     env: () => [{ name: "VALKEY_PASSWORD", secret: "password" }],
     args: () => [
       "valkey-server",
@@ -241,6 +267,7 @@ export const presets: Preset[] = [
   },
   {
     id: "rabbitmq",
+    tcp: true,
     title: "RabbitMQ",
     summary: T(
       "A message broker. Official image `rabbitmq` (with the management page).",
@@ -255,6 +282,7 @@ export const presets: Preset[] = [
     dataPath: "/var/lib/rabbitmq",
     fields: [userField()],
     secrets: ["password"],
+    extra: account(5672, false),
     env: (v) => [
       { name: "RABBITMQ_DEFAULT_USER", value: v.user },
       { name: "RABBITMQ_DEFAULT_PASS", secret: "password" },
@@ -276,6 +304,7 @@ export const presets: Preset[] = [
   },
   {
     id: "mongo",
+    tcp: true,
     title: "MongoDB",
     summary: T("A document database. Official image `mongo`."),
     image: "mongo",
@@ -285,6 +314,7 @@ export const presets: Preset[] = [
     dataPath: "/data/db",
     fields: [userField("root")],
     secrets: ["password"],
+    extra: account(27017, false),
     env: (v) => [
       { name: "MONGO_INITDB_ROOT_USERNAME", value: v.user },
       { name: "MONGO_INITDB_ROOT_PASSWORD", secret: "password" },
@@ -359,6 +389,7 @@ export const presets: Preset[] = [
       },
     ],
     secrets: ["admin-password"],
+    extra: () => ({ username: "admin" }),
     env: (v) => [
       { name: "KC_DB", value: "postgres" },
       { name: "KC_DB_URL_HOST", value: v.dbHost },
@@ -410,6 +441,7 @@ export const presets: Preset[] = [
   },
   {
     id: "memcached",
+    tcp: true,
     title: "Memcached",
     summary: T("A simple in-memory cache. Official image `memcached`."),
     image: "memcached",
@@ -429,6 +461,7 @@ export const presets: Preset[] = [
   },
   {
     id: "nats",
+    tcp: true,
     title: "NATS",
     summary: T(
       "A fast message bus with JetStream persistence. Official image `nats`.",
@@ -470,6 +503,7 @@ export const presets: Preset[] = [
       },
     ],
     secrets: ["password"],
+    extra: (v) => ({ username: v.user }),
     env: (v) => [
       { name: "GF_SECURITY_ADMIN_USER", value: v.user },
       { name: "GF_SECURITY_ADMIN_PASSWORD", secret: "password" },
@@ -602,6 +636,9 @@ export type Form = {
   namespace: string;
   tag: string;
   values: Record<string, string>;
+  // how the Service is reached: inside the cluster only, on a port of every node, or through a load balancer
+  expose: "ClusterIP" | "NodePort" | "LoadBalancer";
+  nodePort: string;
   persistent: boolean;
   size: string;
   storageClass: string;
@@ -625,6 +662,8 @@ export function newForm(preset: Preset): Form {
     namespace: "default",
     tag: preset.defaultTag,
     values: Object.fromEntries(preset.fields.map((f) => [f.id, f.default])),
+    expose: "ClusterIP",
+    nodePort: "",
     persistent: true,
     size: "8Gi",
     storageClass: "",
@@ -657,6 +696,14 @@ export function validate(f: Form): Record<string, string> {
     if (!sizeRe.test(f.size)) e.size = T("A size like 8Gi.");
     if (f.storageClass && !classRe.test(f.storageClass))
       e.storageClass = T("A valid class name.");
+  }
+  if (f.expose === "NodePort" && f.nodePort) {
+    const n = Number(f.nodePort);
+    if (!/^[0-9]{5}$/.test(f.nodePort) || n < 30000 || n > 32767) {
+      e.nodePort = T(
+        "A port from 30000 to 32767, or empty to let the cluster pick.",
+      );
+    }
   }
   if (!cpuRe.test(f.cpu)) e.cpu = T("Like 100m or 0.5.");
   if (!memRe.test(f.memory)) e.memory = T("Like 256Mi.");
@@ -725,9 +772,12 @@ export function build(
           ...owner,
         },
         type: "Opaque",
-        stringData: Object.fromEntries(
-          p.secrets.map((k) => [k, passwords[k] ?? ""]),
-        ),
+        stringData: {
+          ...Object.fromEntries(p.secrets.map((k) => [k, passwords[k] ?? ""])),
+          ...(p.extra
+            ? p.extra(f.values, `${f.name}.${f.namespace}.svc.cluster.local`)
+            : {}),
+        },
       }),
     });
   }
@@ -750,12 +800,16 @@ export function build(
           ...owner,
         },
         spec: {
-          type: "ClusterIP",
+          type: p.tcp ? f.expose : "ClusterIP",
           selector,
-          ports: ports.map((x) => ({
+          ports: ports.map((x, i) => ({
             name: x.name,
             port: x.port,
             targetPort: x.port,
+            // the first port may be pinned on the nodes; the others get one from the cluster
+            ...(p.tcp && f.expose === "NodePort" && f.nodePort && i === 0
+              ? { nodePort: Number(f.nodePort) }
+              : {}),
           })),
         },
       }),

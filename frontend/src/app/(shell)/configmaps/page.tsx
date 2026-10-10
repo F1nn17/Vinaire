@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { t } from "@/lib/i18n/translate";
 import { useConfigMaps } from "@/lib/hooks/useConfigMaps";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { ListDetailSplit } from "@/components/ui/ListDetailSplit";
@@ -10,10 +12,43 @@ import { configMapTemplates } from "@/components/editor/templates";
 import { PlusIcon } from "@/components/icons";
 
 export default function ConfigMapsPage() {
-  const [namespace, setNamespace] = useState("");
-  const { data, isLoading, error, mutate } = useConfigMaps(namespace);
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-sm text-text-muted">Loading…</div>}
+    >
+      <ConfigMapsInner />
+    </Suspense>
+  );
+}
+
+// A link may open the page on one ConfigMap (?namespace=app&name=settings).
+function ConfigMapsInner() {
+  const params = useSearchParams();
+  const linkedNs = params.get("namespace") ?? "";
+  const linkedName = params.get("name") ?? "";
+  const [namespace, setNamespace] = useState(linkedNs);
+  const [query, setQuery] = useState("");
+  const { data: all, isLoading, error, mutate } = useConfigMaps(namespace);
+  const needle = query.trim().toLowerCase();
+  const data = all?.filter(
+    (cm) =>
+      !needle ||
+      cm.name.toLowerCase().includes(needle) ||
+      cm.namespace.toLowerCase().includes(needle) ||
+      cm.keys.some(
+        (k) =>
+          k.label.toLowerCase().includes(needle) ||
+          k.value.toLowerCase().includes(needle),
+      ),
+  );
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pickedId, setSelectedId] = useState<string | null>(null);
+  const selectedId =
+    pickedId ??
+    (linkedName
+      ? (all?.find((c) => c.name === linkedName && c.namespace === linkedNs)
+          ?.id ?? null)
+      : null);
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
@@ -29,16 +64,28 @@ export default function ConfigMapsPage() {
         </button>
       </div>
 
-      <label className="flex w-fit items-center gap-2">
-        <span className="sr-only">Filter by namespace</span>
-        <input
-          type="text"
-          value={namespace}
-          onChange={(e) => setNamespace(e.target.value)}
-          placeholder="All namespaces"
-          className="rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint"
-        />
-      </label>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex min-w-64 items-center gap-2">
+          <span className="sr-only">Search</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("Search by name, namespace, key or value")}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-1.75 text-xs outline-none placeholder:text-text-faint"
+          />
+        </label>
+        <label className="flex w-fit items-center gap-2">
+          <span className="sr-only">Filter by namespace</span>
+          <input
+            type="text"
+            value={namespace}
+            onChange={(e) => setNamespace(e.target.value)}
+            placeholder="All namespaces"
+            className="rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint"
+          />
+        </label>
+      </div>
 
       {error ? (
         <div className="text-sm text-err">
@@ -48,7 +95,9 @@ export default function ConfigMapsPage() {
         <ListSkeleton />
       ) : data.length === 0 ? (
         <div className="text-sm text-text-muted">
-          No ConfigMaps found{namespace ? ` in namespace "${namespace}"` : ""}.
+          {needle
+            ? t("Nothing matches the search.")
+            : `No ConfigMaps found${namespace ? ` in namespace "${namespace}"` : ""}.`}
         </div>
       ) : (
         <ConfigMapsList

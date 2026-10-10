@@ -205,6 +205,9 @@ func newRouter(d routerDeps) *chi.Mux {
 			w.Delete("/statefulsets/{namespace}/{name}", workloadsHandler.DeleteStatefulSet)
 			w.Delete("/daemonsets/{namespace}/{name}", workloadsHandler.DeleteDaemonSet)
 			w.Delete("/jobs/{namespace}/{name}", workloadsHandler.DeleteJob)
+			// owner's decision of 2026-10-10: Services & Ingress get a multi-select and a Delete
+			w.Delete("/services/{namespace}/{name}", workloadsHandler.DeleteService)
+			w.Delete("/ingresses/{namespace}/{name}", workloadsHandler.DeleteIngress)
 			w.Delete("/pods/{namespace}/{name}", workloadsHandler.DeletePod)
 			// the volume claims Helm leaves behind after an uninstall — see AGENTS.md
 			w.Delete("/pvcs/{namespace}/{name}", workloadsHandler.DeletePVC)

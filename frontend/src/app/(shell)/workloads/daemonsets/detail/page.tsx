@@ -93,6 +93,7 @@ function DaemonSetDetailPage() {
       {tab === "overview" && (
         <WorkloadOverview
           resourceType="daemonsets"
+          yaml={ds.yaml}
           namespace={namespace}
           name={name}
           pods={ds.pods}

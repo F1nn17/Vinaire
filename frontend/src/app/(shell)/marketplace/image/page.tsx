@@ -362,6 +362,53 @@ function ImageForm({ preset }: { preset: Preset }) {
             </Field>
           ))}
 
+        {preset.tcp && (
+          <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-2 p-3">
+            <Field
+              label="Reachable from outside the cluster"
+              hint="This is plain TCP, not HTTP, so an Ingress can't carry it. Inside the cluster is safest; the other two open a port that anyone who can reach your nodes can try."
+            >
+              <select
+                className={inputClass}
+                value={form.expose}
+                onChange={(e) =>
+                  set({ expose: e.target.value as Form["expose"] })
+                }
+              >
+                <option value="ClusterIP">
+                  {t("No — only from inside the cluster")}
+                </option>
+                <option value="NodePort">
+                  {t("On a port of every node (NodePort)")}
+                </option>
+                <option value="LoadBalancer">
+                  {t("Through a load balancer (LoadBalancer)")}
+                </option>
+              </select>
+            </Field>
+            {form.expose === "NodePort" && (
+              <Field
+                label="Node port"
+                hint="30000–32767. Empty: the cluster picks one; it is shown after the install."
+                error={errors.nodePort}
+              >
+                <input
+                  className={inputClass}
+                  value={form.nodePort}
+                  onChange={(e) => set({ nodePort: e.target.value })}
+                />
+              </Field>
+            )}
+            {form.expose !== "ClusterIP" && (
+              <div className="text-[11px] text-warn">
+                {t(
+                  "The database will accept connections from outside with just its password. Close the port with a firewall to the addresses that need it.",
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {preset.dataPath !== undefined && (
           <label className="flex items-center gap-2 text-xs">
             <input
@@ -475,7 +522,11 @@ function ImageForm({ preset }: { preset: Preset }) {
         </div>
 
         {steps.StatefulSet === "done" && (
-          <InstanceWatch namespace={eff.namespace} name={eff.name} />
+          <InstanceWatch
+            namespace={eff.namespace}
+            name={eff.name}
+            expose={preset.tcp ? eff.expose : "ClusterIP"}
+          />
         )}
 
         {finished && (

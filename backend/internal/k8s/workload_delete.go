@@ -43,3 +43,20 @@ func DeleteJob(ctx context.Context, clientset *kubernetes.Clientset, namespace, 
 	}
 	return nil
 }
+
+// DeleteService and DeleteIngress (the owner's decision of 2026-10-10: the Services & Ingress page
+// has a multi-select and a Delete like the lists of workloads). Plain deletes; nothing is cascaded —
+// a Service or an Ingress owns no other object.
+func DeleteService(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) error {
+	if err := clientset.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("delete service %s/%s: %w", namespace, name, err)
+	}
+	return nil
+}
+
+func DeleteIngress(ctx context.Context, clientset *kubernetes.Clientset, namespace, name string) error {
+	if err := clientset.NetworkingV1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("delete ingress %s/%s: %w", namespace, name, err)
+	}
+	return nil
+}

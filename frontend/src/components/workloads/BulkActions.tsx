@@ -15,7 +15,9 @@ import {
 import { deletePod } from "@/lib/api/podActions";
 import {
   deleteDaemonSet,
+  deleteIngress,
   deleteJob,
+  deleteService,
   deleteStatefulSet,
 } from "@/lib/api/workloadDelete";
 
@@ -24,7 +26,13 @@ import {
 // delete a Pod — one request per row, each audited and decided by the caller's own RBAC.
 
 export type BulkKind =
-  "deployments" | "pods" | "statefulsets" | "daemonsets" | "jobs";
+  | "deployments"
+  | "pods"
+  | "statefulsets"
+  | "daemonsets"
+  | "jobs"
+  | "services"
+  | "ingresses";
 type Action = "delete" | "restart";
 
 export function BulkBar({
@@ -101,6 +109,10 @@ function run(kind: BulkKind, action: Action, item: BulkItem): Promise<void> {
       return deleteDaemonSet(item.namespace, item.name);
     case "jobs":
       return deleteJob(item.namespace, item.name);
+    case "services":
+      return deleteService(item.namespace, item.name);
+    case "ingresses":
+      return deleteIngress(item.namespace, item.name);
     default:
       return deletePod(item.namespace, item.name);
   }
@@ -112,6 +124,8 @@ const kindWord: Record<BulkKind, string> = {
   statefulsets: "statefulsets",
   daemonsets: "daemonsets",
   jobs: "jobs",
+  services: "Service objects",
+  ingresses: "Ingress objects",
 };
 
 // what deleting this kind does, in one sentence
@@ -125,6 +139,10 @@ function deleteNote(kind: BulkKind): string {
       return "Each DaemonSet is deleted with its pods on every node. This can't be undone.";
     case "jobs":
       return "Each Job is deleted with its pods and their logs. This can't be undone.";
+    case "services":
+      return "Whatever reaches the application through each Service (other pods, an Ingress) stops reaching it. This can't be undone.";
+    case "ingresses":
+      return "Each address the Ingress published stops answering. This can't be undone.";
     default:
       return "A pod that belongs to a controller is recreated (a restart); a bare pod is gone for good.";
   }

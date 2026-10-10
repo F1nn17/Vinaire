@@ -86,6 +86,7 @@ named, with the reason, in `backend/router_test.go`.
 | POST | `/api/v1/gitops/sources/{id}/sync` | yes | yes |
 | GET | `/api/v1/images/tags` | yes | — |
 | GET | `/api/v1/ingresses` | yes | — |
+| DELETE | `/api/v1/ingresses/{namespace}/{name}` | yes | yes |
 | GET | `/api/v1/jobs` | yes | — |
 | DELETE | `/api/v1/jobs/{namespace}/{name}` | yes | yes |
 | GET | `/api/v1/jobs/{namespace}/{name}` | yes | — |
@@ -147,6 +148,7 @@ named, with the reason, in `backend/router_test.go`.
 | POST | `/api/v1/secrets/{namespace}/{name}/reveal` | yes | no |
 | GET | `/api/v1/security/checks` | yes | — |
 | GET | `/api/v1/serviceaccounts` | yes | — |
+| DELETE | `/api/v1/services/{namespace}/{name}` | yes | yes |
 | GET | `/api/v1/statefulsets` | yes | — |
 | DELETE | `/api/v1/statefulsets/{namespace}/{name}` | yes | yes |
 | GET | `/api/v1/statefulsets/{namespace}/{name}` | yes | — |

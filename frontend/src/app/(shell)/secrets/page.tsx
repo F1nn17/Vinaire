@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { copyText } from "@/lib/clipboard";
 import { useSecrets } from "@/lib/hooks/useSecrets";
 import { revealSecretKey } from "@/lib/api/secrets";
 import { friendlyErrorMessage } from "@/lib/api/errors";
+import { t } from "@/lib/i18n/translate";
 import { ListDetailSplit } from "@/components/ui/ListDetailSplit";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { DeleteSecretModal } from "@/components/secrets/DeleteSecretModal";
@@ -21,10 +24,40 @@ type RevealState =
   | { status: "error"; message: string };
 
 export default function SecretsPage() {
-  const [namespace, setNamespace] = useState("");
-  const { data, isLoading, error, mutate } = useSecrets(namespace);
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-sm text-text-muted">Loading…</div>}
+    >
+      <SecretsInner />
+    </Suspense>
+  );
+}
+
+// A link may open the page on one Secret (?namespace=app&name=db).
+function SecretsInner() {
+  const params = useSearchParams();
+  const linkedNs = params.get("namespace") ?? "";
+  const linkedName = params.get("name") ?? "";
+  const [namespace, setNamespace] = useState(linkedNs);
+  const [query, setQuery] = useState("");
+  const { data: all, isLoading, error, mutate } = useSecrets(namespace);
+  const needle = query.trim().toLowerCase();
+  const data = all?.filter(
+    (s) =>
+      !needle ||
+      s.name.toLowerCase().includes(needle) ||
+      s.namespace.toLowerCase().includes(needle) ||
+      s.type.toLowerCase().includes(needle) ||
+      s.keys.some((k) => k.label.toLowerCase().includes(needle)),
+  );
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pickedId, setSelectedId] = useState<string | null>(null);
+  const selectedId =
+    pickedId ??
+    (linkedName
+      ? (all?.find((s) => s.name === linkedName && s.namespace === linkedNs)
+          ?.id ?? null)
+      : null);
   // Revealed values live only in this component's state — never in the SWR
   // cache — so navigating to another secret (or away and back) re-masks
   // them instead of quietly holding decoded plaintext around.
@@ -70,16 +103,28 @@ export default function SecretsPage() {
         </button>
       </div>
 
-      <label className="flex w-fit items-center gap-2">
-        <span className="sr-only">Filter by namespace</span>
-        <input
-          type="text"
-          value={namespace}
-          onChange={(e) => setNamespace(e.target.value)}
-          placeholder="All namespaces"
-          className="rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint"
-        />
-      </label>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex min-w-64 items-center gap-2">
+          <span className="sr-only">Search</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("Search by name, namespace, type or key")}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-1.75 text-xs outline-none placeholder:text-text-faint"
+          />
+        </label>
+        <label className="flex w-fit items-center gap-2">
+          <span className="sr-only">Filter by namespace</span>
+          <input
+            type="text"
+            value={namespace}
+            onChange={(e) => setNamespace(e.target.value)}
+            placeholder="All namespaces"
+            className="rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint"
+          />
+        </label>
+      </div>
 
       {error ? (
         <div className="text-sm text-err">
@@ -89,7 +134,9 @@ export default function SecretsPage() {
         <ListSkeleton />
       ) : data.length === 0 ? (
         <div className="text-sm text-text-muted">
-          No Secrets found{namespace ? ` in namespace "${namespace}"` : ""}.
+          {needle
+            ? t("Nothing matches the search.")
+            : `No Secrets found${namespace ? ` in namespace "${namespace}"` : ""}.`}
         </div>
       ) : (
         <SecretsList
@@ -131,6 +178,31 @@ function SecretsList({
 }) {
   const selected = data.find((s) => s.id === selectedId) ?? data[0];
   const [deleting, setDeleting] = useState(false);
+
+  const [copied, setCopied] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
+
+  // Reveal (audited, like Show) and put the value on the clipboard without drawing it.
+  async function copyKey(keyId: string, label: string) {
+    setCopyError(null);
+    try {
+      const value = await revealSecretKey(
+        selected.namespace,
+        selected.name,
+        label,
+      );
+      if (await copyText(value)) {
+        setCopied(keyId);
+        setTimeout(() => setCopied((c) => (c === keyId ? null : c)), 2000);
+      } else {
+        setCopyError(
+          t("Copying isn't possible here; use Show and copy by hand."),
+        );
+      }
+    } catch (err) {
+      setCopyError(err instanceof Error ? err.message : "Failed to reveal");
+    }
+  }
 
   async function toggleKey(keyId: string, label: string) {
     const current = revealState[keyId];
@@ -220,6 +292,7 @@ function SecretsList({
         />
       )}
       <div className="flex flex-1 flex-col gap-3 overflow-auto">
+        {copyError && <div className="text-xs text-err">{copyError}</div>}
         {selected.keys.length === 0 ? (
           <div className="text-xs text-text-muted">No keys.</div>
         ) : (
@@ -234,20 +307,29 @@ function SecretsList({
                   <span className="font-mono text-xs text-text-muted">
                     {key.label}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => toggleKey(key.id, key.label)}
-                    disabled={state?.status === "loading"}
-                    className="rounded-md border border-border bg-surface-2 px-2 py-[3px] text-[11px] text-accent-text disabled:opacity-60"
-                  >
-                    {state?.status === "loading"
-                      ? "Revealing…"
-                      : state?.status === "revealed"
-                        ? "Hide"
-                        : state?.status === "error"
-                          ? "Retry"
-                          : "Show"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void copyKey(key.id, key.label)}
+                      className="rounded-md border border-border bg-surface-2 px-2 py-[3px] text-[11px] text-accent-text"
+                    >
+                      {copied === key.id ? t("Copied") : t("Copy")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleKey(key.id, key.label)}
+                      disabled={state?.status === "loading"}
+                      className="rounded-md border border-border bg-surface-2 px-2 py-[3px] text-[11px] text-accent-text disabled:opacity-60"
+                    >
+                      {state?.status === "loading"
+                        ? "Revealing…"
+                        : state?.status === "revealed"
+                          ? "Hide"
+                          : state?.status === "error"
+                            ? "Retry"
+                            : "Show"}
+                    </button>
+                  </div>
                 </div>
                 {state?.status === "error" ? (
                   <div className="text-xs text-err">{state.message}</div>

@@ -89,6 +89,7 @@ function JobDetailPage() {
       {tab === "overview" && (
         <WorkloadOverview
           resourceType="jobs"
+          yaml={job.yaml}
           namespace={namespace}
           name={name}
           pods={job.pods}

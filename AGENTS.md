@@ -81,6 +81,11 @@ flow.
   (`GET /api/v1/images/tags`, `internal/imagetags`) is a read of two fixed public registries (Docker Hub, quay.io) through
   `internal/netguard`: the request names an image checked against a strict pattern, never a URL or a host, and a `next` link in a
   registry's answer is followed only if it stays on that registry.
+- `DELETE /api/v1/services/{namespace}/{name}` and `DELETE /api/v1/ingresses/{namespace}/{name}` (owner's decision of
+  2026-10-10, so that Services & Ingress has a multi-select and a Delete like the workload lists) — plain `Delete()` calls as the
+  caller (`internal/api/workload_delete.go`); names validated, system namespaces refused, and so is the `kubernetes` Service of
+  `default`. Audited as `delete-service` / `delete-ingress`. Editing needs no endpoint of its own: a row opens the generic
+  resource page whose YAML tab uses Phase 25's apply. The chart's `-installer` role grants the verbs; `-viewer` does not.
 - `DELETE /api/v1/secrets/{namespace}/{name}` (owner's decision of 2026-10-09, so that what an uninstalled chart
   leaves behind — a database's password Secret — can be removed) — a plain `Delete()` on one Secret, as the caller
   (`internal/api/secrets.go`). The body must repeat the Secret's name (`{"confirmName": ...}`), `kube-system`/

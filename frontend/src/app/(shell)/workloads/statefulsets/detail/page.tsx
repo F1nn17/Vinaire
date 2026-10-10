@@ -139,6 +139,7 @@ function StatefulSetDetailPage() {
       {tab === "overview" && (
         <WorkloadOverview
           resourceType="statefulsets"
+          yaml={sts.yaml}
           namespace={namespace}
           name={name}
           pods={sts.pods}

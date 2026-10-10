@@ -53,3 +53,38 @@ func (h *Handler) DeleteJob(w http.ResponseWriter, r *http.Request) {
 		return k8s.DeleteJob(r.Context(), cs, ns, name)
 	})(w, r)
 }
+
+// refuseSystem stops a delete aimed at the cluster's own namespaces, and at the `kubernetes` Service
+// that every cluster has in `default` (it is how pods reach the API server).
+func refuseSystem(w http.ResponseWriter, r *http.Request, kind string) bool {
+	ns, name := chi.URLParam(r, "namespace"), chi.URLParam(r, "name")
+	if reservedNamespaces[ns] {
+		respondError(w, http.StatusBadRequest, "namespace "+ns+" is a system namespace; its "+kind+"s can't be deleted from Vinaire")
+		return true
+	}
+	if kind == "service" && ns == "default" && name == "kubernetes" {
+		respondError(w, http.StatusBadRequest, "the kubernetes Service is how pods reach the API server; it can't be deleted from Vinaire")
+		return true
+	}
+	return false
+}
+
+// DeleteService handles DELETE /api/v1/services/{namespace}/{name} (owner's decision of 2026-10-10).
+func (h *Handler) DeleteService(w http.ResponseWriter, r *http.Request) {
+	if refuseSystem(w, r, "service") {
+		return
+	}
+	h.deleteWorkload("delete-service", func(r *http.Request, cs *kubernetes.Clientset, ns, name string) error {
+		return k8s.DeleteService(r.Context(), cs, ns, name)
+	})(w, r)
+}
+
+// DeleteIngress handles DELETE /api/v1/ingresses/{namespace}/{name} (owner's decision of 2026-10-10).
+func (h *Handler) DeleteIngress(w http.ResponseWriter, r *http.Request) {
+	if refuseSystem(w, r, "ingress") {
+		return
+	}
+	h.deleteWorkload("delete-ingress", func(r *http.Request, cs *kubernetes.Clientset, ns, name string) error {
+		return k8s.DeleteIngress(r.Context(), cs, ns, name)
+	})(w, r)
+}

@@ -5,6 +5,7 @@ import type { DeploymentPodRow, MetricResourceType } from "@/lib/types";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { MetricsPanel } from "@/components/metrics/MetricsPanel";
+import { ConfigRefs } from "@/components/workloads/ConfigRefs";
 
 // The Overview of a workload's detail page (Roadmap Phase 66): its metadata on the left, its
 // pods on the right, the usage history below — the layout the Deployment page has had since
@@ -53,6 +54,7 @@ export function WorkloadOverview({
   name,
   pods,
   emptyLabel,
+  yaml,
   children,
 }: {
   resourceType: Exclude<MetricResourceType, "nodes" | "pods">;
@@ -60,13 +62,18 @@ export function WorkloadOverview({
   name: string;
   pods: DeploymentPodRow[];
   emptyLabel?: string;
+  // the workload's own YAML: the Secrets and ConfigMaps it uses become links
+  yaml?: string;
   // the metadata card
   children: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-        <div>{children}</div>
+        <div className="flex flex-col gap-5">
+          {children}
+          {yaml && <ConfigRefs yaml={yaml} namespace={namespace} />}
+        </div>
         <div className="min-w-0">
           <div className="mb-2.5 text-[13px] font-semibold">
             Pods ({pods.length})

@@ -59,3 +59,33 @@ func TestDeleteStatefulSetDaemonSetAndJob(t *testing.T) {
 		}
 	}
 }
+
+func TestDeleteServiceAndIngressKeepSystemObjects(t *testing.T) {
+	hs := newHarness(t, "token")
+	for name, c := range map[string]struct {
+		handler http.HandlerFunc
+		path    string
+	}{
+		"service": {hs.h.DeleteService, "/api/v1/namespaces/app/services/web"},
+		"ingress": {hs.h.DeleteIngress, "/apis/networking.k8s.io/v1/namespaces/app/ingresses/web"},
+	} {
+		for what, ns := range map[string]string{"system namespace": "kube-system"} {
+			if w := hs.deleteWorkloadCall(c.handler, "viewer", ns, "web"); w.Code != http.StatusBadRequest {
+				t.Errorf("%s in a %s: %d", name, what, w.Code)
+			}
+		}
+		if w := hs.deleteWorkloadCall(c.handler, "viewer", "app", "web"); w.Code != 200 {
+			t.Fatalf("%s: %d %s", name, w.Code, w.Body)
+		}
+		if last := hs.api.deleted[len(hs.api.deleted)-1]; last != c.path {
+			t.Errorf("%s: deleted %s, want %s", name, last, c.path)
+		}
+	}
+	before := len(hs.api.deleted)
+	if w := hs.deleteWorkloadCall(hs.h.DeleteService, "viewer", "default", "kubernetes"); w.Code != http.StatusBadRequest {
+		t.Errorf("the kubernetes Service: %d", w.Code)
+	}
+	if len(hs.api.deleted) != before {
+		t.Fatal("the kubernetes Service was deleted")
+	}
+}

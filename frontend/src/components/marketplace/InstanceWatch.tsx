@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import useSWR from "swr";
+import { parse } from "yaml";
+import { getResourceObject, useResourceTable } from "@/lib/api/allResources";
 import { t } from "@/lib/i18n/translate";
 import { useWorkloads } from "@/lib/hooks/useWorkloads";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -26,9 +29,11 @@ const PROBLEMS: Record<string, string> = {
 export function InstanceWatch({
   namespace,
   name,
+  expose = "ClusterIP",
 }: {
   namespace: string;
   name: string;
+  expose?: "ClusterIP" | "NodePort" | "LoadBalancer";
 }) {
   const { data } = useWorkloads("pods", namespace);
   const [started] = useState(() => Date.now());
@@ -50,6 +55,7 @@ export function InstanceWatch({
       const [a, b] = p.ready.split("/");
       return a === b && a !== "0" && p.status === "Running";
     });
+  const outside = useOutsideAddress(namespace, name, expose);
   const problem = pods.map((p) => PROBLEMS[p.status]).find(Boolean);
 
   return (
@@ -83,6 +89,12 @@ export function InstanceWatch({
           </div>
         ))
       )}
+      {outside && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-text-muted">{t("From outside")}:</span>
+          <span className="font-mono">{outside}</span>
+        </div>
+      )}
       {!ready && problem && seconds > 15 && (
         <span className="text-warn">{t(problem)}</span>
       )}
@@ -95,4 +107,61 @@ export function InstanceWatch({
       )}
     </div>
   );
+}
+
+type Svc = {
+  spec?: { ports?: { nodePort?: number; port?: number }[] };
+  status?: {
+    loadBalancer?: { ingress?: { ip?: string; hostname?: string }[] };
+  };
+};
+
+// The address a Service published outside the cluster answers on: a node's address and the node
+// port, or what the load balancer was given (it appears a little after the Service). Read only.
+function useOutsideAddress(
+  namespace: string,
+  name: string,
+  expose: "ClusterIP" | "NodePort" | "LoadBalancer",
+): string {
+  const svc = useSWR(
+    expose === "ClusterIP" ? null : ["outside-svc", namespace, name],
+    () => getResourceObject("core/v1/services", namespace, name),
+    { refreshInterval: 4000 },
+  );
+  const nodes = useResourceTable(
+    expose === "NodePort" ? "core/v1/nodes" : null,
+    "",
+  );
+  const firstNode = nodes.data?.rows[0]?.name ?? "";
+  const nodeAddress = useSWR(
+    firstNode ? ["outside-node", firstNode] : null,
+    async () => {
+      const obj = await getResourceObject("core/v1/nodes", "", firstNode);
+      const doc = parse(obj.yaml) as {
+        status?: { addresses?: { type?: string; address?: string }[] };
+      } | null;
+      const list = doc?.status?.addresses ?? [];
+      return (
+        list.find((a) => a.type === "ExternalIP")?.address ??
+        list.find((a) => a.type === "InternalIP")?.address ??
+        ""
+      );
+    },
+  );
+  if (!svc.data) return "";
+  let doc: Svc | null = null;
+  try {
+    doc = parse(svc.data.yaml) as Svc | null;
+  } catch {
+    return "";
+  }
+  const port = doc?.spec?.ports?.[0];
+  if (expose === "NodePort") {
+    return port?.nodePort && nodeAddress.data
+      ? `${nodeAddress.data}:${port.nodePort}`
+      : "";
+  }
+  const lb = doc?.status?.loadBalancer?.ingress?.[0];
+  const host = lb?.ip ?? lb?.hostname ?? "";
+  return host && port?.port ? `${host}:${port.port}` : "";
 }
