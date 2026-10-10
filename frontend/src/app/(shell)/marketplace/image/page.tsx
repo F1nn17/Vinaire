@@ -9,6 +9,7 @@ import { createResource } from "@/lib/api/resources";
 import { applyErrorMessage } from "@/components/editor/useYamlApply";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { PillTabs } from "@/components/ui/Tabs";
+import { InstanceWatch } from "@/components/marketplace/InstanceWatch";
 import { PostgresPicker } from "@/components/marketplace/PostgresPicker";
 import { parse } from "yaml";
 import { ApiError } from "@/lib/api/http";
@@ -472,6 +473,10 @@ function ImageForm({ preset }: { preset: Preset }) {
             </div>
           )}
         </div>
+
+        {steps.StatefulSet === "done" && (
+          <InstanceWatch namespace={eff.namespace} name={eff.name} />
+        )}
 
         {finished && (
           <div className="flex flex-col gap-2 rounded-lg border border-ok/40 bg-surface-2 p-3 text-xs">
