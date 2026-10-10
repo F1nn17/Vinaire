@@ -43,8 +43,18 @@ export function PostgresPicker({
     "app.kubernetes.io/name=postgresql",
   );
   const b = useResourceTable("core/v1/services", "", "cnpg.io/cluster");
-  const loaded = !!a.data && !!b.data;
-  const rows: TableRow[] = [...(a.data?.rows ?? []), ...(b.data?.rows ?? [])]
+  // a PostgreSQL installed by this app's own "Install from an image" wizard
+  const c = useResourceTable(
+    "core/v1/services",
+    "",
+    "app.kubernetes.io/name=postgres",
+  );
+  const loaded = !!a.data && !!b.data && !!c.data;
+  const rows: TableRow[] = [
+    ...(a.data?.rows ?? []),
+    ...(b.data?.rows ?? []),
+    ...(c.data?.rows ?? []),
+  ]
     // headless and read-only/replica Services aren't where an application should connect
     .filter((r) => !/(-headless|-hl|-ro|-r|-metrics)$/.test(r.name));
   const [picked, setPicked] = useState<{ ns: string; name: string } | null>(
