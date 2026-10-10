@@ -340,7 +340,7 @@
  "Create the first administrator as the chart's notes describe; the notes are shown above.": "Первого администратора создайте так, как описано в заметках chart (они показаны выше).",
  "Create this Secret with a generated password": "Создать этот Secret со сгенерированным паролем",
  "Created if it doesn't exist. Put it next to the application that will use it.": "Создаётся, если его нет. Поставьте рядом с приложением, которое будет его использовать.",
- "Created. The pod needs a minute to start.": "Создано. Поду нужна минута на запуск.",
+ "Created. How to connect:": "Создано. Как подключиться:",
  "Creating…": "Создаём…",
  "Credentials Secret": "Secret с учётными данными",
  "Current": "Текущая",

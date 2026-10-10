@@ -481,7 +481,7 @@ function ImageForm({ preset }: { preset: Preset }) {
         {finished && (
           <div className="flex flex-col gap-2 rounded-lg border border-ok/40 bg-surface-2 p-3 text-xs">
             <div className="font-semibold text-ok">
-              {t("Created. The pod needs a minute to start.")}
+              {t("Created. How to connect:")}
             </div>
             <table className="text-left">
               <tbody>
