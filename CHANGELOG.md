@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Image wizard, Keycloak: the database finds itself.** The preset looks for the PostgreSQL that already runs in the cluster (the same Services the Marketplace's guided setup knows: the common chart's and CloudNativePG's) and fills its address and port; when the credentials Secret is in the install namespace it fills the user, the database and the Secret too, otherwise a click copies it into the install namespace through the audited reveal. No password is shown.
 - **Image wizard: tags from a list, more programs.** The tag field offers the newest versions of the image from Docker Hub or quay.io (`GET /api/v1/images/tags?image=`, anonymous, through the guarded client, cached 10 min; a request names an image, never a URL) and warns about a tag that isn't among them. New presets: Keycloak (connected to an existing PostgreSQL through its Secret), nginx, Memcached, NATS, Grafana, Adminer, Uptime Kuma.
 - **Namespace page: a Workloads tab** with the pods (and deployments, StatefulSets, DaemonSets, Jobs) of that namespace.
 - **Overview: cluster usage history** (CPU, memory, network, disk of the whole cluster from Prometheus; `GET /api/v1/cluster/metrics`).

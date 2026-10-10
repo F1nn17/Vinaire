@@ -9,6 +9,7 @@ import { createResource } from "@/lib/api/resources";
 import { applyErrorMessage } from "@/components/editor/useYamlApply";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { PillTabs } from "@/components/ui/Tabs";
+import { PostgresPicker } from "@/components/marketplace/PostgresPicker";
 import { parse } from "yaml";
 import { ApiError } from "@/lib/api/http";
 import { getResourceObject } from "@/lib/api/allResources";
@@ -323,6 +324,16 @@ function ImageForm({ preset }: { preset: Preset }) {
               "latest moves without warning: the next restart may run another version.",
             )}
           </div>
+        )}
+
+        {preset.id === "keycloak" && (
+          <PostgresPicker
+            installNamespace={form.namespace}
+            secretName={`${form.name || "keycloak"}-db`}
+            onFill={(v) =>
+              setForm((f) => ({ ...f, values: { ...f.values, ...v } }))
+            }
+          />
         )}
 
         {preset.fields

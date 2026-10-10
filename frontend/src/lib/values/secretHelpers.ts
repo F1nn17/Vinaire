@@ -243,3 +243,40 @@ export async function copyCredentials(
     userUnknown: !username,
   };
 }
+
+// What a credentials Secret says about its account, without creating anything: the user and the
+// database (from the Secret's own keys, else from the settings of the workload that runs the
+// database) and which key holds the password. Only `username` and `dbname` are revealed (audited);
+// the password is never read here.
+export async function accountOf(
+  source: CredentialSource,
+  serviceName: string,
+): Promise<{
+  username: string;
+  database: string;
+  passwordKey: string;
+  superuser: boolean;
+  userUnknown: boolean;
+}> {
+  const hints = source.hasUsername
+    ? {}
+    : await databaseHints(source.namespace, serviceName, source.name);
+  const passwordKey =
+    hints.passwordKey && source.keys.includes(hints.passwordKey)
+      ? hints.passwordKey
+      : source.passwordKey;
+  const superuser = passwordKey === "postgres-password";
+  let username = superuser ? "postgres" : (hints.username ?? "");
+  let database = hints.database ?? "";
+  if (source.hasUsername)
+    username = await revealSecretKey(source.namespace, source.name, "username");
+  if (source.keys.includes("dbname"))
+    database = await revealSecretKey(source.namespace, source.name, "dbname");
+  return {
+    username,
+    database,
+    passwordKey,
+    superuser,
+    userUnknown: !username,
+  };
+}
