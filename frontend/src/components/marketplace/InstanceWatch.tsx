@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { parse } from "yaml";
-import { getResourceObject, useResourceTable } from "@/lib/api/allResources";
+import { getResourceObject } from "@/lib/api/allResources";
+import { useNodeAddress } from "@/lib/hooks/useNodeAddress";
 import { t } from "@/lib/i18n/translate";
 import { useWorkloads } from "@/lib/hooks/useWorkloads";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -128,26 +129,7 @@ function useOutsideAddress(
     () => getResourceObject("core/v1/services", namespace, name),
     { refreshInterval: 4000 },
   );
-  const nodes = useResourceTable(
-    expose === "NodePort" ? "core/v1/nodes" : null,
-    "",
-  );
-  const firstNode = nodes.data?.rows[0]?.name ?? "";
-  const nodeAddress = useSWR(
-    firstNode ? ["outside-node", firstNode] : null,
-    async () => {
-      const obj = await getResourceObject("core/v1/nodes", "", firstNode);
-      const doc = parse(obj.yaml) as {
-        status?: { addresses?: { type?: string; address?: string }[] };
-      } | null;
-      const list = doc?.status?.addresses ?? [];
-      return (
-        list.find((a) => a.type === "ExternalIP")?.address ??
-        list.find((a) => a.type === "InternalIP")?.address ??
-        ""
-      );
-    },
-  );
+  const nodeAddress = useNodeAddress(expose === "NodePort");
   if (!svc.data) return "";
   let doc: Svc | null = null;
   try {
@@ -157,8 +139,8 @@ function useOutsideAddress(
   }
   const port = doc?.spec?.ports?.[0];
   if (expose === "NodePort") {
-    return port?.nodePort && nodeAddress.data
-      ? `${nodeAddress.data}:${port.nodePort}`
+    return port?.nodePort && nodeAddress
+      ? `${nodeAddress}:${port.nodePort}`
       : "";
   }
   const lb = doc?.status?.loadBalancer?.ingress?.[0];

@@ -5,6 +5,8 @@ import { useState } from "react";
 import { t } from "@/lib/i18n/translate";
 import { useGatewayResources, useIngresses } from "@/lib/hooks/useNetwork";
 import { useResourceTable, type TableRow } from "@/lib/api/allResources";
+import { PublishServiceModal } from "@/components/network/PublishServiceModal";
+import { useNodeAddress } from "@/lib/hooks/useNodeAddress";
 import { BulkBar } from "@/components/workloads/BulkActions";
 import { BULK_MAX } from "@/lib/api/bulk";
 import { friendlyErrorMessage } from "@/lib/api/errors";
@@ -17,10 +19,12 @@ import { CreateResourceModal } from "@/components/editor/CreateResourceModal";
 import { networkTemplates } from "@/components/editor/templates";
 import { PlusIcon } from "@/components/icons";
 
-type Tab = "services" | "ingress" | "gateway";
+type Tab = "services" | "nodeports" | "loadbalancers" | "ingress" | "gateway";
 
 const tabs: { key: Tab; label: string }[] = [
   { key: "services", label: "Services" },
+  { key: "nodeports", label: "Node ports" },
+  { key: "loadbalancers", label: "Load balancers" },
   { key: "ingress", label: "Ingress" },
   { key: "gateway", label: "Gateway API" },
 ];
@@ -96,6 +100,8 @@ const gatewayColumns: DataTableColumn<GatewayRow>[] = [
 
 function serviceColumns(
   columns: { name: string }[],
+  mode: "all" | "nodeports" | "loadbalancers" = "all",
+  nodeAddress = "",
 ): DataTableColumn<TableRow>[] {
   const c = (name: string, header: string, width: string, mono = true) => ({
     header,
@@ -121,12 +127,38 @@ function serviceColumns(
         <span className="font-mono text-xs text-text-muted">{r.namespace}</span>
       ),
     },
-    c("type", "Type", ".8fr"),
+    ...(mode === "all" ? [c("type", "Type", ".8fr")] : []),
     c("cluster-ip", "Cluster IP", "1fr"),
-    c("external-ip", "External IP", "1fr"),
+    ...(mode !== "nodeports" ? [c("external-ip", "External IP", "1fr")] : []),
     c("port(s)", "Ports", "1.6fr"),
+    ...(mode === "nodeports"
+      ? [
+          {
+            header: "Reach it at",
+            width: "1.6fr",
+            sortValue: (r: TableRow) =>
+              reachAt(cell(r, columns, "port(s)"), nodeAddress),
+            render: (r: TableRow) => (
+              <span className="truncate font-mono text-xs">
+                {reachAt(cell(r, columns, "port(s)"), nodeAddress) || "—"}
+              </span>
+            ),
+          },
+        ]
+      : []),
     c("age", "Age", ".6fr"),
   ];
+}
+
+// "5432:32041/TCP,80:30080/TCP" -> "10.0.0.5:32041, 10.0.0.5:30080" (a NodePort is open on every node)
+function reachAt(ports: string, node: string): string {
+  if (!node) return "";
+  return ports
+    .split(",")
+    .map((p) => /^[0-9]+:([0-9]+)\//.exec(p.trim())?.[1])
+    .filter(Boolean)
+    .map((np) => `${node}:${np}`)
+    .join(", ");
 }
 
 // A Service row is the cluster's own table (`kubectl get svc`): the columns are found by name.
@@ -159,9 +191,23 @@ export default function NetworkPage() {
     keys: new Set(),
   });
   const selected = picked.tab === tab ? picked.keys : new Set<string>();
-  const svcRows = svcTable.data?.rows ?? [];
-  const rowsOfTab: { namespace?: string; name: string }[] =
-    tab === "services" ? svcRows : tab === "ingress" ? (ingressRows ?? []) : [];
+  const allSvcRows = svcTable.data?.rows ?? [];
+  const typeOf = (r: TableRow) => cell(r, svcTable.data?.columns ?? [], "type");
+  const svcRows =
+    tab === "nodeports"
+      ? allSvcRows.filter((r) => typeOf(r) === "NodePort")
+      : tab === "loadbalancers"
+        ? allSvcRows.filter((r) => typeOf(r) === "LoadBalancer")
+        : allSvcRows;
+  const isSvcTab =
+    tab === "services" || tab === "nodeports" || tab === "loadbalancers";
+  const nodeAddress = useNodeAddress(tab === "nodeports");
+  const [publishOpen, setPublishOpen] = useState(false);
+  const rowsOfTab: { namespace?: string; name: string }[] = isSvcTab
+    ? svcRows
+    : tab === "ingress"
+      ? (ingressRows ?? [])
+      : [];
   const selectedItems = rowsOfTab
     .filter((r) => selected.has(`${r.namespace}/${r.name}`))
     .map((r) => ({ namespace: r.namespace ?? "", name: r.name }));
@@ -174,15 +220,26 @@ export default function NetworkPage() {
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
       <div className="flex items-center justify-between">
-        <div className="text-[15px] font-semibold">Services &amp; Ingress</div>
-        <button
-          type="button"
-          onClick={() => setCreateOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
-        >
-          <PlusIcon />
-          Create
-        </button>
+        <div className="text-[15px] font-semibold">{t("Routing")}</div>
+        <div className="flex items-center gap-2">
+          {isSvcTab && (
+            <button
+              type="button"
+              onClick={() => setPublishOpen(true)}
+              className="rounded-lg border border-border bg-surface px-3.5 py-2 text-[12.5px] font-semibold text-accent-text hover:border-accent"
+            >
+              {t("Publish a Service outside")}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-white"
+          >
+            <PlusIcon />
+            Create
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-3">
@@ -200,10 +257,10 @@ export default function NetworkPage() {
         </label>
       </div>
 
-      {(tab === "services" || tab === "ingress") && (
+      {(isSvcTab || tab === "ingress") && (
         <>
           <BulkBar
-            kind={tab === "services" ? "services" : "ingresses"}
+            kind={isSvcTab ? "services" : "ingresses"}
             items={selectedItems}
             onClear={() => setPicked({ tab, keys: new Set() })}
             onFinished={(done) => {
@@ -222,14 +279,18 @@ export default function NetworkPage() {
         </>
       )}
 
-      {tab === "services" &&
+      {isSvcTab &&
         (svcTable.error ? (
           <div className="text-sm text-err">
             Failed to load Services: {friendlyErrorMessage(svcTable.error)}
           </div>
         ) : (
           <DataTable
-            columns={serviceColumns(svcTable.data?.columns ?? [])}
+            columns={serviceColumns(
+              svcTable.data?.columns ?? [],
+              tab === "nodeports" || tab === "loadbalancers" ? tab : "all",
+              nodeAddress,
+            )}
             rows={svcRows}
             rowKey={(r) => `${r.namespace}/${r.name}`}
             rowHref={(r) => openLink("core/v1/services", r)}
@@ -239,7 +300,17 @@ export default function NetworkPage() {
               onChange: (keys) => setPicked({ tab, keys }),
               max: BULK_MAX,
             }}
-            emptyLabel={`No Services found${namespace ? ` in namespace "${namespace}"` : ""}.`}
+            emptyLabel={
+              tab === "nodeports"
+                ? t(
+                    "No Service is published on a node port. Use “Publish a Service outside”.",
+                  )
+                : tab === "loadbalancers"
+                  ? t(
+                      "No Service is published through a load balancer. Use “Publish a Service outside”.",
+                    )
+                  : `No Services found${namespace ? ` in namespace "${namespace}"` : ""}.`
+            }
           />
         ))}
 
@@ -285,6 +356,22 @@ export default function NetworkPage() {
             emptyLabel={`No Gateway API resources found${namespace ? ` in namespace "${namespace}"` : ""}.`}
           />
         ))}
+
+      {publishOpen && (
+        <PublishServiceModal
+          services={allSvcRows}
+          initial={
+            isSvcTab && selectedItems.length === 1
+              ? selectedItems[0]
+              : undefined
+          }
+          onClose={() => setPublishOpen(false)}
+          onCreated={() => {
+            void svcTable.mutate();
+            setTab("nodeports");
+          }}
+        />
+      )}
 
       {createOpen && (
         <CreateResourceModal

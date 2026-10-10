@@ -81,6 +81,9 @@ flow.
   (`GET /api/v1/images/tags`, `internal/imagetags`) is a read of two fixed public registries (Docker Hub, quay.io) through
   `internal/netguard`: the request names an image checked against a strict pattern, never a URL or a host, and a `next` link in a
   registry's answer is followed only if it stays on that registry.
+- "Publish a Service outside" (Routing page, `frontend/src/components/network/PublishServiceModal.tsx`) adds **no write path**:
+  it builds one more Service (NodePort or LoadBalancer, same selector and ports as an existing Service, never touching that one)
+  and creates it through the generic YAML create above, as the caller.
 - `DELETE /api/v1/services/{namespace}/{name}` and `DELETE /api/v1/ingresses/{namespace}/{name}` (owner's decision of
   2026-10-10, so that Services & Ingress has a multi-select and a Delete like the workload lists) — plain `Delete()` calls as the
   caller (`internal/api/workload_delete.go`); names validated, system namespaces refused, and so is the `kubernetes` Service of

@@ -173,7 +173,7 @@ const groups: NavGroup[] = [
     items: [
       {
         href: "/network",
-        label: "Services & Ingress",
+        label: "Routing",
         icon: <NetworkIcon />,
         isActive: (p) => p.startsWith("/network"),
       },
