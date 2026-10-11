@@ -10,6 +10,7 @@ import { friendlyErrorMessage } from "@/lib/api/errors";
 import { t } from "@/lib/i18n/translate";
 import { ListDetailSplit } from "@/components/ui/ListDetailSplit";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { SecretKeyModal } from "@/components/secrets/SecretKeyModal";
 import { LoginHint } from "@/components/secrets/LoginHint";
 import { DeleteSecretModal } from "@/components/secrets/DeleteSecretModal";
 import { CreateResourceModal } from "@/components/editor/CreateResourceModal";
@@ -174,6 +175,7 @@ function SecretsList({
 }) {
   const selected = data.find((s) => s.id === selectedId) ?? data[0];
   const [deleting, setDeleting] = useState(false);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
 
   const [copied, setCopied] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
@@ -268,14 +270,33 @@ function SecretsList({
             ns/{selected.namespace} · {selected.type} · {selected.age}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setDeleting(true)}
-          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-err"
-        >
-          Delete
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setEditingKey("")}
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-accent-text"
+          >
+            {t("Add or change a key")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleting(true)}
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-err"
+          >
+            Delete
+          </button>
+        </div>
       </div>
+      {editingKey !== null && (
+        <SecretKeyModal
+          namespace={selected.namespace}
+          name={selected.name}
+          existing={selected.keys.map((k) => k.label)}
+          initialKey={editingKey}
+          onClose={() => setEditingKey(null)}
+          onSaved={onDeleted}
+        />
+      )}
       {deleting && (
         <DeleteSecretModal
           namespace={selected.namespace}

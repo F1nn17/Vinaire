@@ -113,12 +113,14 @@ export async function findLoginHint(
   return null;
 }
 
-// Copy the login found into the Secret as `username` (and `dbname`). Every existing value is read
-// through the audited reveal and written back unchanged, because an update replaces the object.
-export async function addLoginToSecret(
+// Add keys to a Secret, or change their values. Every existing value is read through the audited
+// reveal and written back unchanged, because an update replaces the whole object; only the keys given
+// differ. (`overwrite: false` leaves a key that already exists alone.)
+export async function setSecretKeys(
   namespace: string,
   secret: string,
-  hint: LoginHint,
+  changes: Record<string, string>,
+  overwrite = true,
 ): Promise<void> {
   const obj = await getResourceObject("core/v1/secrets", namespace, secret);
   const doc = parse(obj.yaml) as {
@@ -133,10 +135,9 @@ export async function addLoginToSecret(
   const keys = Object.keys(doc?.data ?? {});
   const values: Record<string, string> = {};
   for (const k of keys) values[k] = await revealSecretKey(namespace, secret, k);
-  if (hint.username && !("username" in values))
-    values.username = hint.username.value;
-  if (hint.database && !("dbname" in values))
-    values.dbname = hint.database.value;
+  for (const [k, v] of Object.entries(changes)) {
+    if (overwrite || !(k in values)) values[k] = v;
+  }
 
   const annotations = { ...(doc?.metadata?.annotations ?? {}) };
   delete annotations["kubectl.kubernetes.io/last-applied-configuration"];
@@ -160,4 +161,21 @@ export async function addLoginToSecret(
   );
   const dry = await dryRunResource(yaml, "update");
   await updateResource(yaml, dry.resourceVersion ?? "");
+}
+
+// Copy the login found into the Secret as `username` (and `dbname`).
+export async function addLoginToSecret(
+  namespace: string,
+  secret: string,
+  hint: LoginHint,
+): Promise<void> {
+  await setSecretKeys(
+    namespace,
+    secret,
+    {
+      ...(hint.username ? { username: hint.username.value } : {}),
+      ...(hint.database ? { dbname: hint.database.value } : {}),
+    },
+    false,
+  );
 }
