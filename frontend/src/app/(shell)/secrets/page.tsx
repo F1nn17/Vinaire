@@ -1,5 +1,6 @@
 "use client";
 
+import { NamespaceSelect } from "@/components/ui/NamespaceSelect";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { copyText } from "@/lib/clipboard";
@@ -9,6 +10,7 @@ import { friendlyErrorMessage } from "@/lib/api/errors";
 import { t } from "@/lib/i18n/translate";
 import { ListDetailSplit } from "@/components/ui/ListDetailSplit";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { LoginHint } from "@/components/secrets/LoginHint";
 import { DeleteSecretModal } from "@/components/secrets/DeleteSecretModal";
 import { CreateResourceModal } from "@/components/editor/CreateResourceModal";
 import { secretTemplates } from "@/components/editor/templates";
@@ -116,13 +118,7 @@ function SecretsInner() {
         </label>
         <label className="flex w-fit items-center gap-2">
           <span className="sr-only">Filter by namespace</span>
-          <input
-            type="text"
-            value={namespace}
-            onChange={(e) => setNamespace(e.target.value)}
-            placeholder="All namespaces"
-            className="rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint"
-          />
+          <NamespaceSelect value={namespace} onChange={setNamespace} />
         </label>
       </div>
 
@@ -292,6 +288,13 @@ function SecretsList({
         />
       )}
       <div className="flex flex-1 flex-col gap-3 overflow-auto">
+        <LoginHint
+          key={`${selected.namespace}/${selected.name}`}
+          namespace={selected.namespace}
+          name={selected.name}
+          keys={selected.keys}
+          onChanged={onDeleted}
+        />
         {copyError && <div className="text-xs text-err">{copyError}</div>}
         {selected.keys.length === 0 ? (
           <div className="text-xs text-text-muted">No keys.</div>

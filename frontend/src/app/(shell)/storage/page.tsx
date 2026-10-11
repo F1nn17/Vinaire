@@ -1,5 +1,6 @@
 "use client";
 
+import { NamespaceSelect } from "@/components/ui/NamespaceSelect";
 import { useRememberedState } from "@/lib/hooks/useRememberedState";
 import { useState } from "react";
 import { usePVCs, usePVs, useStorageClasses } from "@/lib/hooks/useStorage";
@@ -202,13 +203,7 @@ export default function StoragePage() {
         {tab === "pvcs" && (
           <label className="flex items-center gap-2">
             <span className="sr-only">Filter by namespace</span>
-            <input
-              type="text"
-              value={namespace}
-              onChange={(e) => setNamespace(e.target.value)}
-              placeholder="All namespaces"
-              className="rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint"
-            />
+            <NamespaceSelect value={namespace} onChange={setNamespace} />
           </label>
         )}
       </div>
