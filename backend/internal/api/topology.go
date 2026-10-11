@@ -7,14 +7,16 @@ import (
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/shiraku/vinaire/backend/internal/k8s"
 )
 
 // TopologyNode is one resource in the graph. Kind is one of "ingress",
-// "service", "deployment", "pod", "configmap", "secret".
+// "service", "deployment", "statefulset", "daemonset", "job", "pod", "configmap", "secret".
 type TopologyNode struct {
 	ID          string      `json:"id"`
 	Kind        string      `json:"kind"`
@@ -54,45 +56,62 @@ func (h *Handler) Topology(w http.ResponseWriter, r *http.Request) {
 	if namespace == "" {
 		namespace = "default"
 	}
+	// "all" is every namespace: the lists below take an empty namespace to mean that
+	scope := namespace
+	if namespace == "all" {
+		scope = ""
+	}
 
 	ctx := r.Context()
 
-	ingresses, err := k8s.ListIngresses(ctx, clientset, namespace)
+	ingresses, err := k8s.ListIngresses(ctx, clientset, scope)
 	if err != nil {
 		respondK8sError(w, err)
 		return
 	}
-	services, err := k8s.ListServices(ctx, clientset, namespace)
+	services, err := k8s.ListServices(ctx, clientset, scope)
 	if err != nil {
 		respondK8sError(w, err)
 		return
 	}
-	deployments, err := k8s.ListDeployments(ctx, clientset, namespace)
+	deployments, err := k8s.ListDeployments(ctx, clientset, scope)
 	if err != nil {
 		respondK8sError(w, err)
 		return
 	}
-	pods, err := k8s.ListPods(ctx, clientset, namespace)
+	// A kind the caller may not list leaves its nodes out; it doesn't blank the whole graph.
+	statefulsets, _ := k8s.ListStatefulSets(ctx, clientset, scope)
+	daemonsets, _ := k8s.ListDaemonSets(ctx, clientset, scope)
+	jobs, _ := k8s.ListJobs(ctx, clientset, scope)
+	pods, err := k8s.ListPods(ctx, clientset, scope)
 	if err != nil {
 		respondK8sError(w, err)
 		return
 	}
-	configMaps, err := k8s.ListConfigMaps(ctx, clientset, namespace)
+	configMaps, err := k8s.ListConfigMaps(ctx, clientset, scope)
 	if err != nil {
 		respondK8sError(w, err)
 		return
 	}
-	secrets, err := k8s.ListSecrets(ctx, clientset, namespace)
+	secrets, err := k8s.ListSecrets(ctx, clientset, scope)
 	if err != nil {
 		respondK8sError(w, err)
 		return
 	}
 
-	respondJSON(w, buildTopologyGraph(namespace, ingresses, services, deployments, pods, configMaps, secrets))
+	respondJSON(w, buildTopologyGraph(namespace, ingresses, services, deployments, statefulsets, daemonsets, jobs, pods, configMaps, secrets))
 }
 
 func nodeID(kind, namespace, name string) string {
 	return kind + "/" + namespace + "/" + name
+}
+
+// topologyWorkload is what the graph needs of any pod-owning kind: who it is, which pods are its
+// own, and what its pod template refers to.
+type topologyWorkload struct {
+	node     TopologyNode
+	selector map[string]string
+	spec     corev1.PodSpec
 }
 
 func buildTopologyGraph(
@@ -100,6 +119,9 @@ func buildTopologyGraph(
 	ingresses []networkingv1.Ingress,
 	services []corev1.Service,
 	deployments []appsv1.Deployment,
+	statefulsets []appsv1.StatefulSet,
+	daemonsets []appsv1.DaemonSet,
+	jobs []batchv1.Job,
 	pods []corev1.Pod,
 	configMaps []corev1.ConfigMap,
 	secrets []corev1.Secret,
@@ -110,6 +132,26 @@ func buildTopologyGraph(
 		nodeIndex[n.ID] = len(nodes)
 		nodes = append(nodes, n)
 	}
+	matchLabels := func(sel *metav1.LabelSelector) map[string]string {
+		if sel == nil {
+			return map[string]string{}
+		}
+		return sel.MatchLabels
+	}
+
+	var workloads []topologyWorkload
+	for _, d := range deployments {
+		workloads = append(workloads, topologyWorkload{deploymentTopologyNode(d), matchLabels(d.Spec.Selector), d.Spec.Template.Spec})
+	}
+	for _, st := range statefulsets {
+		workloads = append(workloads, topologyWorkload{statefulSetTopologyNode(st), matchLabels(st.Spec.Selector), st.Spec.Template.Spec})
+	}
+	for _, ds := range daemonsets {
+		workloads = append(workloads, topologyWorkload{daemonSetTopologyNode(ds), matchLabels(ds.Spec.Selector), ds.Spec.Template.Spec})
+	}
+	for _, j := range jobs {
+		workloads = append(workloads, topologyWorkload{jobTopologyNode(j), matchLabels(j.Spec.Selector), j.Spec.Template.Spec})
+	}
 
 	for _, ing := range ingresses {
 		addNode(ingressNode(ing))
@@ -117,8 +159,8 @@ func buildTopologyGraph(
 	for _, s := range services {
 		addNode(serviceNode(s))
 	}
-	for _, d := range deployments {
-		addNode(deploymentTopologyNode(d))
+	for _, w := range workloads {
+		addNode(w.node)
 	}
 	for _, p := range pods {
 		addNode(podTopologyNode(p))
@@ -130,9 +172,11 @@ func buildTopologyGraph(
 		addNode(secretTopologyNode(s))
 	}
 
-	serviceByName := make(map[string]corev1.Service, len(services))
+	// With every namespace in one graph, a name alone no longer says which object is meant:
+	// everything is matched inside its own namespace.
+	serviceByKey := make(map[string]corev1.Service, len(services))
 	for _, s := range services {
-		serviceByName[s.Name] = s
+		serviceByKey[s.Namespace+"/"+s.Name] = s
 	}
 
 	var edges []TopologyEdge
@@ -143,58 +187,54 @@ func buildTopologyGraph(
 	for _, ing := range ingresses {
 		ingID := nodeID("ingress", ing.Namespace, ing.Name)
 		for _, svcName := range ingressBackendServiceNames(ing) {
-			if svc, ok := serviceByName[svcName]; ok {
+			if svc, ok := serviceByKey[ing.Namespace+"/"+svcName]; ok {
 				edges = append(edges, TopologyEdge{From: ingID, To: nodeID("service", svc.Namespace, svc.Name)})
 			}
 		}
 	}
 
-	// Service -> Pods (selector match)
+	// Service -> Pods (selector match, same namespace)
 	for _, s := range services {
 		if len(s.Spec.Selector) == 0 {
 			continue
 		}
 		svcID := nodeID("service", s.Namespace, s.Name)
 		for _, p := range pods {
-			if labelsMatch(s.Spec.Selector, p.Labels) {
+			if p.Namespace == s.Namespace && labelsMatch(s.Spec.Selector, p.Labels) {
 				edges = append(edges, TopologyEdge{From: svcID, To: nodeID("pod", p.Namespace, p.Name)})
 			}
 		}
 	}
 
-	// Deployment -> Pods (selector match, skipping the ReplicaSet hop) and
-	// Deployment -> ConfigMap/Secret (scanned from the pod template).
-	for _, d := range deployments {
-		depID := nodeID("deployment", d.Namespace, d.Name)
-
-		selector := map[string]string{}
-		if d.Spec.Selector != nil {
-			selector = d.Spec.Selector.MatchLabels
-		}
-		for _, p := range pods {
-			if labelsMatch(selector, p.Labels) {
-				edges = append(edges, TopologyEdge{From: depID, To: nodeID("pod", p.Namespace, p.Name)})
+	// Workload -> Pods (selector match, skipping the ReplicaSet hop) and Workload -> ConfigMap/Secret
+	// (scanned from the pod template).
+	for _, w := range workloads {
+		wID := w.node.ID
+		if len(w.selector) > 0 {
+			for _, p := range pods {
+				if p.Namespace == w.node.Namespace && labelsMatch(w.selector, p.Labels) {
+					edges = append(edges, TopologyEdge{From: wID, To: nodeID("pod", p.Namespace, p.Name)})
+				}
 			}
 		}
-
-		for _, cmName := range configMapRefsInPodSpec(d.Spec.Template.Spec) {
-			cmID := nodeID("configmap", d.Namespace, cmName)
+		for _, cmName := range configMapRefsInPodSpec(w.spec) {
+			cmID := nodeID("configmap", w.node.Namespace, cmName)
 			if _, ok := nodeIndex[cmID]; ok {
-				edges = append(edges, TopologyEdge{From: depID, To: cmID})
+				edges = append(edges, TopologyEdge{From: wID, To: cmID})
 				usedConfigMaps[cmID] = true
 			}
 		}
-		for _, secretName := range secretRefsInPodSpec(d.Spec.Template.Spec) {
-			secretID := nodeID("secret", d.Namespace, secretName)
+		for _, secretName := range secretRefsInPodSpec(w.spec) {
+			secretID := nodeID("secret", w.node.Namespace, secretName)
 			if _, ok := nodeIndex[secretID]; ok {
-				edges = append(edges, TopologyEdge{From: depID, To: secretID})
+				edges = append(edges, TopologyEdge{From: wID, To: secretID})
 				usedSecrets[secretID] = true
 			}
 		}
 	}
 
 	// ConfigMap/Secret status depends on whether anything actually
-	// references them — only known once every deployment has been scanned.
+	// references them — only known once every workload has been scanned.
 	for id, idx := range nodeIndex {
 		switch nodes[idx].Kind {
 		case "configmap":
@@ -492,5 +532,50 @@ func secretTopologyNode(s corev1.Secret) TopologyNode {
 			{"Type", string(s.Type)},
 			{"Keys", keysStr},
 		},
+	}
+}
+
+func statefulSetTopologyNode(st appsv1.StatefulSet) TopologyNode {
+	desired := int32(1)
+	if st.Spec.Replicas != nil {
+		desired = *st.Spec.Replicas
+	}
+	status, color := readyStatus(st.Status.ReadyReplicas, desired)
+	image := "—"
+	if len(st.Spec.Template.Spec.Containers) > 0 {
+		image = st.Spec.Template.Spec.Containers[0].Image
+	}
+	return TopologyNode{
+		ID: nodeID("statefulset", st.Namespace, st.Name), Kind: "statefulset", Name: st.Name, Namespace: st.Namespace,
+		StatusText: status, StatusColor: string(color),
+		Extra: [][2]string{{"Replicas", fmt.Sprintf("%d/%d ready", st.Status.ReadyReplicas, desired)}, {"Image", image}},
+	}
+}
+
+func daemonSetTopologyNode(ds appsv1.DaemonSet) TopologyNode {
+	status, color := readyStatus(ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)
+	image := "—"
+	if len(ds.Spec.Template.Spec.Containers) > 0 {
+		image = ds.Spec.Template.Spec.Containers[0].Image
+	}
+	return TopologyNode{
+		ID: nodeID("daemonset", ds.Namespace, ds.Name), Kind: "daemonset", Name: ds.Name, Namespace: ds.Namespace,
+		StatusText: status, StatusColor: string(color),
+		Extra: [][2]string{{"Nodes", fmt.Sprintf("%d/%d ready", ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)}, {"Image", image}},
+	}
+}
+
+func jobTopologyNode(j batchv1.Job) TopologyNode {
+	status, color := "Running", StatusOK
+	switch {
+	case j.Status.Failed > 0 && j.Status.Succeeded == 0 && j.Status.Active == 0:
+		status, color = "Failed", StatusErr
+	case j.Status.Succeeded > 0 && j.Status.Active == 0:
+		status = "Complete"
+	}
+	return TopologyNode{
+		ID: nodeID("job", j.Namespace, j.Name), Kind: "job", Name: j.Name, Namespace: j.Namespace,
+		StatusText: status, StatusColor: string(color),
+		Extra: [][2]string{{"Succeeded", fmt.Sprintf("%d", j.Status.Succeeded)}, {"Failed", fmt.Sprintf("%d", j.Status.Failed)}},
 	}
 }

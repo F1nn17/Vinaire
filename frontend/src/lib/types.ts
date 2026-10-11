@@ -580,7 +580,15 @@ export type DashboardData = {
 // Real graph shape (Roadmap Phase 7) — node count and edges vary per
 // namespace, computed server-side from owner references and selectors.
 export type TopologyNodeKind =
-  "ingress" | "service" | "deployment" | "pod" | "configmap" | "secret";
+  | "ingress"
+  | "service"
+  | "deployment"
+  | "statefulset"
+  | "daemonset"
+  | "job"
+  | "pod"
+  | "configmap"
+  | "secret";
 
 export type TopologyNode = {
   id: string;
