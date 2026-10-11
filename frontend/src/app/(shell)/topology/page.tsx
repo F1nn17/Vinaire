@@ -62,8 +62,13 @@ const ROW_H = 104;
 
 type Point = { x: number; y: number };
 
-// Positions in pixels inside a panel whose width is the widest row.
-function layoutNodes(nodes: TopologyNode[]): {
+// Positions in pixels inside a panel whose width is the widest row. Rows are laid out top to bottom
+// and each row is ordered by where its neighbours in the rows above sit (their average position), so
+// related objects end up under one another and the lines cross as little as this simple scheme can.
+function layoutNodes(
+  nodes: TopologyNode[],
+  edges: { from: string; to: string }[],
+): {
   points: Map<string, Point>;
   width: number;
   height: number;
@@ -72,24 +77,41 @@ function layoutNodes(nodes: TopologyNode[]): {
     (a, b) => a - b,
   );
   const rowOf = new Map(ranks.map((rank, i) => [rank, i]));
-  const byRow = new Map<number, TopologyNode[]>();
-  for (const n of nodes) {
-    const row = rowOf.get(KIND_RANK[n.kind])!;
-    if (!byRow.has(row)) byRow.set(row, []);
-    byRow.get(row)!.push(n);
-  }
-  const widest = Math.max(1, ...[...byRow.values()].map((r) => r.length));
+  const byRow: TopologyNode[][] = ranks.map(() => []);
+  for (const n of nodes) byRow[rowOf.get(KIND_RANK[n.kind])!].push(n);
+  const widest = Math.max(1, ...byRow.map((r) => r.length));
   const width = Math.max(560, widest * (NODE_W + NODE_GAP) + NODE_GAP);
   const height = Math.max(1, ranks.length) * ROW_H + 20;
+
+  const neighbours = new Map<string, string[]>();
+  for (const e of edges) {
+    (neighbours.get(e.from) ?? neighbours.set(e.from, []).get(e.from)!).push(
+      e.to,
+    );
+    (neighbours.get(e.to) ?? neighbours.set(e.to, []).get(e.to)!).push(e.from);
+  }
+
   const points = new Map<string, Point>();
-  for (const [row, rowNodes] of byRow) {
-    rowNodes.forEach((n, i) => {
+  byRow.forEach((row, r) => {
+    const keyOf = (n: TopologyNode, i: number): number => {
+      const xs = (neighbours.get(n.id) ?? [])
+        .map((id) => points.get(id)?.x)
+        .filter((x): x is number => x !== undefined);
+      return xs.length
+        ? xs.reduce((a, b) => a + b, 0) / xs.length
+        : (i / row.length) * width;
+    };
+    const ordered = row
+      .map((n, i) => ({ n, k: keyOf(n, i) }))
+      .sort((a, b) => a.k - b.k || a.n.name.localeCompare(b.n.name))
+      .map((x) => x.n);
+    ordered.forEach((n, i) => {
       points.set(n.id, {
-        x: ((i + 0.5) / rowNodes.length) * width,
-        y: row * ROW_H + ROW_H / 2 + 10,
+        x: ((i + 0.5) / ordered.length) * width,
+        y: r * ROW_H + ROW_H / 2 + 10,
       });
     });
-  }
+  });
   return { points, width, height };
 }
 
@@ -130,7 +152,7 @@ export default function TopologyPage() {
     );
   }, [nodes]);
 
-  const selected = nodes.find((n) => n.id === selectedId) ?? nodes[0];
+  const selected = nodes.find((n) => n.id === selectedId) ?? groups[0]?.[1][0];
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
@@ -251,9 +273,15 @@ function NamespacePanel({
   onSelect: (id: string) => void;
   defaultOpen: boolean;
 }) {
-  const { points, width, height } = useMemo(() => layoutNodes(nodes), [nodes]);
   const ids = useMemo(() => new Set(nodes.map((n) => n.id)), [nodes]);
-  const own = edges.filter((e) => ids.has(e.from) && ids.has(e.to));
+  const own = useMemo(
+    () => edges.filter((e) => ids.has(e.from) && ids.has(e.to)),
+    [edges, ids],
+  );
+  const { points, width, height } = useMemo(
+    () => layoutNodes(nodes, own),
+    [nodes, own],
+  );
   const problems = nodes.filter((n) => n.statusColor === "err").length;
 
   return (
