@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-12
+
+The first public release. Everything below was built up over Roadmap phases 1–67; from here on, changes go into `[Unreleased]` and a release cuts them (see docs/releasing.md).
+
+### Release
+
+- **A release is made by one workflow run** (Roadmap Phase 64): `scripts/release-prepare.sh <version>` bumps the chart and cuts this changelog in a pull request; the Release workflow, run from `main` with that version, builds, signs (cosign), attests (SBOM, provenance), publishes the image and the chart to ghcr.io and creates the tag and the GitHub Release with these notes. `scripts/verify-release.sh` checks a published release. See docs/releasing.md.
+- **Ready to open** (Roadmap Phase 65): the Go module path now matches the repository (`github.com/f1nn17/vinaire/backend`), the history was scanned for secrets (none found), and the README, `SECURITY.md` and `CONTRIBUTING.md` are written for outside readers.
+
 ### Added
 
 - **Secrets: "Add or change a key".** A button on every Secret opens a small form (key, value, quick picks `username`, `password`, `dbname`, `host`, `port`) to add the login — or any key — to a Secret, or replace a value. The other keys are read through the audited reveal and written back unchanged (an update replaces the object), via the generic YAML update; a replaced key is flagged first.

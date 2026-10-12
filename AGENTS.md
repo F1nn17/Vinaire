@@ -837,7 +837,7 @@ resource name it doesn't know at build time — these pages instead read
 .
 ├── frontend/               Next.js (App Router) + TypeScript + Tailwind CSS
 │   └── src/app/            Pages, layouts, route handlers
-├── backend/                Go module: github.com/shiraku/vinaire/backend
+├── backend/                Go module: github.com/f1nn17/vinaire/backend
 │   ├── main.go             HTTP server (chi), route wiring, graceful shutdown
 │   ├── internal/config/    env-driven config (PORT, KUBECONFIG, CORS, OIDC,
 │   │                       CLUSTER_CONTEXTS)
@@ -961,6 +961,6 @@ later.
 
 ## Git module path
 
-The Go module is `github.com/shiraku/vinaire/backend`. If the actual GitHub
+The Go module is `github.com/f1nn17/vinaire/backend`. If the actual GitHub
 org/repo location changes, update `go.mod`'s module line and all internal
 import paths together in one commit.

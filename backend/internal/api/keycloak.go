@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/keycloak"
-	"github.com/shiraku/vinaire/backend/internal/netguard"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/keycloak"
+	"github.com/f1nn17/vinaire/backend/internal/netguard"
 )
 
 // Sign-in through Keycloak in one click (Roadmap Phase 47). A wizard on the

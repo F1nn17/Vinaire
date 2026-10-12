@@ -8,8 +8,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
 )
 
 // tokenValidator asks the default cluster whether a pasted token is accepted, by

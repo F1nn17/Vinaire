@@ -14,8 +14,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/shiraku/vinaire/backend/internal/helm"
-	"github.com/shiraku/vinaire/backend/internal/imagetags"
+	"github.com/f1nn17/vinaire/backend/internal/helm"
+	"github.com/f1nn17/vinaire/backend/internal/imagetags"
 )
 
 // Roadmap Phase 28: the application catalog. Browsing charts is read-only and

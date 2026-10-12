@@ -15,7 +15,7 @@ import (
 	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
 )
 
 // ResourceUsage matches the frontend's `{ used, limit, pct }` shape used for

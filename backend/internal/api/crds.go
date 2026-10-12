@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
 )
 
 // CRDRow matches the frontend's CRDRow type (frontend/src/lib/types.ts).

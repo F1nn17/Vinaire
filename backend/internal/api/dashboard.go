@@ -18,7 +18,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
 )
 
 // dashboardSampleLimit caps how many example pod/application names ride

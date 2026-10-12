@@ -9,7 +9,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/shiraku/vinaire/backend/internal/api"
+	"github.com/f1nn17/vinaire/backend/internal/api"
 )
 
 // resyncPeriod controls how often informers replay their full cache as

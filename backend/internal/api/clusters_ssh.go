@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/shiraku/vinaire/backend/internal/clusters"
-	"github.com/shiraku/vinaire/backend/internal/provision"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/provision"
 )
 
 // Roadmap Phase 34: adding a cluster that lives on another server, over SSH.

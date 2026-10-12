@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/provision"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/provision"
 )
 
 // ServeProvision streams a node-provisioning run's progress (Roadmap Phase 30)

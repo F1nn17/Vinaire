@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
 )
 
 // ConfigMapKeyRow matches the frontend's ConfigMapKey type.

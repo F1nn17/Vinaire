@@ -13,10 +13,10 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/shiraku/vinaire/backend/internal/audit"
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/clusters"
-	"github.com/shiraku/vinaire/backend/internal/gitops"
+	"github.com/f1nn17/vinaire/backend/internal/audit"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/gitops"
 )
 
 // Roadmap Phase 29: GitOps. A cluster's mode (off / native / argocd) and the

@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/rest"
 
-	"github.com/shiraku/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
 )
 
 // ---- fakes -------------------------------------------------------------------

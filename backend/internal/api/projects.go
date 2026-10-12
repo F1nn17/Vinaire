@@ -10,7 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
 )
 
 // Projects (Roadmap Phase 53): a project is a set of namespaces carrying the label

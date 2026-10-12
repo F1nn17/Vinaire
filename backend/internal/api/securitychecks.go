@@ -6,8 +6,8 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
-	"github.com/shiraku/vinaire/backend/internal/securitychecks"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/securitychecks"
 )
 
 // SecurityChecksResponse is GET /api/v1/security/checks.

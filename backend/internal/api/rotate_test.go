@@ -12,7 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/shiraku/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
 )
 
 type memClusterStore struct {

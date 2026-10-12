@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shiraku/vinaire/backend/internal/audit"
+	"github.com/f1nn17/vinaire/backend/internal/audit"
 )
 
 // The audit viewer: the same records Vinaire writes for every mutating action,

@@ -16,8 +16,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
-	"github.com/shiraku/vinaire/backend/internal/metricsstack"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/metricsstack"
 )
 
 // The metrics stack (Roadmap Phase 37): find a Prometheus in the cluster, tell the

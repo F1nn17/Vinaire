@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shiraku/vinaire/backend/internal/netguard"
+	"github.com/f1nn17/vinaire/backend/internal/netguard"
 )
 
 func newKey(t *testing.T) string {

@@ -12,8 +12,8 @@ import (
 	"github.com/gorilla/websocket"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
 )
 
 // logLine matches the frontend's LogLine type (frontend/src/lib/types.ts).

@@ -16,7 +16,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/shiraku/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
 )
 
 // ClusterRow matches the frontend's Cluster type (frontend/src/lib/types.ts).

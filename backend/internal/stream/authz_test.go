@@ -16,9 +16,9 @@ import (
 	"github.com/gorilla/websocket"
 	"k8s.io/client-go/rest"
 
-	"github.com/shiraku/vinaire/backend/internal/api"
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/api"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
 )
 
 func podEvent(ns, name string) Event {

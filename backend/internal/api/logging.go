@@ -16,8 +16,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
-	"github.com/shiraku/vinaire/backend/internal/logging"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/logging"
 )
 
 // The logs stack (Roadmap Phase 45): find a Loki in the cluster, tell the UI what is

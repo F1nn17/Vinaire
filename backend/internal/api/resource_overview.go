@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
 )
 
 // The "Requests & Limits" view: for the whole cluster, each node and each

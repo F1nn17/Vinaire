@@ -5,7 +5,7 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
 )
 
 // resolveContainer defaults to the pod's first container when none is

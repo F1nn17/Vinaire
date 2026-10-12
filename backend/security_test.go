@@ -14,9 +14,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/clusters"
-	"github.com/shiraku/vinaire/backend/internal/keycloak"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/keycloak"
 )
 
 // ---- headers and CSP ----------------------------------------------------------------

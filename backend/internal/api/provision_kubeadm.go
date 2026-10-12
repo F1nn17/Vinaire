@@ -9,8 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/shiraku/vinaire/backend/internal/clusters"
-	"github.com/shiraku/vinaire/backend/internal/provision"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/provision"
 )
 
 // Roadmap Phase 35: the kubeadm provider's pieces of the HTTP layer — what the

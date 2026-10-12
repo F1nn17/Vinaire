@@ -1,4 +1,4 @@
-module github.com/shiraku/vinaire/backend
+module github.com/f1nn17/vinaire/backend
 
 go 1.27.0
 

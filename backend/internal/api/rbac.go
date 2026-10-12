@@ -8,7 +8,7 @@ import (
 
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
 )
 
 // RoleRow matches the frontend's RoleRow type (frontend/src/lib/types.ts).

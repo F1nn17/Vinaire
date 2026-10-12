@@ -13,7 +13,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/shiraku/vinaire/backend/internal/keyprovider"
+	"github.com/f1nn17/vinaire/backend/internal/keyprovider"
 )
 
 // Roadmap Phase 49: where the store's data key lives. Without a provider it is the

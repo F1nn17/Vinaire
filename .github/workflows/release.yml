@@ -14,11 +14,24 @@ name: Release
 #     --certificate-identity-regexp 'https://github.com/<owner>/<repo>/\.github/workflows/release\.yml@.*' \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 #
+# How a release is made (Roadmap Phase 64; docs/releasing.md): bump the version in a pull request
+# (scripts/release-prepare.sh), merge it, then run this workflow from main with that version —
+# the "Run workflow" button, or `gh workflow run release.yml -f version=1.0.1`. It builds, signs and
+# publishes everything below AND creates the tag v<version> and the GitHub Release itself, in this
+# one workflow. (A tag created by the default GITHUB_TOKEN would not start another workflow, which
+# is why tagging is part of this one rather than a separate step.) Pushing a v* tag by hand still
+# works and does the same.
+#
 # Third-party actions are pinned by commit, as in security.yml; Dependabot moves them.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 1.0.1 (must equal the chart version on main)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -38,6 +51,8 @@ jobs:
       # ghcr.io names are lower case ("F1nn17/Vinaire" is not a valid image name), and the tag
       # has to agree with the chart so a release can't ship a chart pointing at another image.
       - name: Names and version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           repo="${GITHUB_REPOSITORY#*/}"
@@ -46,6 +61,23 @@ jobs:
           if [ "$version" != "$app" ]; then echo "chart version $version and appVersion $app must match"; exit 1; fi
           if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
             echo "tag $GITHUB_REF_NAME does not match chart version v$version"; exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "a release is made from main, not from $GITHUB_REF"; exit 1
+            fi
+            if ! echo "$INPUT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+              echo "version must look like 1.2.3 (or 1.2.3-rc.1)"; exit 1
+            fi
+            if [ "$INPUT_VERSION" != "$version" ]; then
+              echo "asked for $INPUT_VERSION but charts/vinaire/Chart.yaml says $version — bump it in a pull request first (scripts/release-prepare.sh)"; exit 1
+            fi
+            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
+              echo "tag v$version already exists; a released version is never replaced"; exit 1
+            fi
+          fi
+          if ! grep -q "^## \[$version\]" CHANGELOG.md; then
+            echo "CHANGELOG.md has no '## [$version]' section"; exit 1
           fi
           {
             echo "IMAGE=ghcr.io/${owner}/${repo,,}"
@@ -103,10 +135,22 @@ jobs:
       - name: Sign the chart by digest
         run: cosign sign --yes "${CHART_REPO#oci://}/vinaire@${{ steps.chart.outputs.digest }}"
 
-      - name: GitHub Release
-        if: github.ref_type == 'tag'
+      # The notes are the CHANGELOG's own section for this version. On a manual run the tag does not
+      # exist yet: `gh release create` makes it, on exactly the commit that was built.
+      - name: GitHub Release (and the tag)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "Vinaire $VERSION" --generate-notes \
-            "vinaire-${VERSION}.tgz" vinaire-sbom.cdx.json
+          awk -v h="## [$VERSION]" '
+            index($0, h) == 1 { on = 1; next }
+            on && index($0, "## [") == 1 { exit }
+            on { print }' CHANGELOG.md > release-notes.md
+          flags=""
+          case "$VERSION" in *-*) flags="--prerelease" ;; esac
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "Vinaire $VERSION" --notes-file release-notes.md $flags \
+              "vinaire-${VERSION}.tgz" vinaire-sbom.cdx.json
+          else
+            gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Vinaire $VERSION" --notes-file release-notes.md $flags \
+              "vinaire-${VERSION}.tgz" vinaire-sbom.cdx.json
+          fi

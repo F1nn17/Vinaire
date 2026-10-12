@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/shiraku/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
 )
 
 // The sessions list (Roadmap Phase 48): who is signed in to this Vinaire, and a way to

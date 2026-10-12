@@ -17,13 +17,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/shiraku/vinaire/backend/internal/audit"
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/clusters"
-	"github.com/shiraku/vinaire/backend/internal/gitops"
-	"github.com/shiraku/vinaire/backend/internal/helm"
-	"github.com/shiraku/vinaire/backend/internal/k8s"
-	"github.com/shiraku/vinaire/backend/internal/provision"
+	"github.com/f1nn17/vinaire/backend/internal/audit"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/gitops"
+	"github.com/f1nn17/vinaire/backend/internal/helm"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/provision"
 )
 
 // WorkloadRow matches the frontend's WorkloadRow type exactly

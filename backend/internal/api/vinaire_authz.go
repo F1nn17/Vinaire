@@ -12,8 +12,8 @@ import (
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
 )
 
 // Roadmap Phase 36. Two things live here.

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/shiraku/vinaire/backend/internal/k8s"
+	"github.com/f1nn17/vinaire/backend/internal/k8s"
 )
 
 // searchResultLimit caps the total number of results across every resource

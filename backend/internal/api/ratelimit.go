@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/shiraku/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
 )
 
 // WriteRateLimiter throttles the three Phase 9 write endpoints (restart/

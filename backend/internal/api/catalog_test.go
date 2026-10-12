@@ -11,7 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/shiraku/vinaire/backend/internal/helm"
+	"github.com/f1nn17/vinaire/backend/internal/helm"
 )
 
 func TestRespondHelmErrorStatuses(t *testing.T) {

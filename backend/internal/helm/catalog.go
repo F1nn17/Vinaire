@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shiraku/vinaire/backend/internal/netguard"
+	"github.com/f1nn17/vinaire/backend/internal/netguard"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/repo"

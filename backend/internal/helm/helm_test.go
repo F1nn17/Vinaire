@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shiraku/vinaire/backend/internal/netguard"
+	"github.com/f1nn17/vinaire/backend/internal/netguard"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/storage/driver"

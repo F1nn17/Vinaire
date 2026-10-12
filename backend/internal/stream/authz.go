@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/shiraku/vinaire/backend/internal/api"
+	"github.com/f1nn17/vinaire/backend/internal/api"
 )
 
 // The informers behind the live-update stream watch the whole cluster with

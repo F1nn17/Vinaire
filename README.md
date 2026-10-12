@@ -1,23 +1,63 @@
 # Vinaire
 
+[![CI](https://github.com/F1nn17/Vinaire/actions/workflows/ci.yml/badge.svg)](https://github.com/F1nn17/Vinaire/actions/workflows/ci.yml)
+[![Security](https://github.com/F1nn17/Vinaire/actions/workflows/security.yml/badge.svg)](https://github.com/F1nn17/Vinaire/actions/workflows/security.yml)
+[![Release](https://img.shields.io/github/v/release/F1nn17/Vinaire)](https://github.com/F1nn17/Vinaire/releases)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
+
 **English** · [Русский](./README.ru.md)
 
-Vinaire is a custom web UI for managing Kubernetes clusters — a friendlier,
-more opinionated alternative to Rancher/Headlamp, targeting **k3s** clusters.
+Vinaire is a web UI for Kubernetes, built around **k3s** and homelab clusters and working with any
+conformant cluster. One small image, no database: it talks to the cluster's own API as *you*, so
+what you can do is decided by your real Kubernetes RBAC, not by a second permission system.
 
-The UI is **read-only by default**, with a small, deliberate, fully-audited
-set of exceptions (Deployment restart/delete/rollback — see AGENTS.md's core
-rule) rather than a general-purpose write path. Logging in (Roadmap Phase
-10) is either a pasted Kubernetes ServiceAccount token or Keycloak/OIDC —
-either way, what a given login can actually do is decided by that identity's
-real Kubernetes RBAC, not by a separate permission system in this app. See
-[AGENTS.md](./AGENTS.md) for the full rationale and conventions for anyone
-(human or AI) writing code here.
+## What it does
 
-Design concept: an interactive mockup covering the main screens (Dashboard,
-Topology, Workloads, ConfigMaps, Secrets, Network) exists outside this repo.
-Ask the project owner for a walkthrough of the UX decisions if you need
-context before implementing a screen.
+- **See everything** — workloads (with pods, metrics and logs, a terminal and port-forward), nodes,
+  storage, network (Services, node ports, load balancers, Ingress, Gateway API), ConfigMaps and
+  Secrets (values only through an audited *reveal*), RBAC, events, a topology graph of the whole
+  cluster, and a "what's wrong" security-checks page.
+- **Install software** — a **Marketplace** over Helm charts with the checks that matter (what the chart will
+  create, whether you may, a preview of the manifests, cancel with roll-back), guided setup for databases and
+  common apps, and **install one instance from a publisher's image** (PostgreSQL, Redis, Keycloak, …) with every
+  value explained.
+- **Change things carefully** — a YAML editor with a server-side dry-run and a diff before anything is
+  written, bulk actions with typed confirmation, node cordon/drain, role bindings. Every write is audited and
+  made with *your* identity.
+- **Many clusters, real sign-in** — register several clusters, sign in with a ServiceAccount token or through
+  Keycloak/OIDC (it can set Keycloak up for you).
+- **Safe by construction** — signed images with an SBOM and provenance, sealed credentials at rest, strict input
+  validation, a CSP, rate limits; see [docs/security.md](./docs/security.md).
+
+The interface is available in English and Russian.
+
+## Quick start
+
+On any cluster with `kubectl` and [Helm](https://helm.sh/docs/intro/install/):
+
+```bash
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.0.0 \
+  --namespace vinaire --create-namespace
+
+kubectl -n vinaire port-forward svc/vinaire 8080:8080      # then open http://localhost:8080
+```
+
+Sign in with a ServiceAccount token — [how to create one](#two-different-serviceaccounts-dont-mix-them-up) takes
+three commands. For an Ingress, HTTPS and OIDC see [Installation](#installation-helm) below.
+
+### Check what you install
+
+Every release image and the chart are signed (keyless, with cosign) and carry an SBOM and a provenance
+attestation. To verify before you run:
+
+```bash
+cosign verify ghcr.io/f1nn17/vinaire:1.0.0 \
+  --certificate-identity-regexp 'https://github.com/F1nn17/Vinaire/\.github/workflows/release\.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+[`scripts/verify-release.sh`](./scripts/verify-release.sh) does this for the image and the chart.
+Releases are made as described in [docs/releasing.md](./docs/releasing.md).
 
 ## Stack
 

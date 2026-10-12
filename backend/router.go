@@ -9,10 +9,10 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
-	"github.com/shiraku/vinaire/backend/internal/api"
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/config"
-	"github.com/shiraku/vinaire/backend/internal/provision"
+	"github.com/f1nn17/vinaire/backend/internal/api"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/config"
+	"github.com/f1nn17/vinaire/backend/internal/provision"
 )
 
 // routerDeps is everything the HTTP routes need. Building the router is its own

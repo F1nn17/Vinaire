@@ -6,8 +6,8 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
 )
 
 // ServeWS upgrades the request to a WebSocket and streams every Event

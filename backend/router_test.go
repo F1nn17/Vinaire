@@ -12,11 +12,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/shiraku/vinaire/backend/internal/api"
-	"github.com/shiraku/vinaire/backend/internal/authn"
-	"github.com/shiraku/vinaire/backend/internal/clusters"
-	"github.com/shiraku/vinaire/backend/internal/config"
-	"github.com/shiraku/vinaire/backend/internal/stream"
+	"github.com/f1nn17/vinaire/backend/internal/api"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/config"
+	"github.com/f1nn17/vinaire/backend/internal/stream"
 )
 
 // Roadmap Phase 50: the router is walked, route by route, so that a new endpoint cannot

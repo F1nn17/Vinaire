@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/shiraku/vinaire/backend/internal/audit"
-	"github.com/shiraku/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/audit"
+	"github.com/f1nn17/vinaire/backend/internal/authn"
 )
 
 // auditLog records one audited action — every Phase 9 write action

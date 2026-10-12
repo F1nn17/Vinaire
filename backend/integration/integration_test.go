@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shiraku/vinaire/backend/internal/api"
+	"github.com/f1nn17/vinaire/backend/internal/api"
 )
 
 // testNamespace/testDeployment etc. must match testdata/manifests.yaml

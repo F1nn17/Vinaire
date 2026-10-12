@@ -1,22 +1,61 @@
 # Vinaire
 
+[![CI](https://github.com/F1nn17/Vinaire/actions/workflows/ci.yml/badge.svg)](https://github.com/F1nn17/Vinaire/actions/workflows/ci.yml)
+[![Security](https://github.com/F1nn17/Vinaire/actions/workflows/security.yml/badge.svg)](https://github.com/F1nn17/Vinaire/actions/workflows/security.yml)
+[![Release](https://img.shields.io/github/v/release/F1nn17/Vinaire)](https://github.com/F1nn17/Vinaire/releases)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
+
 [English](./README.md) · **Русский**
 
-Vinaire — собственный веб-интерфейс для управления кластерами Kubernetes: более
-дружелюбная и более «со своим мнением» альтернатива Rancher/Headlamp, рассчитанная на
-кластеры **k3s**.
+Vinaire — веб-интерфейс для Kubernetes, сделанный с прицелом на **k3s** и домашние кластеры, но работающий
+с любым совместимым кластером. Один небольшой образ, без своей базы данных: он обращается к API кластера
+**от вашего имени**, поэтому то, что вам можно, решает ваш настоящий Kubernetes RBAC, а не вторая система прав.
 
-По умолчанию интерфейс работает **только на чтение**; исключения — небольшой, намеренно
-узкий и полностью аудируемый набор действий (перезапуск, откат и удаление Deployment и
-другие — см. главное правило в [AGENTS.md](./AGENTS.md)), а не универсальный путь записи.
-Вход (Roadmap, Phase 10) — это либо вставленный токен ServiceAccount Kubernetes, либо
-Keycloak/OIDC; в любом случае то, что может конкретный вход, решает настоящий Kubernetes RBAC
-этой учётной записи, а не отдельная система прав внутри приложения. Полное обоснование и
-соглашения для тех, кто пишет здесь код (человек или ИИ), — в [AGENTS.md](./AGENTS.md).
+## Что умеет
 
-Дизайн-концепт: интерактивный макет основных экранов (Dashboard, Topology, Workloads,
-ConfigMaps, Secrets, Network) лежит вне этого репозитория. Если перед реализацией экрана
-нужен контекст UX-решений, попросите владельца проекта рассказать о них.
+- **Показывать всё** — нагрузки (поды, метрики, логи, терминал, проброс порта), ноды, хранилище, сеть
+  (Services, порты нод, балансировщики, Ingress, Gateway API), ConfigMap и Secret (значения — только через
+  аудируемый *reveal*), RBAC, события, граф топологии всего кластера и страницу проверок безопасности.
+- **Ставить софт** — **Маркетплейс** поверх Helm-чартов с нужными проверками (что чарт создаст, можно ли вам,
+  предпросмотр манифестов, отмена с откатом), мастера для баз данных и популярных приложений и
+  **установка одного экземпляра из образа издателя** (PostgreSQL, Redis, Keycloak, …) с пояснением каждого значения.
+- **Менять аккуратно** — YAML-редактор с проверкой на сервере (dry-run) и diff до записи, массовые действия с
+  подтверждением вводом, cordon/drain нод, привязки ролей. Каждая запись попадает в аудит и делается с
+  **вашей** учётной записью.
+- **Много кластеров и настоящий вход** — несколько кластеров, вход по токену ServiceAccount или через
+  Keycloak/OIDC (Keycloak он умеет настроить сам).
+- **Безопасность по построению** — подписанные образы с SBOM и происхождением, зашифрованные учётные данные,
+  строгая проверка ввода, CSP, лимиты запросов; см. [docs/security.ru.md](./docs/security.ru.md).
+
+Интерфейс доступен на английском и русском.
+
+## Быстрый старт
+
+На любом кластере, где есть `kubectl` и [Helm](https://helm.sh/docs/intro/install/):
+
+```bash
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.0.0 \
+  --namespace vinaire --create-namespace
+
+kubectl -n vinaire port-forward svc/vinaire 8080:8080      # затем откройте http://localhost:8080
+```
+
+Входите токеном ServiceAccount — [как его создать](#two-serviceaccounts-ru) — три команды. Про Ingress,
+HTTPS и OIDC — в разделе [Установка](#установка-helm) ниже.
+
+### Проверьте, что ставите
+
+Образ каждого релиза и chart подписаны (cosign, без ключей) и сопровождаются SBOM и подтверждением происхождения.
+Проверить перед запуском:
+
+```bash
+cosign verify ghcr.io/f1nn17/vinaire:1.0.0 \
+  --certificate-identity-regexp 'https://github.com/F1nn17/Vinaire/\.github/workflows/release\.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+[`scripts/verify-release.sh`](./scripts/verify-release.sh) делает это для образа и chart'а. Как делаются релизы —
+в [docs/releasing.ru.md](./docs/releasing.ru.md).
 
 ## Стек
 
