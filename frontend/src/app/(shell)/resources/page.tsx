@@ -94,7 +94,12 @@ function AllResources() {
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
       <div>
-        <div className="text-[15px] font-semibold">All resources</div>
+        <div className="text-[15px] font-semibold">
+          <Link href="/settings" className="font-normal text-text-muted">
+            Settings
+          </Link>{" "}
+          / All resources
+        </div>
         <div className="mt-1 max-w-3xl text-xs text-text-muted">
           Every kind this cluster serves — built-in and custom — listed as{" "}
           <span className="font-mono">kubectl get</span> would. What you see is
