@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **"All resources" and "Security checks" moved under Settings.** They are gone from the sidebar and open from Settings' tab strip; Settings stays highlighted while one of them is open, and each page has a "Settings /" link back. The addresses (`/resources`, `/security`) are unchanged.
+
 ### Fixed
 
 - **Node and whole-cluster usage charts showed "No cpu data" on kube-prometheus-stack** (the "Full" profile of the Metrics stack page). Those charts read the node's root cgroup (`id="/"`), and kube-prometheus-stack's kubelet scrape drops every cgroup series that has no pod ("Drop cgroup metrics with no pod"), that one included — while pod and workload charts, which are built from pod series, kept working. The node and cluster queries now fall back to the sum of the pods' containers (CPU, memory) or pods (network, disk) when — and only when — the root cgroup has no series at all, so the two are never mixed. With the fallback the numbers are the pods' usage (the node's own overhead is not in them).
