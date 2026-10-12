@@ -530,3 +530,32 @@ func TestNotesLoseTheirColourCodes(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+// A chart download may take much longer than an index request: a slow link to the chart's host must
+// not turn an upgrade into "context deadline exceeded" after 30 seconds.
+func TestChartDownloadsHaveALongerTimeCapThanIndexes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(400 * time.Millisecond)
+		_, _ = w.Write([]byte("chart bytes"))
+	}))
+	defer srv.Close()
+
+	client := srv.Client()
+	client.Timeout = 100 * time.Millisecond // the short cap of an index request
+	c := newCatalog(Config{}, client)
+
+	if _, err := c.fetchLimited(context.Background(), srv.URL, 1<<10); err == nil {
+		t.Fatal("an index-style fetch should have hit the short cap")
+	}
+
+	old := chartTimeout
+	chartTimeout = 5 * time.Second
+	defer func() { chartTimeout = old }()
+	got, err := c.fetchWithin(context.Background(), srv.URL, 1<<10, c.chartClient())
+	if err != nil || string(got) != "chart bytes" {
+		t.Fatalf("a chart download must be given longer: %q %v", got, err)
+	}
+	if client.Timeout != 100*time.Millisecond {
+		t.Errorf("the shared client's own cap must not change: %v", client.Timeout)
+	}
+}
