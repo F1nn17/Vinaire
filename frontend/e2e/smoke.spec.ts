@@ -27,6 +27,8 @@ test.describe("Vinaire smoke test", () => {
   test("logs in and navigates through the sidebar's main sections", async ({
     page,
   }) => {
+    // a dozen pages, each waiting for real cluster data, on a small CI runner: well over the default 30 s
+    test.setTimeout(150_000);
     await page.goto("/login");
     await page.getByLabel("Kubernetes ServiceAccount token").fill(TOKEN);
     await page.getByRole("button", { name: "Sign in" }).click();
@@ -65,6 +67,9 @@ test.describe("Vinaire smoke test", () => {
 
     // Settings
     await open(page, "Settings", /\/settings/);
-    await expect(page.getByText("Add a cluster")).toBeVisible();
+    // the page of Vinaire's own settings: its tabs are there
+    await expect(
+      page.getByText("Sign-in", { exact: true }).first(),
+    ).toBeVisible();
   });
 });
