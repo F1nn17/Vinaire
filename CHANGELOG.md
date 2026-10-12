@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Changing the metrics retention (or any upgrade) failed with "context deadline exceeded" while downloading the chart.** The chart was fetched with the 30-second cap meant for repository indexes, and from a home connection to GitHub's release storage that is not always enough (it hit kube-prometheus-stack 92.1.0). A chart download now has its own cap of 5 minutes; indexes keep the short one, so a slow repository still doesn't hold a search up. A downloaded chart is kept in memory, so the next install or upgrade of it is instant until Vinaire restarts.
+
 ## [1.0.0] - 2026-10-12
 
 The first public release. Everything below was built up over Roadmap phases 1–67; from here on, changes go into `[Unreleased]` and a release cuts them (see docs/releasing.md).

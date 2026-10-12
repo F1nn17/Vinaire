@@ -105,12 +105,32 @@ func safeClient(allowLoopback bool) *http.Client {
 // fetchLimited GETs rawURL and returns at most max bytes of its body; a larger
 // body is an error rather than a silent truncation.
 func (c *Catalog) fetchLimited(ctx context.Context, rawURL string, max int64) ([]byte, error) {
+	return c.fetchWithin(ctx, rawURL, max, c.client)
+}
+
+// chartTimeout is how long one chart download may take, whole. An index is a quick request, and a
+// failing repository must not hold a search up, so those keep the short cap (fetchTimeout); a chart
+// is the thing being installed or upgraded, and on a home connection to GitHub's release storage
+// even a chart of a few hundred KiB can take longer than 30 s — an upgrade of kube-prometheus-stack
+// ended in "context deadline exceeded" for that reason. It is a variable only so a test can shorten it.
+var chartTimeout = 5 * time.Minute
+
+// chartClient is the HTTP client with the chart's time cap: a copy, sharing the guarded transport.
+func (c *Catalog) chartClient() *http.Client {
+	cl := *c.client
+	if cl.Timeout < chartTimeout {
+		cl.Timeout = chartTimeout
+	}
+	return &cl
+}
+
+func (c *Catalog) fetchWithin(ctx context.Context, rawURL string, max int64, client *http.Client) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "vinaire-catalog")
-	resp, err := c.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetching %s: %w", redactURL(rawURL), err)
 	}
@@ -638,7 +658,7 @@ func (c *Catalog) chartArchive(ctx context.Context, r Repo, cv *repo.ChartVersio
 	if cached {
 		return data, key, nil
 	}
-	data, err = c.fetchLimited(ctx, chartURL.String(), maxChartBytes)
+	data, err = c.fetchWithin(ctx, chartURL.String(), maxChartBytes, c.chartClient())
 	if err != nil {
 		return nil, "", err
 	}
