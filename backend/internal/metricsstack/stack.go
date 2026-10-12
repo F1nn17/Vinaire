@@ -57,6 +57,13 @@ const (
 	LiteRelease      = "metrics-server"
 
 	DefaultNamespace = "monitoring"
+
+	// NodeExporterPort is the port the stack's node-exporter listens on, on every node. The chart's
+	// default (9100) is the port everyone's node-exporter uses, and this one runs with hostNetwork, so
+	// it claims that port on the node itself: whoever then installs another node-exporter, or runs
+	// one by hand, would find 9100 taken by Vinaire. 19100 is outside the ports exporters register by
+	// default; Prometheus finds the exporter through its Service, so nothing else has to know.
+	NodeExporterPort = 19100
 )
 
 // Options are what the user may choose; everything else is fixed.
@@ -176,6 +183,9 @@ kube-state-metrics:
   enabled: true%s
 prometheus-node-exporter:
   enabled: true
+  service:
+    port: %d
+    targetPort: %d
   resources:
     requests:
       cpu: 20m
@@ -192,7 +202,7 @@ server:
       memory: 256Mi
     limits:
       memory: 1Gi%s
-`, am, o.selector("  "), o.RetentionDay, persist, o.selector("  "))
+`, am, o.selector("  "), NodeExporterPort, NodeExporterPort, o.RetentionDay, persist, o.selector("  "))
 }
 
 // fullValues: kube-prometheus-stack. The control-plane component monitors are off —
@@ -217,6 +227,10 @@ func fullValues(o Options) string {
 	return fmt.Sprintf(`# Installed by Vinaire — kube-prometheus-stack (no Grafana).
 grafana:
   enabled: false
+prometheus-node-exporter:
+  service:
+    port: %d
+    targetPort: %d
 kubeEtcd:
   enabled: false
 kubeControllerManager:
@@ -243,7 +257,7 @@ prometheus:
         memory: 512Mi
       limits:
         memory: 2Gi%s%s
-`, o.selector("    "), o.RetentionDay, storage, o.selector("    "))
+`, NodeExporterPort, NodeExporterPort, o.selector("    "), o.RetentionDay, storage, o.selector("    "))
 }
 
 func liteValues(o Options) string {

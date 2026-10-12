@@ -2,6 +2,7 @@ package metricsstack
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -182,5 +183,27 @@ func TestAlertmanagerAndManagedDetection(t *testing.T) {
 	}
 	if ProfileOf(ServerService) != ProfileStandard || ProfileOf(StackService) != ProfileFull || ProfileOf("other") != "" {
 		t.Error("ProfileOf")
+	}
+}
+
+// The node-exporter of the stack runs with hostNetwork, so its port is a port of the node itself. It
+// must not be the default 9100, which another exporter — the next thing someone installs — expects
+// to have; and the Service has to point at the same port or Prometheus finds nothing.
+func TestNodeExporterDoesNotTakeTheDefaultPort(t *testing.T) {
+	for name, o := range map[string]Options{
+		"standard": {Profile: ProfileStandard, Namespace: DefaultNamespace, RetentionDay: 7, StorageSize: "none"},
+		"full":     {Profile: ProfileFull, Namespace: DefaultNamespace, RetentionDay: 7, StorageSize: "none"},
+	} {
+		v := Values(o)
+		want := fmt.Sprintf("port: %d\n    targetPort: %d", NodeExporterPort, NodeExporterPort)
+		if !strings.Contains(v, want) {
+			t.Errorf("%s: the values must set the node-exporter's port and targetPort together:\n%s", name, v)
+		}
+		if regexp.MustCompile(`(^|[^0-9])9100([^0-9]|$)`).MatchString(v) {
+			t.Errorf("%s: the default node-exporter port must not appear", name)
+		}
+	}
+	if NodeExporterPort == 9100 {
+		t.Fatal("NodeExporterPort is the default port again")
 	}
 }

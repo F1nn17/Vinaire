@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The metrics stack's node-exporter no longer takes port 9100.** It runs with `hostNetwork`, so its port is a port of the node itself, and 9100 is where every other node-exporter expects to be — someone installing one later (or running one by hand) found the port taken by Vinaire. Both profiles (Prometheus, kube-prometheus-stack) now set `prometheus-node-exporter.service.port` and `targetPort` to **19100**; Prometheus finds the exporter through its Service, so nothing else changes. A stack that is already installed keeps its port until it is installed again from the Metrics stack page.
+
 ## [1.0.0] - 2026-10-12
 
 The first public release. Everything below was built up over Roadmap phases 1–67; from here on, changes go into `[Unreleased]` and a release cuts them (see docs/releasing.md).

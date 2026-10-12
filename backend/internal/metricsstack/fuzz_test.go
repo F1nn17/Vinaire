@@ -25,7 +25,7 @@ func FuzzOptionsNeverInjectYAML(f *testing.F) {
 		}
 		allowed := map[Profile][]string{
 			ProfileStandard: {"alertmanager", "prometheus-pushgateway", "kube-state-metrics", "prometheus-node-exporter", "server"},
-			ProfileFull:     {"grafana", "kubeEtcd", "kubeControllerManager", "kubeScheduler", "kubeProxy", "alertmanager", "prometheus"},
+			ProfileFull:     {"grafana", "prometheus-node-exporter", "kubeEtcd", "kubeControllerManager", "kubeScheduler", "kubeProxy", "alertmanager", "prometheus"},
 			ProfileLite:     {"resources", "nodeSelector"},
 		}[o.Profile]
 		for k := range v {
