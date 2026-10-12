@@ -120,13 +120,51 @@ func podSelector(namespace, podMatcher string, containerFilter bool) string {
 // that has samples wins and the rest add nothing) — Roadmap Phase 61: with only `node`, a
 // perfectly healthy Prometheus answered "no data".
 func nodeSelectors(name string) []string {
+	return withRoot(nodeMatchers(name))
+}
+
+// nodeMatchers are the label matchers that tie a series to a node, in the four spellings above.
+func nodeMatchers(name string) []string {
 	q := regexp.QuoteMeta(name)
 	return []string{
-		`id="/",node=` + promString(name),
-		`id="/",instance=~` + promString(q+`(:[0-9]+)?`),
-		`id="/",kubernetes_io_hostname=` + promString(name),
-		`id="/",nodename=` + promString(name),
+		`node=` + promString(name),
+		`instance=~` + promString(q+`(:[0-9]+)?`),
+		`kubernetes_io_hostname=` + promString(name),
+		`nodename=` + promString(name),
 	}
+}
+
+// withRoot selects the root cgroup (`id="/"`), which cAdvisor reports for the whole node: its CPU,
+// memory, network and disk including what runs outside any pod.
+func withRoot(ms []string) []string {
+	out := make([]string, len(ms))
+	for i, m := range ms {
+		out[i] = `id="/",` + m
+	}
+	return out
+}
+
+// podLevel selects what is left when the root cgroup is not stored: the containers of pods, added up
+// (so the node's own overhead is missing). kube-prometheus-stack drops every cgroup series without a
+// pod ("Drop cgroup metrics with no pod" in its kubelet ServiceMonitor), `id="/"` among them, so
+// with it a node's or the cluster's usage can only be built from its pods — Roadmap Phase 61 again:
+// a healthy Prometheus answering "no data". containerFilter is true for CPU and memory, which must
+// not count the pod-level cgroup and the pause container twice; network and disk series have no
+// container of their own, only a pod.
+func podLevel(ms []string, containerFilter bool) []string {
+	out := make([]string, len(ms))
+	extra := `pod!=""`
+	if containerFilter {
+		extra = `container!="",container!="POD"`
+	}
+	for i, m := range ms {
+		if m == "" {
+			out[i] = extra
+		} else {
+			out[i] = m + "," + extra
+		}
+	}
+	return out
 }
 
 // orJoin joins alternative queries: the left one's series, and the right ones' only where the
@@ -137,6 +175,9 @@ func orJoin(qs []string) string {
 
 func planFor(kind, namespace, name, metricType string) (metricPlan, bool) {
 	var sels func(containerFilter bool) []string
+	// fallback, for node-level kinds: the same series built from pods, used only when the root
+	// cgroup has nothing (see podLevel)
+	var fallback func(containerFilter bool) []string
 	nodeLevel := false
 	switch kind {
 	case "pods":
@@ -158,20 +199,32 @@ func planFor(kind, namespace, name, metricType string) (metricPlan, bool) {
 	case "nodes":
 		nodeLevel = true
 		sels = func(bool) []string { return nodeSelectors(name) }
+		fallback = func(cf bool) []string { return podLevel(nodeMatchers(name), cf) }
 	case "cluster":
 		// the whole cluster: the root cgroup of every node added together
 		nodeLevel = true
 		sels = func(bool) []string { return []string{`id="/"`} }
+		fallback = func(cf bool) []string { return podLevel([]string{""}, cf) }
 	default:
 		return metricPlan{}, false
 	}
 	// build renders one query per selector and joins them
-	build := func(containerFilter bool, format string, extra ...any) string {
+	render := func(selectors []string, format string, extra ...any) string {
 		var qs []string
-		for _, sel := range sels(containerFilter) {
+		for _, sel := range selectors {
 			qs = append(qs, fmt.Sprintf(format, append([]any{sel}, extra...)...))
 		}
 		return orJoin(qs)
+	}
+	build := func(containerFilter bool, format string, extra ...any) string {
+		root := render(sels(containerFilter), format, extra...)
+		if fallback == nil {
+			return root
+		}
+		// the root cgroup's answer when there is one; the pods' only when there is none at all
+		// (absent(root) is an element only when root is empty) — never a mix of the two
+		pods := render(fallback(containerFilter), format, extra...)
+		return root + " or ((" + pods + ") and on() absent(" + root + "))"
 	}
 
 	switch metricType {
