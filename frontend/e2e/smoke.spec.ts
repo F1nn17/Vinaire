@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 // Roadmap Phase 23 — token login, then a walk through the sidebar's main
 // sections confirming each one actually renders real cluster data (not an
@@ -11,12 +11,24 @@ import { test, expect } from "@playwright/test";
 // an unrelated reason.
 const TOKEN = process.env.E2E_TOKEN ?? "";
 
+// Click a sidebar link and wait for the page. A click that lands while the previous page is still
+// hydrating can be swallowed, so the click is repeated until the URL changes (clicking the link of the
+// page you are on does nothing).
+async function open(page: Page, name: string, url: RegExp) {
+  await expect(async () => {
+    await page.getByRole("link", { name, exact: true }).click();
+    await expect(page).toHaveURL(url, { timeout: 4000 });
+  }).toPass({ timeout: 30_000 });
+}
+
 test.describe("Vinaire smoke test", () => {
   test.skip(!TOKEN, "E2E_TOKEN not set — requires a real cluster + token");
 
   test("logs in and navigates through the sidebar's main sections", async ({
     page,
   }) => {
+    // a dozen pages, each waiting for real cluster data, on a small CI runner: well over the default 30 s
+    test.setTimeout(150_000);
     await page.goto("/login");
     await page.getByLabel("Kubernetes ServiceAccount token").fill(TOKEN);
     await page.getByRole("button", { name: "Sign in" }).click();
@@ -27,43 +39,37 @@ test.describe("Vinaire smoke test", () => {
     await expect(page.getByText("Failed to load dashboard")).toHaveCount(0);
 
     // Topology
-    await page.getByRole("link", { name: "Topology" }).click();
-    await expect(page).toHaveURL(/\/topology/);
+    await open(page, "Topology", /\/topology/);
     await expect(page.getByText("Service graph")).toBeVisible();
 
     // Nodes
-    await page.getByRole("link", { name: "Nodes" }).click();
-    await expect(page).toHaveURL(/\/nodes/);
+    await open(page, "Nodes", /\/nodes/);
     await expect(page.getByText("Failed to load nodes")).toHaveCount(0);
 
     // Workloads (Deployments & pods)
-    await page.getByRole("link", { name: "Deployments & pods" }).click();
-    await expect(page).toHaveURL(/\/workloads/);
+    await open(page, "Deployments & pods", /\/workloads/);
     await expect(page.getByRole("button", { name: "Pods" })).toBeVisible();
 
     // ConfigMaps
-    await page.getByRole("link", { name: "ConfigMaps" }).click();
-    await expect(page).toHaveURL(/\/configmaps/);
+    await open(page, "ConfigMaps", /\/configmaps/);
 
     // Secrets
-    await page.getByRole("link", { name: "Secrets" }).click();
-    await expect(page).toHaveURL(/\/secrets/);
+    await open(page, "Secrets", /\/secrets/);
 
     // Storage
-    await page.getByRole("link", { name: "PVCs & volumes" }).click();
-    await expect(page).toHaveURL(/\/storage/);
+    await open(page, "PVCs & volumes", /\/storage/);
 
     // Network
-    await page.getByRole("link", { name: "Services & Ingress" }).click();
-    await expect(page).toHaveURL(/\/network/);
+    await open(page, "Routing", /\/network/);
 
     // Access control
-    await page.getByRole("link", { name: "RBAC" }).click();
-    await expect(page).toHaveURL(/\/access-control/);
+    await open(page, "RBAC", /\/access-control/);
 
     // Settings
-    await page.getByRole("link", { name: "Settings" }).click();
-    await expect(page).toHaveURL(/\/settings/);
-    await expect(page.getByText("Add a cluster")).toBeVisible();
+    await open(page, "Settings", /\/settings/);
+    // the page of Vinaire's own settings: its tabs are there
+    await expect(
+      page.getByText("Sign-in", { exact: true }).first(),
+    ).toBeVisible();
   });
 });
