@@ -22,10 +22,40 @@ func TestNodeQueriesTryEveryWayANodeIsNamed(t *testing.T) {
 					t.Errorf("%s: %q lacks %s", typ, q.promql, label)
 				}
 			}
-			if strings.Count(q.promql, " or ") != 3 {
-				t.Errorf("%s: want four alternatives joined by or: %q", typ, q.promql)
+			// the root cgroup's four alternatives come first, then the pod-level fallback, which counts
+			// only when the root has nothing (kube-prometheus-stack drops `id="/"`)
+			root, rest, found := strings.Cut(q.promql, " or ((")
+			if !found || strings.Count(root, " or ") != 3 || !strings.Contains(root, `id="/"`) {
+				t.Errorf("%s: want four root alternatives, then the pod-level fallback: %q", typ, q.promql)
+			}
+			if !strings.Contains(rest, ") and on() absent(") || strings.Contains(rest, `id="/",`+"node=") && !strings.Contains(rest, "absent(") {
+				t.Errorf("%s: the fallback must apply only when the root cgroup has no series: %q", typ, q.promql)
+			}
+			fb, _, _ := strings.Cut(rest, ") and on() absent(")
+			if strings.Contains(fb, `id="/"`) {
+				t.Errorf("%s: the fallback must not ask for the root cgroup: %q", typ, fb)
 			}
 		}
+	}
+}
+
+// kube-prometheus-stack drops every cgroup series without a pod, so a node's and the cluster's usage
+// is built from pods there: the fallback sums containers (CPU, memory) or pods (network, disk).
+func TestNodeAndClusterQueriesFallBackToPodsWhenTheRootCgroupIsNotStored(t *testing.T) {
+	for _, kind := range []string{"nodes", "cluster"} {
+		for typ, want := range map[string]string{"cpu": `container!="",container!="POD"`, "memory": `container!="",container!="POD"`, "network": `pod!=""`, "filesystem": `pod!=""`} {
+			plan, _ := planFor(kind, "", "n1", typ)
+			for _, q := range plan.queries {
+				_, rest, _ := strings.Cut(q.promql, " or ((")
+				if !strings.Contains(rest, want) {
+					t.Errorf("%s/%s: fallback lacks %s: %q", kind, typ, want, q.promql)
+				}
+			}
+		}
+	}
+	// pods and workloads need no fallback
+	if plan, _ := planFor("pods", "app", "web", "cpu"); strings.Contains(plan.queries[0].promql, "absent(") {
+		t.Errorf("a pod query has no root cgroup to fall back from")
 	}
 }
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Node and whole-cluster usage charts showed "No cpu data" on kube-prometheus-stack** (the "Full" profile of the Metrics stack page). Those charts read the node's root cgroup (`id="/"`), and kube-prometheus-stack's kubelet scrape drops every cgroup series that has no pod ("Drop cgroup metrics with no pod"), that one included — while pod and workload charts, which are built from pod series, kept working. The node and cluster queries now fall back to the sum of the pods' containers (CPU, memory) or pods (network, disk) when — and only when — the root cgroup has no series at all, so the two are never mixed. With the fallback the numbers are the pods' usage (the node's own overhead is not in them).
+
 ### Changed
 
 - **The metrics stack's node-exporter no longer takes port 9100.** It runs with `hostNetwork`, so its port is a port of the node itself, and 9100 is where every other node-exporter expects to be — someone installing one later (or running one by hand) found the port taken by Vinaire. Both profiles (Prometheus, kube-prometheus-stack) now set `prometheus-node-exporter.service.port` and `targetPort` to **19100**; Prometheus finds the exporter through its Service, so nothing else changes. A stack that is already installed keeps its port until it is installed again from the Metrics stack page.
