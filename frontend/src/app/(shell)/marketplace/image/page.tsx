@@ -339,6 +339,7 @@ function ImageForm({ preset }: { preset: Preset }) {
 
         {preset.fields
           .filter((f) => !(preset.free && f.id === "image"))
+          .filter((f) => !f.showIf || f.showIf(form.values))
           .map((f) => (
             <Field
               key={f.id}
@@ -346,7 +347,16 @@ function ImageForm({ preset }: { preset: Preset }) {
               hint={f.hint}
               error={errors[f.id]}
             >
-              {f.multiline ? (
+              {f.checkbox ? (
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 self-start"
+                  checked={form.values[f.id] === "true"}
+                  onChange={(e) =>
+                    setValue(f.id, e.target.checked ? "true" : "")
+                  }
+                />
+              ) : f.multiline ? (
                 <textarea
                   className={`${inputClass} min-h-20 font-mono`}
                   value={form.values[f.id] ?? ""}

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Redis and Valkey from an image: an ACL option.** A check box "Use ACL" switches the instance from one shared password (Redis' default user, no user name) to a named user: the default user is turned off and a user (default `app`, may run every command, password generated) is created — what applications that sign in with a user name and password need. The Secret then also holds `username`. Checked against a real Redis 7.4: the named user signs in, the default user gets `NOAUTH`.
+
 ### Fixed
 
 - **Node and whole-cluster usage charts showed "No cpu data" on kube-prometheus-stack** (the "Full" profile of the Metrics stack page). Those charts read the node's root cgroup (`id="/"`), and kube-prometheus-stack's kubelet scrape drops every cgroup series that has no pod ("Drop cgroup metrics with no pod"), that one included — while pod and workload charts, which are built from pod series, kept working. The node and cluster queries now fall back to the sum of the pods' containers (CPU, memory) or pods (network, disk) when — and only when — the root cgroup has no series at all, so the two are never mixed. With the fallback the numbers are the pods' usage (the node's own overhead is not in them).
