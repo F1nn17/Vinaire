@@ -24,6 +24,10 @@ export type PresetField = {
   // an empty value is allowed
   optional?: boolean;
   multiline?: boolean;
+  // a check box: its value is "true" or ""
+  checkbox?: boolean;
+  // shown (and checked) only while this holds for the other values
+  showIf?: (v: Record<string, string>) => boolean;
 };
 
 // A value, a key of the instance's own Secret (`secret`), or a key of a Secret that already exists
@@ -211,25 +215,64 @@ export const presets: Preset[] = [
     defaultTag: "7.4",
     ports: [{ name: "redis", port: 6379 }],
     dataPath: "/data",
-    fields: [],
+    fields: [
+      {
+        id: "acl",
+        label: T("Use ACL (a named user instead of one shared password)"),
+        hint: T(
+          "Off: a single shared password, no user name (Redis' default user). On: the default user is switched off and a named user with the generated password is created — what applications that sign in with a user name and password (ACL) need.",
+        ),
+        default: "",
+        pattern: /^(true)?$/,
+        optional: true,
+        checkbox: true,
+      },
+      {
+        id: "user",
+        label: T("ACL user name"),
+        hint: T(
+          "The user applications sign in as. It may run every command; make narrower users later with ACL SETUSER.",
+        ),
+        default: "app",
+        pattern: word,
+        showIf: (v) => v.acl === "true",
+      },
+    ],
     secrets: ["password"],
-    extra: (_v, host) => ({ host, port: "6379" }),
+    extra: (v, host) => ({
+      host,
+      port: "6379",
+      ...(v.acl === "true" ? { username: v.user } : {}),
+    }),
     env: () => [{ name: "REDIS_PASSWORD", secret: "password" }],
-    args: () => [
+    args: (v) => [
       "redis-server",
-      "--requirepass",
-      "$(REDIS_PASSWORD)",
       "--appendonly",
       "yes",
+      ...(v.acl === "true"
+        ? [
+            "--user",
+            "default",
+            "off",
+            "--user",
+            v.user,
+            "on",
+            ">$(REDIS_PASSWORD)",
+            "~*",
+            "&*",
+            "+@all",
+          ]
+        : ["--requirepass", "$(REDIS_PASSWORD)"]),
     ],
     probe: { tcp: 6379 },
     resources: { cpu: "50m", memory: "128Mi", memoryLimit: "512Mi" },
-    connect: (_v, host, secret) => [
+    connect: (v, host, secret) => [
       [T("Address"), `${host}:6379`],
+      ...(v.acl === "true" ? [[T("User"), v.user] as [string, string]] : []),
       [T("Password"), `${T("Secret")} ${secret}, ${T("key")} password`],
     ],
     note: T(
-      "One instance with the append-only file on. No user name: Redis asks for the password only.",
+      "One instance with the append-only file on. Without ACL there is no user name: Redis asks for the password only.",
     ),
   },
   {
@@ -244,21 +287,60 @@ export const presets: Preset[] = [
     defaultTag: "8",
     ports: [{ name: "redis", port: 6379 }],
     dataPath: "/data",
-    fields: [],
+    fields: [
+      {
+        id: "acl",
+        label: T("Use ACL (a named user instead of one shared password)"),
+        hint: T(
+          "Off: a single shared password, no user name (Redis' default user). On: the default user is switched off and a named user with the generated password is created — what applications that sign in with a user name and password (ACL) need.",
+        ),
+        default: "",
+        pattern: /^(true)?$/,
+        optional: true,
+        checkbox: true,
+      },
+      {
+        id: "user",
+        label: T("ACL user name"),
+        hint: T(
+          "The user applications sign in as. It may run every command; make narrower users later with ACL SETUSER.",
+        ),
+        default: "app",
+        pattern: word,
+        showIf: (v) => v.acl === "true",
+      },
+    ],
     secrets: ["password"],
-    extra: (_v, host) => ({ host, port: "6379" }),
+    extra: (v, host) => ({
+      host,
+      port: "6379",
+      ...(v.acl === "true" ? { username: v.user } : {}),
+    }),
     env: () => [{ name: "VALKEY_PASSWORD", secret: "password" }],
-    args: () => [
+    args: (v) => [
       "valkey-server",
-      "--requirepass",
-      "$(VALKEY_PASSWORD)",
       "--appendonly",
       "yes",
+      ...(v.acl === "true"
+        ? [
+            "--user",
+            "default",
+            "off",
+            "--user",
+            v.user,
+            "on",
+            ">$(VALKEY_PASSWORD)",
+            "~*",
+            "&*",
+            "+@all",
+          ]
+        : ["--requirepass", "$(VALKEY_PASSWORD)"]),
     ],
     probe: { tcp: 6379 },
     resources: { cpu: "50m", memory: "128Mi", memoryLimit: "512Mi" },
-    connect: (_v, host, secret) => [
+    connect: (v, host, secret) => [
       [T("Address"), `${host}:6379`],
+      ...(v.acl === "true" ? [[T("User"), v.user] as [string, string]] : []),
       [T("Password"), `${T("Secret")} ${secret}, ${T("key")} password`],
     ],
     note: T(
@@ -681,6 +763,7 @@ export function validate(f: Form): Record<string, string> {
   if (!nsName.test(f.namespace)) e.namespace = T("A valid namespace name.");
   if (!tagRe.test(f.tag)) e.tag = T("A tag, e.g. 17 or 1.2.3.");
   for (const fld of f.preset.fields) {
+    if (fld.showIf && !fld.showIf(f.values)) continue;
     const v = f.values[fld.id] ?? "";
     if (!v && fld.optional) continue;
     const lines = fld.multiline ? v.split("\n").filter((l) => l.trim()) : [v];

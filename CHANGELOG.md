@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+### Added
 
-- **"All resources" and "Security checks" moved under Settings.** They are gone from the sidebar and open from Settings' tab strip; Settings stays highlighted while one of them is open, and each page has a "Settings /" link back. The addresses (`/resources`, `/security`) are unchanged.
+- **Redis and Valkey from an image: an ACL option.** A check box "Use ACL" switches the instance from one shared password (Redis' default user, no user name) to a named user: the default user is turned off and a user (default `app`, may run every command, password generated) is created — what applications that sign in with a user name and password need. The Secret then also holds `username`. Checked against a real Redis 7.4: the named user signs in, the default user gets `NOAUTH`.
 
 ### Fixed
 
