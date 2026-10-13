@@ -80,22 +80,10 @@ const groups: NavGroup[] = [
         isActive: (p) => p.startsWith("/nodes"),
       },
       {
-        href: "/resources",
-        label: "All resources",
-        icon: <ListIcon />,
-        isActive: (p) => p.startsWith("/resources"),
-      },
-      {
         href: "/requests-limits",
         label: "Requests & Limits",
         icon: <GaugeIcon />,
         isActive: (p) => p.startsWith("/requests-limits"),
-      },
-      {
-        href: "/security",
-        label: "Security checks",
-        icon: <ShieldIcon />,
-        isActive: (p) => p.startsWith("/security"),
       },
     ],
   },
@@ -218,6 +206,10 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
+// Settings holds the rarely used tools: "All resources" and "Security checks" open from its tab strip,
+// and Settings stays lit while one of them is open.
+const settingsPaths = ["/settings", "/resources", "/security"];
+
 export function Sidebar() {
   const pathname = usePathname();
   // Roadmap Phase 29: with GitOps off for this cluster the section isn't shown.
@@ -260,9 +252,9 @@ export function Sidebar() {
             href: "/settings",
             label: "Settings",
             icon: <SettingsIcon />,
-            isActive: (p) => p.startsWith("/settings"),
+            isActive: (p) => settingsPaths.some((x) => p.startsWith(x)),
           }}
-          active={pathname.startsWith("/settings")}
+          active={settingsPaths.some((x) => pathname.startsWith(x))}
         />
       </div>
     </nav>

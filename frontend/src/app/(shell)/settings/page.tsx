@@ -17,6 +17,12 @@ import {
 
 type SettingsTab = "crds" | "signin" | "help";
 
+// pages that live under Settings (they used to be in the sidebar)
+const toolLinks = [
+  { href: "/resources", label: "All resources" },
+  { href: "/security", label: "Security checks" },
+];
+
 const tabs: { id: SettingsTab; label: string }[] = [
   { id: "crds", label: "Custom Resources" },
   { id: "signin", label: "Sign-in" },
@@ -121,6 +127,15 @@ export default function SettingsPage() {
           >
             {t.label}
           </button>
+        ))}
+        {toolLinks.map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            className="px-3.5 py-2 text-[12.5px] text-text-muted hover:text-text"
+          >
+            {l.label}
+          </Link>
         ))}
       </div>
 
