@@ -134,9 +134,12 @@ function ImageForm({ preset }: { preset: Preset }) {
 
   const errors = validate(eff);
   const valid = Object.keys(errors).length === 0;
-  const masked = Object.fromEntries(
-    preset.secrets.map((k) => [k, "<generated>"]),
-  );
+  const masked = {
+    ...Object.fromEntries(preset.secrets.map((k) => [k, "<generated>"])),
+    ...(preset.licenseFile
+      ? { [preset.licenseFile.key]: "<your licence>" }
+      : {}),
+  };
   const docs: Doc[] = useMemo(
     () => (valid ? build(eff, masked) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,6 +161,12 @@ function ImageForm({ preset }: { preset: Preset }) {
     setFailure(null);
     for (const k of preset.secrets) {
       passwords.current[k] ||= randomPassword();
+    }
+    // a pasted licence goes into the Secret as it is typed here; it is in no environment value
+    if (preset.licenseFile) {
+      passwords.current[preset.licenseFile.key] = (
+        eff.values.license ?? ""
+      ).trim();
     }
     // The StatefulSet goes first: the Secret and the Service are made its dependents, so that
     // deleting the StatefulSet removes them too. (Until the Secret exists the pod waits for it.)
@@ -347,7 +356,15 @@ function ImageForm({ preset }: { preset: Preset }) {
               hint={f.hint}
               error={errors[f.id]}
             >
-              {f.checkbox ? (
+              {f.secretText ? (
+                <textarea
+                  className={`${inputClass} min-h-20 font-mono`}
+                  value={form.values[f.id] ?? ""}
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(e) => setValue(f.id, e.target.value)}
+                />
+              ) : f.checkbox ? (
                 <input
                   type="checkbox"
                   className="h-4 w-4 self-start"

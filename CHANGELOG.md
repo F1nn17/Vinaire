@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **MinIO AIStor from an image (the "Install from an image" wizard).** A new preset runs `quay.io/minio/aistor/minio` as `minio server /mnt/data --console-address :9001 --license /minio.license`, as in the owner's compose file: the licence is pasted into the form (the decoded `eyJ…` JWT; the encrypted `ZXlK…` block is refused), stored only in the instance's Secret, masked in the preview, and mounted read-only as the file `/minio.license` — in no environment variable. Root user, a generated password, 1 vCPU-light defaults, a data volume and the metrics open inside the cluster, as in the compose file. Tag lists now work for Quay's nested repositories (`quay.io/minio/aistor/minio`) and no longer show cosign's `sha256-….sig` tags. Run against the real image: the server formats its drive and reads the licence file.
+
+### Added
+
 - **Redis and Valkey from an image: an ACL option.** A check box "Use ACL" switches the instance from one shared password (Redis' default user, no user name) to a named user: the default user is turned off and a user (default `app`, may run every command, password generated) is created — what applications that sign in with a user name and password need. The Secret then also holds `username`. Checked against a real Redis 7.4: the named user signs in, the default user gets `NOAUTH`.
 
 ### Fixed

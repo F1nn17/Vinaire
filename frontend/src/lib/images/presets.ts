@@ -24,6 +24,8 @@ export type PresetField = {
   // an empty value is allowed
   optional?: boolean;
   multiline?: boolean;
+  // a text kept only in the instance's Secret, never in an environment value (a licence key)
+  secretText?: boolean;
   // a check box: its value is "true" or ""
   checkbox?: boolean;
   // shown (and checked) only while this holds for the other values
@@ -65,6 +67,9 @@ export type Preset = {
   // speaks plain TCP (a database, a broker): an Ingress can't carry it, so the wizard offers to
   // publish the Service on a node port or through a load balancer
   tcp?: boolean;
+  // the field "license" (a pasted text) is stored in the instance's Secret under `key` and mounted
+  // into the container as the file `path` (MinIO AIStor reads its licence from a file)
+  licenseFile?: { key: string; path: string };
   // more keys for the Secret besides the generated passwords — the user, the database, the address —
   // so that everything needed to connect is in one place (none of it is secret on its own)
   extra?: (v: Record<string, string>, host: string) => Record<string, string>;
@@ -410,6 +415,77 @@ export const presets: Preset[] = [
     ],
     note: T(
       "One instance, no replica set and no backups. The account is the administrator of the whole server.",
+    ),
+  },
+  {
+    id: "minio-aistor",
+    tcp: true,
+    title: "MinIO AIStor",
+    summary: T(
+      "S3-compatible object storage. Image `quay.io/minio/aistor/minio`; needs a licence from MinIO (SUBNET).",
+    ),
+    image: "quay.io/minio/aistor/minio",
+    tagHint: T(
+      "A release tag; pick one from the list (edge-daily is the nightly build).",
+    ),
+    defaultTag: "latest",
+    ports: [
+      { name: "api", port: 9000 },
+      { name: "console", port: 9001 },
+    ],
+    dataPath: "/mnt/data",
+    fields: [
+      {
+        id: "user",
+        label: T("Administrator (root user)"),
+        hint: T("The name of the administrator; at least 3 characters."),
+        default: "minioadmin",
+        pattern: /^[a-z][a-z0-9_]{2,30}$/,
+      },
+      {
+        id: "license",
+        label: T("MinIO licence"),
+        hint: T(
+          "The decoded licence from SUBNET — it starts with eyJ (the encrypted block that starts with ZXlK does not work). It is kept only in this instance's Secret and mounted as a file.",
+        ),
+        default: "",
+        pattern: /^eyJ[A-Za-z0-9_.-]{20,}$/,
+        multiline: true,
+        secretText: true,
+      },
+    ],
+    secrets: ["password"],
+    licenseFile: { key: "minio.license", path: "/minio.license" },
+    extra: (v, host) => ({
+      username: v.user,
+      host,
+      port: "9000",
+    }),
+    env: (v) => [
+      { name: "MINIO_ROOT_USER", value: v.user },
+      { name: "MINIO_ROOT_PASSWORD", secret: "password" },
+      // the metrics endpoint answers without a token, so Prometheus can scrape it from inside the cluster
+      { name: "MINIO_PROMETHEUS_AUTH_TYPE", value: "public" },
+    ],
+    args: () => [
+      "minio",
+      "server",
+      "/mnt/data",
+      "--console-address",
+      ":9001",
+      "--license",
+      "/minio.license",
+    ],
+    probe: { tcp: 9000 },
+    resources: { cpu: "100m", memory: "256Mi", memoryLimit: "1Gi" },
+    connect: (v, host, secret) => [
+      [T("S3 address"), `http://${host}:9000`],
+      [T("Console"), `${host}:9001 (${T("use Forward port on the pod")})`],
+      [T("Access key"), v.user],
+      [T("Password"), `${T("Secret")} ${secret}, ${T("key")} password`],
+    ],
+    note: T(
+      "One server on one volume. The console is not published outside. Metrics are open to anything inside the cluster (MINIO_PROMETHEUS_AUTH_TYPE=public).",
     ),
   },
   {
@@ -841,7 +917,7 @@ export function build(
     "app.kubernetes.io/instance": f.name,
   };
   const docs: Doc[] = [];
-  if (p.secrets.length > 0) {
+  if (p.secrets.length > 0 || p.licenseFile) {
     docs.push({
       kind: "Secret",
       name: f.name,
@@ -857,6 +933,9 @@ export function build(
         type: "Opaque",
         stringData: {
           ...Object.fromEntries(p.secrets.map((k) => [k, passwords[k] ?? ""])),
+          ...(p.licenseFile
+            ? { [p.licenseFile.key]: passwords[p.licenseFile.key] ?? "" }
+            : {}),
           ...(p.extra
             ? p.extra(f.values, `${f.name}.${f.namespace}.svc.cluster.local`)
             : {}),
@@ -943,7 +1022,23 @@ export function build(
       limits: { memory: f.memoryLimit },
     },
     ...(probe ? { readinessProbe: probe } : {}),
-    ...(keep ? { volumeMounts: [{ name: "data", mountPath }] } : {}),
+    ...(keep || p.licenseFile
+      ? {
+          volumeMounts: [
+            ...(keep ? [{ name: "data", mountPath }] : []),
+            ...(p.licenseFile
+              ? [
+                  {
+                    name: "license",
+                    mountPath: p.licenseFile.path,
+                    subPath: p.licenseFile.key,
+                    readOnly: true,
+                  },
+                ]
+              : []),
+          ],
+        }
+      : {}),
   };
   docs.push({
     kind: "StatefulSet",
@@ -960,6 +1055,24 @@ export function build(
           metadata: { labels: lab },
           spec: {
             containers: [container],
+            ...(p.licenseFile
+              ? {
+                  volumes: [
+                    {
+                      name: "license",
+                      secret: {
+                        secretName: f.name,
+                        items: [
+                          {
+                            key: p.licenseFile.key,
+                            path: p.licenseFile.key,
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                }
+              : {}),
             ...(p.fsGroup ? { securityContext: { fsGroup: p.fsGroup } } : {}),
           },
         },
