@@ -560,6 +560,8 @@ export type DashboardSummary = {
   // in workloads.ts for the identical shape Pod detail already uses.
   cpu: { used: string; limit: string; pct: number } | null;
   memory: { used: string; limit: string; pct: number } | null;
+  // the nodes' root disks added together; `used` is empty when only the size is known
+  disk?: { used: string; limit: string; pct: number } | null;
 };
 
 export type DashboardData = {
@@ -578,6 +580,7 @@ export type DashboardData = {
   // percentage bar, not a Sparkline.
   cpu: { used: string; total: string; pct: number } | null;
   memory: { used: string; total: string; pct: number } | null;
+  disk: { used: string; total: string; pct: number } | null;
   namespaces: NamespacePodCount[];
 };
 

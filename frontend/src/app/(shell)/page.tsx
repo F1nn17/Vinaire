@@ -62,7 +62,7 @@ export default function DashboardPage() {
               <span className="text-[13px] font-semibold">Cluster CPU</span>
               {data.cpu && (
                 <span className="font-mono text-xs text-text-muted">
-                  {data.cpu.used} / {data.cpu.total}
+                  {data.cpu.used} / {data.cpu.total} · {data.cpu.pct}%
                 </span>
               )}
             </div>
@@ -83,7 +83,7 @@ export default function DashboardPage() {
               <span className="text-[13px] font-semibold">Cluster memory</span>
               {data.memory && (
                 <span className="font-mono text-xs text-text-muted">
-                  {data.memory.used} / {data.memory.total}
+                  {data.memory.used} / {data.memory.total} · {data.memory.pct}%
                 </span>
               )}
             </div>
@@ -96,6 +96,39 @@ export default function DashboardPage() {
               </div>
             ) : (
               <UnavailablePlaceholder text="metrics-server isn't installed or reachable." />
+            )}
+          </div>
+
+          <div className="rounded-[10px] border border-border bg-surface p-[18px]">
+            <div className="mb-2.5 flex items-center justify-between">
+              <span className="text-[13px] font-semibold">
+                {t("Cluster disk")}
+              </span>
+              {data.disk && (
+                <span className="font-mono text-xs text-text-muted">
+                  {data.disk.used
+                    ? `${data.disk.used} / ${data.disk.total} · ${data.disk.pct}%`
+                    : data.disk.total}
+                </span>
+              )}
+            </div>
+            {data.disk?.used ? (
+              <div className="h-2 overflow-hidden rounded bg-surface-2">
+                <div
+                  className={`h-full ${data.disk.pct >= 90 ? "bg-err" : data.disk.pct >= 75 ? "bg-warn" : "bg-ok"}`}
+                  style={{ width: `${data.disk.pct}%` }}
+                />
+              </div>
+            ) : (
+              <UnavailablePlaceholder
+                text={
+                  data.disk
+                    ? t(
+                        "The size of the nodes' disks. Usage needs Prometheus with the node-exporter (Metrics stack page).",
+                      )
+                    : t("The nodes don't report their disk size.")
+                }
+              />
             )}
           </div>
 
