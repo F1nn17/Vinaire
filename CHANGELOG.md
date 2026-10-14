@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Redis from the Marketplace: password or ACL.** Install recipes for the `redis` and `redis-replication` charts (ot-container-kit): one shared password, **ACL** (the default user keeps its own generated password for the operator, a named user `app` gets another for applications; the Secret holds `password`, `app-password` and the `user.acl` file and is wired to `redisSecret` and `acl.secret`), or none. The Secret is created from the page with generated passwords — nothing goes into the Helm values.
 - **Notifications: "read" and an unread count.** The bell shows the number of unread alerts on its badge; each alert has "Mark as read", and "Mark all as read" clears the lot. Read and silenced alerts stay in the list, dimmed, under the unread ones. What was read is remembered in a cookie, per occurrence (an alert that fires again later is unread again).
 
 ### Added

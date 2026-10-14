@@ -24,6 +24,9 @@ export type RecipeField = {
     userKeyField?: string;
     // one key holding both credentials as an environment file (MinIO's operator reads them so)
     envFile?: string;
+    // a Redis ACL setup: passwordKey holds the default user's password, this key the ACL file, and
+    // "<user>-password" the named user's password
+    acl?: string;
   };
   // a secret field that can be filled from pasted text (a licence key): where it is stored and how
   // it should begin

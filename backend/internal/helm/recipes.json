@@ -2128,5 +2128,183 @@
         ]
       }
     ]
+  },
+  "ot-container-kit/redis": {
+    "summary": "A Redis instance run by the Redis operator (install the redis-operator chart first). By default it has no password at all.",
+    "guide": [
+      "Operator: this chart only describes the instance; the redis-operator chart (same repository) must already be running in the cluster, or nothing starts.",
+      "Access: pick a password, or an ACL setup — the default user keeps a generated password for the operator and a named user gets its own for your applications. Both are generated into the Secret; nothing is typed into the Helm values."
+    ],
+    "after": [
+      "The Redis {release} in {namespace} comes up when its pods are ready (the operator creates them). Reach it on the Service {release} port 6379.",
+      "The passwords are in the Secret you chose; read them on the Secrets page (reading a value is audited). With ACL, applications sign in as the named user with its password key (<user>-password)."
+    ],
+    "sections": [
+      {
+        "id": "access",
+        "title": "Access",
+        "options": [
+          {
+            "id": "password",
+            "title": "One shared password",
+            "default": true,
+            "fields": [
+              {
+                "key": "authSecret",
+                "label": "Secret for the password",
+                "kind": "secret",
+                "default": "redis-auth",
+                "required": true,
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "Created with the button below (key password, generated); or name one that exists.",
+                "generate": {
+                  "passwordKey": "password"
+                }
+              }
+            ],
+            "set": [
+              {
+                "path": "redisStandalone.redisSecret.secretName",
+                "value": "{authSecret}"
+              },
+              {
+                "path": "redisStandalone.redisSecret.secretKey",
+                "value": "password"
+              }
+            ]
+          },
+          {
+            "id": "acl",
+            "title": "ACL: a named user for applications",
+            "note": "The operator keeps signing in as the default user with its own password; applications use the named user (user app, all commands) — narrow it later with ACL SETUSER.",
+            "fields": [
+              {
+                "key": "authSecret",
+                "label": "Secret for the passwords and the ACL file",
+                "kind": "secret",
+                "default": "redis-acl",
+                "required": true,
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "Created with the button below: key password (default user), app-password (user app) and user.acl (the ACL file).",
+                "generate": {
+                  "passwordKey": "password",
+                  "user": "app",
+                  "acl": "user.acl"
+                }
+              }
+            ],
+            "set": [
+              {
+                "path": "redisStandalone.redisSecret.secretName",
+                "value": "{authSecret}"
+              },
+              {
+                "path": "redisStandalone.redisSecret.secretKey",
+                "value": "password"
+              },
+              {
+                "path": "acl.secret.secretName",
+                "value": "{authSecret}"
+              }
+            ]
+          },
+          {
+            "id": "none",
+            "title": "No password",
+            "note": "Anyone who can reach the Service can use it. Only inside a trusted cluster.",
+            "set": []
+          }
+        ]
+      }
+    ]
+  },
+  "ot-container-kit/redis-replication": {
+    "summary": "A Redis replication run by the Redis operator (install the redis-operator chart first). By default it has no password at all.",
+    "guide": [
+      "Operator: this chart only describes the instance; the redis-operator chart (same repository) must already be running in the cluster, or nothing starts.",
+      "Access: pick a password, or an ACL setup — the default user keeps a generated password for the operator and a named user gets its own for your applications. Both are generated into the Secret; nothing is typed into the Helm values."
+    ],
+    "after": [
+      "The Redis {release} in {namespace} comes up when its pods are ready (the operator creates them). Reach it on the Service {release} port 6379.",
+      "The passwords are in the Secret you chose; read them on the Secrets page (reading a value is audited). With ACL, applications sign in as the named user with its password key (<user>-password)."
+    ],
+    "sections": [
+      {
+        "id": "access",
+        "title": "Access",
+        "options": [
+          {
+            "id": "password",
+            "title": "One shared password",
+            "default": true,
+            "fields": [
+              {
+                "key": "authSecret",
+                "label": "Secret for the password",
+                "kind": "secret",
+                "default": "redis-auth",
+                "required": true,
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "Created with the button below (key password, generated); or name one that exists.",
+                "generate": {
+                  "passwordKey": "password"
+                }
+              }
+            ],
+            "set": [
+              {
+                "path": "redisReplication.redisSecret.secretName",
+                "value": "{authSecret}"
+              },
+              {
+                "path": "redisReplication.redisSecret.secretKey",
+                "value": "password"
+              }
+            ]
+          },
+          {
+            "id": "acl",
+            "title": "ACL: a named user for applications",
+            "note": "The operator keeps signing in as the default user with its own password; applications use the named user (user app, all commands) — narrow it later with ACL SETUSER.",
+            "fields": [
+              {
+                "key": "authSecret",
+                "label": "Secret for the passwords and the ACL file",
+                "kind": "secret",
+                "default": "redis-acl",
+                "required": true,
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "Created with the button below: key password (default user), app-password (user app) and user.acl (the ACL file).",
+                "generate": {
+                  "passwordKey": "password",
+                  "user": "app",
+                  "acl": "user.acl"
+                }
+              }
+            ],
+            "set": [
+              {
+                "path": "redisReplication.redisSecret.secretName",
+                "value": "{authSecret}"
+              },
+              {
+                "path": "redisReplication.redisSecret.secretKey",
+                "value": "password"
+              },
+              {
+                "path": "acl.secret.secretName",
+                "value": "{authSecret}"
+              }
+            ]
+          },
+          {
+            "id": "none",
+            "title": "No password",
+            "note": "Anyone who can reach the Service can use it. Only inside a trusted cluster.",
+            "set": []
+          }
+        ]
+      }
+    ]
   }
 }

@@ -106,6 +106,11 @@ type RecipeGenerate struct {
 	// environment file (export MINIO_ROOT_USER=… / export MINIO_ROOT_PASSWORD=…), which is how
 	// MinIO's operator reads its root credentials. It needs User.
 	EnvFile string `json:"envFile,omitempty"`
+	// ACL (with PasswordKey and User) makes the Secret a Redis ACL setup: PasswordKey holds the
+	// password of the "default" user — the one the Redis operator itself signs in with — ACL names the
+	// key holding the ACL file ("user.acl": the default user plus User, each with its own generated
+	// password), and "<User>-password" holds the named user's password for applications.
+	ACL string `json:"acl,omitempty"`
 }
 
 // RecipeSet puts one value at a path ("a.b.0.c": numbers index lists). Strings (also inside
@@ -293,6 +298,15 @@ func (o RecipeOption) validate() error {
 				!regexp.MustCompile(`^[A-Za-z0-9._-]+$`).MatchString(g.EnvFile) ||
 				!regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`).MatchString(g.User) {
 				return fmt.Errorf("field %s: envFile needs a user and no other key", f.Key)
+			}
+			continue
+		}
+		if g.ACL != "" {
+			keyRe := regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+			if g.User == "" || g.PasswordKey == "" || g.PasswordKeyField != "" || g.UserKey != "" || g.UserKeyField != "" ||
+				!keyRe.MatchString(g.ACL) || !keyRe.MatchString(g.PasswordKey) || g.ACL == g.PasswordKey ||
+				!regexp.MustCompile(`^[a-z][a-z0-9_-]*$`).MatchString(g.User) || g.User == "default" {
+				return fmt.Errorf("field %s: acl needs a user (not \"default\"), a literal passwordKey and distinct key names", f.Key)
 			}
 			continue
 		}
