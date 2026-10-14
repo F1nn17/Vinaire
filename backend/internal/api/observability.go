@@ -113,6 +113,11 @@ type AlertRow struct {
 	Summary     string `json:"summary"`
 	StatusColor string `json:"statusColor"`
 	StartsAt    string `json:"startsAt"`
+	// ID names this occurrence of the alert (its fingerprint and when it started firing), so that
+	// "read" can be remembered per occurrence: the same alert firing again later is new.
+	ID string `json:"id"`
+	// Suppressed: silenced or inhibited — still listed, but it is not news.
+	Suppressed bool `json:"suppressed,omitempty"`
 }
 
 type alertsResponse struct {
@@ -127,6 +132,21 @@ type alertmanagerAlert struct {
 	Labels      map[string]string `json:"labels"`
 	Annotations map[string]string `json:"annotations"`
 	StartsAt    string            `json:"startsAt"`
+	EndsAt      string            `json:"endsAt"`
+	Fingerprint string            `json:"fingerprint"`
+	Status      struct {
+		State string `json:"state"`
+	} `json:"status"`
+}
+
+// alertIsOver reports an alert Alertmanager still holds but that has already ended: it keeps a
+// resolved alert around for a while, and its endsAt is in the past (a firing alert's is ahead).
+func alertIsOver(a alertmanagerAlert, now time.Time) bool {
+	if a.EndsAt == "" {
+		return false
+	}
+	end, err := time.Parse(time.RFC3339, a.EndsAt)
+	return err == nil && !end.After(now)
 }
 
 // Alerts handles GET /api/v1/alerts — every currently active alert
@@ -161,6 +181,10 @@ func (h *Handler) Alerts(w http.ResponseWriter, r *http.Request) {
 		if n := a.Labels["alertname"]; n == "Watchdog" || n == "InfoInhibitor" {
 			continue
 		}
+		// one that has already resolved is history, not an alert
+		if alertIsOver(a, time.Now()) {
+			continue
+		}
 		color := StatusWarn
 		if a.Labels["severity"] == "critical" {
 			color = StatusErr
@@ -175,6 +199,8 @@ func (h *Handler) Alerts(w http.ResponseWriter, r *http.Request) {
 			Summary:     summary,
 			StatusColor: string(color),
 			StartsAt:    a.StartsAt,
+			ID:          a.Fingerprint + "@" + a.StartsAt,
+			Suppressed:  a.Status.State != "" && a.Status.State != "active",
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].StartsAt > rows[j].StartsAt })

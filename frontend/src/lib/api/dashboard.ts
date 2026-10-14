@@ -67,6 +67,13 @@ export async function getDashboard(): Promise<DashboardData> {
           pct: summary.memory.pct,
         }
       : null,
+    disk: summary.disk
+      ? {
+          used: summary.disk.used,
+          total: summary.disk.limit,
+          pct: summary.disk.pct,
+        }
+      : null,
     namespaces: summary.namespaces,
   };
 }

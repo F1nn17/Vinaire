@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The bell no longer lists alerts that have already resolved.** Alertmanager keeps a resolved alert for a while (its `endsAt` is already in the past); those are now left out, and silenced or inhibited ones are marked as such and don't count as news.
+
 ### Added
 
-- **MinIO AIStor in the Marketplace.** The catalog has MinIO's own repository (`https://helm.min.io/`, in Storage), with the operator (`aistor-operator`) and the object store (`aistor-objectstore`) told apart as *operator* and *cluster*. Guided setup for both. **Operator:** the licence goes into the Secret `minio-license` (key `minio.license`) that the operator reads — paste it on the page and the Secret is created (the encrypted `ZXlK…` block is refused, the decoded `eyJ…` JWT is stored; it never becomes a Helm value), or copy the one found in another namespace of the cluster, or add it later. **Object store:** root credentials as a generated Secret with a `config.env` (the chart's `secrets.existingSecret`), and a size choice — one server with one drive for a home cluster (the chart's default is 4 × 4 = sixteen volumes). The new recipe field kinds (`paste`, `generate.envFile`) are validated like the rest.
+- **Notifications: "read" and an unread count.** The bell shows the number of unread alerts on its badge; each alert has "Mark as read", and "Mark all as read" clears the lot. Read and silenced alerts stay in the list, dimmed, under the unread ones. What was read is remembered in a cookie, per occurrence (an alert that fires again later is unread again).
+
+### Added
+
+- **Overview: the cluster's disk, and percentages on the cards.** A new "Cluster disk" card shows the nodes' disks added together — used against size, with a bar that turns amber at 75 % and red at 90 % — from the node-exporter's filesystem series in Prometheus (each block device counted once per node, however many places it is mounted; memory-backed, overlay and loop filesystems left out). Without Prometheus it shows only the size the nodes report as ephemeral storage and says what is needed for the rest. The CPU and memory cards now show the percentage next to "used / total". (`GET /api/v1/dashboard/summary` has a new `disk` field.)
+- **MinIO AIStor from an image (the "Install from an image" wizard).** A new preset runs `quay.io/minio/aistor/minio` as `minio server /mnt/data --console-address :9001 --license /minio.license`, as in the owner's compose file: the licence is pasted into the form (the decoded `eyJ…` JWT; the encrypted `ZXlK…` block is refused), stored only in the instance's Secret, masked in the preview, and mounted read-only as the file `/minio.license` — in no environment variable. Root user, a generated password, 1 vCPU-light defaults, a data volume and the metrics open inside the cluster, as in the compose file. Tag lists now work for Quay's nested repositories (`quay.io/minio/aistor/minio`) and no longer show cosign's `sha256-….sig` tags. Run against the real image: the server formats its drive and reads the licence file.
 
 ### Added
 

@@ -94,7 +94,9 @@ func parse(image string) (registry, repo string, err error) {
 	if len(parts) == 1 && registry == "docker.io" {
 		parts = []string{"library", parts[0]}
 	}
-	if len(parts) != 2 {
+	// Docker Hub names are owner/name; Quay allows repositories nested one level deeper
+	// (quay.io/minio/aistor/minio).
+	if len(parts) != 2 && !(registry == "quay.io" && len(parts) == 3) {
 		return "", "", fmt.Errorf("not an image name: %q", image)
 	}
 	for _, p := range parts {
@@ -102,7 +104,7 @@ func parse(image string) (registry, repo string, err error) {
 			return "", "", fmt.Errorf("not an image name: %q", image)
 		}
 	}
-	return registry, parts[0] + "/" + parts[1], nil
+	return registry, strings.Join(parts, "/"), nil
 }
 
 // Tags returns the tags of image, newest versions first.
@@ -230,7 +232,8 @@ func order(in []Tag) []Tag {
 	var latest *Tag
 	for i := range in {
 		t := in[i]
-		if !tagName.MatchString(t.Name) || seen[t.Name] {
+		// cosign keeps signatures and attestations as tags of their own (sha256-<digest>.sig): not versions
+		if !tagName.MatchString(t.Name) || seen[t.Name] || strings.HasPrefix(t.Name, "sha256-") {
 			continue
 		}
 		seen[t.Name] = true
