@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The bell no longer lists alerts that have already resolved.** Alertmanager keeps a resolved alert for a while (its `endsAt` is already in the past); those are now left out, and silenced or inhibited ones are marked as such and don't count as news.
+
+### Added
+
+- **Notifications: "read" and an unread count.** The bell shows the number of unread alerts on its badge; each alert has "Mark as read", and "Mark all as read" clears the lot. Read and silenced alerts stay in the list, dimmed, under the unread ones. What was read is remembered in a cookie, per occurrence (an alert that fires again later is unread again).
+
 ### Added
 
 - **MinIO AIStor in the Marketplace.** The catalog has MinIO's own repository (`https://helm.min.io/`, in Storage), with the operator (`aistor-operator`) and the object store (`aistor-objectstore`) told apart as *operator* and *cluster*. Guided setup for both. **Operator:** the licence goes into the Secret `minio-license` (key `minio.license`) that the operator reads — paste it on the page and the Secret is created (the encrypted `ZXlK…` block is refused, the decoded `eyJ…` JWT is stored; it never becomes a Helm value), or copy the one found in another namespace of the cluster, or add it later. **Object store:** root credentials as a generated Secret with a `config.env` (the chart's `secrets.existingSecret`), and a size choice — one server with one drive for a home cluster (the chart's default is 4 × 4 = sixteen volumes). The new recipe field kinds (`paste`, `generate.envFile`) are validated like the rest.

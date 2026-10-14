@@ -456,6 +456,10 @@ export type AlertRow = {
   summary: string;
   statusColor: StatusColor;
   startsAt: string;
+  // this occurrence of the alert (fingerprint@startsAt): what "read" is remembered for
+  id: string;
+  // silenced or inhibited: listed, but not news
+  suppressed?: boolean;
 };
 
 // Discriminated union every Phase 16 observability proxy returns — the
