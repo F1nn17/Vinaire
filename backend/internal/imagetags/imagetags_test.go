@@ -14,6 +14,7 @@ func TestParseAcceptsOnlyKnownRegistriesAndPlainNames(t *testing.T) {
 		"grafana/grafana":           "docker.io/grafana/grafana",
 		"docker.io/library/redis":   "docker.io/library/redis",
 		"quay.io/keycloak/keycloak": "quay.io/keycloak/keycloak",
+		"quay.io/minio/aistor/minio": "quay.io/minio/aistor/minio",
 	} {
 		reg, repo, err := parse(in)
 		if err != nil || reg+"/"+repo != want {
@@ -26,7 +27,7 @@ func TestParseAcceptsOnlyKnownRegistriesAndPlainNames(t *testing.T) {
 	if _, _, err := parse("169.254.169.254/x/y"); !errors.Is(err, ErrUnsupported) {
 		t.Errorf("an address as the registry must be refused, got %v", err)
 	}
-	for _, bad := range []string{"", "a/b/c", "UPPER", "../etc", "a b", "postgres?x=1", "x/y@sha256"} {
+	for _, bad := range []string{"", "a/b/c", "docker.io/a/b/c", "quay.io/a/b/c/d", "UPPER", "../etc", "a b", "postgres?x=1", "x/y@sha256"} {
 		if _, _, err := parse(bad); err == nil {
 			t.Errorf("parse(%q) should fail", bad)
 		}
@@ -36,7 +37,7 @@ func TestParseAcceptsOnlyKnownRegistriesAndPlainNames(t *testing.T) {
 func TestOrderPutsVersionsFirstAndNewestNumberUp(t *testing.T) {
 	got := order([]Tag{
 		{Name: "17-alpine", Updated: "2025-02"}, {Name: "9.6"}, {Name: "latest"}, {Name: "17.2"},
-		{Name: "17"}, {Name: "bad tag"}, {Name: "16.10"}, {Name: "17.2"},
+		{Name: "17"}, {Name: "sha256-0123.sig"}, {Name: "bad tag"}, {Name: "16.10"}, {Name: "17.2"},
 	})
 	want := []string{"17.2", "17", "16.10", "9.6", "latest", "17-alpine"}
 	if len(got) != len(want) {
