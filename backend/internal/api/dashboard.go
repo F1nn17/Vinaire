@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -55,6 +56,10 @@ type DashboardSummaryResponse struct {
 	// instead of one pod's limits + PodMetricses.
 	CPU    *ResourceUsage `json:"cpu,omitempty"`
 	Memory *ResourceUsage `json:"memory,omitempty"`
+	// Disk is the nodes' root disks added together: used against size when Prometheus has the
+	// node-exporter's filesystem series, else only the size (what the nodes report as ephemeral
+	// storage) with Used empty. nil when neither is known.
+	Disk *ResourceUsage `json:"disk,omitempty"`
 }
 
 // DashboardSummary handles GET /api/v1/dashboard/summary — aggregates
@@ -99,6 +104,7 @@ func (h *Handler) DashboardSummary(w http.ResponseWriter, r *http.Request) {
 		Namespaces:     namespaces,
 	}
 	resp.CPU, resp.Memory = h.clusterResourceUsage(r.Context(), clientset, h.metricsFor(r, cluster))
+	resp.Disk = h.clusterDiskUsage(r.Context(), cluster.Name, clientset)
 
 	// A discarding ResponseWriter: resolveDynamic writes its own HTTP error
 	// on failure, but an ArgoCD-detection hiccup should only make this one
@@ -256,3 +262,47 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	}
 	respondJSON(w, rows)
 }
+
+// diskFilter keeps the real block devices: a disk is counted once per node however many places it is
+// mounted (a node and its kubelet directories, a container runtime's bind mounts all sit on the same
+// one), and memory-backed, overlay and loop filesystems are left out.
+const diskFilter = `{device=~"/dev/.+",device!~"/dev/loop.*",fstype!~"tmpfs|overlay|squashfs|ramfs|nsfs|devtmpfs"}`
+
+func diskSum(metric string) string {
+	return "sum(max by (instance, device) (" + metric + diskFilter + "))"
+}
+
+// clusterDiskUsage adds up the nodes' root disks: used and size from Prometheus (the node-exporter),
+// or, without it, only the size the nodes report as ephemeral storage. It never fails the dashboard:
+// a missing Prometheus just means no "used".
+func (h *Handler) clusterDiskUsage(ctx context.Context, cluster string, cs *kubernetes.Clientset) *ResourceUsage {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if fetch, _ := h.prometheusFetcher(ctx, cluster, cs); fetch != nil {
+		size, okSize := promInstant(ctx, fetch, diskSum("node_filesystem_size_bytes"))
+		avail, okAvail := promInstant(ctx, fetch, diskSum("node_filesystem_avail_bytes"))
+		if okSize && okAvail && size > 0 {
+			used := size - avail
+			if used < 0 {
+				used = 0
+			}
+			return &ResourceUsage{Used: formatGiB(used), Limit: formatGiB(size), Pct: int(used * 100 / size)}
+		}
+	}
+	nodes, err := cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil
+	}
+	var total int64
+	for _, n := range nodes.Items {
+		if q, ok := n.Status.Capacity[corev1.ResourceEphemeralStorage]; ok {
+			total += q.Value()
+		}
+	}
+	if total == 0 {
+		return nil
+	}
+	return &ResourceUsage{Limit: formatGiB(float64(total))}
+}
+
+func formatGiB(b float64) string { return fmt.Sprintf("%.1f GiB", b/(1<<30)) }
