@@ -12,6 +12,7 @@ import {
   type KeycloakSetupResult,
 } from "@/lib/api/keycloak";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { KeycloakInstall, type InstalledKeycloak } from "./KeycloakInstall";
 import { TypeToConfirmModal } from "@/components/ui/TypeToConfirmModal";
 
 const input =
@@ -24,6 +25,8 @@ export function KeycloakSetup() {
   const { data: status, error, isLoading, mutate } = useKeycloakStatus();
   const [result, setResult] = useState<KeycloakSetupResult | null>(null);
   const [removing, setRemoving] = useState(false);
+  // a Keycloak just installed from the card above: the form below is filled in from it
+  const [installed, setInstalled] = useState<InstalledKeycloak | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -142,8 +145,14 @@ export function KeycloakSetup() {
 
           <SessionsList />
 
+          {status.available && !status.active && (
+            <KeycloakInstall onReady={setInstalled} />
+          )}
+
           {status.available && (
             <SetupForm
+              key={installed?.url ?? "form"}
+              prefill={installed}
               reconfigure={status.configured}
               onDone={(r) => {
                 setResult(r);
@@ -207,16 +216,18 @@ function Done({ result }: { result: KeycloakSetupResult }) {
 
 function SetupForm({
   reconfigure,
+  prefill,
   onDone,
 }: {
   reconfigure: boolean;
+  prefill: InstalledKeycloak | null;
   onDone: (r: KeycloakSetupResult) => void;
 }) {
   const [f, setF] = useState({
-    keycloakUrl: "",
+    keycloakUrl: prefill?.url ?? "",
     adminRealm: "master",
-    adminUser: "admin",
-    adminPassword: "",
+    adminUser: prefill?.adminUser ?? "admin",
+    adminPassword: prefill?.adminPassword ?? "",
     realm: "vinaire",
     clientId: "vinaire",
     createUser: true,
