@@ -54,7 +54,10 @@ export function seriesName(
   const values = Object.entries(metric)
     .filter(([k]) => k !== "__name__")
     .map(([, v]) => v);
-  return values.length ? values.join(" ") : legend || "value";
+  if (values.length) return values.join(" ");
+  // a legend that names a label this series doesn't have ("{pod}" on a series without a pod) must not
+  // show its raw placeholder
+  return legend && !/\{\w+\}/.test(legend) ? legend : "(no label)";
 }
 
 export async function queryRange(
