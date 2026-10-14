@@ -22,7 +22,12 @@ export type RecipeField = {
     user?: string;
     userKey?: string;
     userKeyField?: string;
+    // one key holding both credentials as an environment file (MinIO's operator reads them so)
+    envFile?: string;
   };
+  // a secret field that can be filled from pasted text (a licence key): where it is stored and how
+  // it should begin
+  paste?: { key: string; prefix?: string; hint?: string };
 };
 
 export type RecipeSet = { path: string; value: unknown; as?: "number" };

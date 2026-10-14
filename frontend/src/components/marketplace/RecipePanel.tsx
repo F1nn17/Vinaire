@@ -22,6 +22,7 @@ import {
 import { backendFromService } from "@/components/editor/forms/fromApp";
 import { FieldChecks } from "./FieldChecks";
 import { friendlyErrorMessage } from "@/lib/api/errors";
+import { revealSecretKey } from "@/lib/api/secrets";
 import {
   copyCredentials,
   createSecret,
@@ -285,6 +286,29 @@ function FieldInput({
     const g = field.generate;
     if (!g || !namespace) return;
     const secretName = value.trim() || `${release || "app"}-admin`;
+    if (g.envFile) {
+      // MinIO's operator reads its root credentials from an environment file in the Secret
+      setGenBusy(true);
+      setGenMsg(null);
+      try {
+        await createSecret(namespace, secretName, {
+          [g.envFile]: `export MINIO_ROOT_USER="${g.user ?? "admin"}"\nexport MINIO_ROOT_PASSWORD="${randomPassword()}"\n`,
+        });
+        onFill({ [field.key]: secretName });
+        setGenMsg({
+          ok: true,
+          text: t(
+            "Secret {name} created in {ns} with a generated password. You can read it later on the Secrets page (reading a value is audited).",
+            { name: secretName, ns: namespace },
+          ),
+        });
+      } catch (e) {
+        setGenMsg({ ok: false, text: friendlyErrorMessage(e) });
+      } finally {
+        setGenBusy(false);
+      }
+      return;
+    }
     const pwKey = (
       g.passwordKey ??
       fields[g.passwordKeyField ?? ""] ??
@@ -315,6 +339,77 @@ function FieldInput({
       setGenMsg({ ok: false, text: friendlyErrorMessage(e) });
     } finally {
       setGenBusy(false);
+    }
+  }
+
+  // "create this Secret from what I paste" (a licence), or copy one found in another namespace
+  const [pasted, setPasted] = useState("");
+  const [pasteBusy, setPasteBusy] = useState(false);
+  const [pasteMsg, setPasteMsg] = useState<{
+    ok: boolean;
+    text: string;
+  } | null>(null);
+  const everywhere = useResourceTable(
+    field.paste ? "core/v1/secrets" : null,
+    "",
+  );
+  const secretName = value.trim() || field.default || "";
+  const elsewhere = field.paste
+    ? (everywhere.data?.rows ?? []).filter(
+        (r) => r.name === secretName && (r.namespace ?? "") !== namespace,
+      )
+    : [];
+
+  async function storePasted() {
+    const g = field.paste;
+    if (!g || !namespace || !secretName) return;
+    const text = pasted.trim();
+    if (g.prefix && !text.startsWith(g.prefix)) {
+      setPasteMsg({ ok: false, text: g.hint ?? t("That doesn't look right.") });
+      return;
+    }
+    setPasteBusy(true);
+    setPasteMsg(null);
+    try {
+      await createSecret(namespace, secretName, { [g.key]: text });
+      setPasted("");
+      onFill({ [field.key]: secretName });
+      setPasteMsg({
+        ok: true,
+        text: t("Secret {name} created in {ns}.", {
+          name: secretName,
+          ns: namespace,
+        }),
+      });
+    } catch (e) {
+      setPasteMsg({ ok: false, text: friendlyErrorMessage(e) });
+    } finally {
+      setPasteBusy(false);
+    }
+  }
+
+  // copy a Secret that already holds it, from another namespace: read through the audited reveal,
+  // written straight into the new Secret, never shown
+  async function copyFrom(ns: string) {
+    const g = field.paste;
+    if (!g || !namespace || !secretName) return;
+    setPasteBusy(true);
+    setPasteMsg(null);
+    try {
+      const text = await revealSecretKey(ns, secretName, g.key);
+      await createSecret(namespace, secretName, { [g.key]: text });
+      onFill({ [field.key]: secretName });
+      setPasteMsg({
+        ok: true,
+        text: t("Secret {name} created in {ns}.", {
+          name: secretName,
+          ns: namespace,
+        }),
+      });
+    } catch (e) {
+      setPasteMsg({ ok: false, text: friendlyErrorMessage(e) });
+    } finally {
+      setPasteBusy(false);
     }
   }
 
@@ -357,6 +452,61 @@ function FieldInput({
         </datalist>
       )}
       {field.help && <span className="text-text-faint">{field.help}</span>}
+      {field.paste && (
+        <span className="flex flex-col gap-1.5">
+          {elsewhere.length > 0 && (
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="text-text-muted">
+                {t("Found in this cluster")}:
+              </span>
+              {elsewhere.map((r) => (
+                <button
+                  key={`${r.namespace}/${r.name}`}
+                  type="button"
+                  disabled={pasteBusy || !namespace}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void copyFrom(r.namespace ?? "");
+                  }}
+                  className="rounded-lg border border-border px-3 py-1.5 hover:bg-surface"
+                >
+                  {t("Copy {ns}/{name} here", {
+                    ns: r.namespace ?? "",
+                    name: r.name,
+                  })}
+                </button>
+              ))}
+            </span>
+          )}
+          <textarea
+            value={pasted}
+            onChange={(e) => setPasted(e.target.value)}
+            placeholder={t("Paste the licence here")}
+            rows={3}
+            autoComplete="off"
+            spellCheck={false}
+            className={`${input} resize-y`}
+          />
+          <button
+            type="button"
+            disabled={pasteBusy || !namespace || pasted.trim() === ""}
+            onClick={(e) => {
+              e.preventDefault();
+              void storePasted();
+            }}
+            className="w-fit rounded-lg border border-border px-3 py-1.5 hover:bg-surface"
+          >
+            {pasteBusy
+              ? t("Creating…")
+              : t("Create the Secret from the pasted text")}
+          </button>
+          {pasteMsg && (
+            <span className={pasteMsg.ok ? "text-ok" : "text-err"}>
+              {pasteMsg.text}
+            </span>
+          )}
+        </span>
+      )}
       {field.generate && (
         <span className="flex flex-col gap-1">
           <button
