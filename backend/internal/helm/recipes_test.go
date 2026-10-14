@@ -119,13 +119,20 @@ func TestGeneratedSecretsAreOnlyOfferedWhereTheyAreSafe(t *testing.T) {
 	if _, err := loadRecipes([]byte(good)); err != nil {
 		t.Errorf("rejected: %v", err)
 	}
+	acl := wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"password","user":"app","acl":"user.acl"}}`)
+	if _, err := loadRecipes([]byte(acl)); err != nil {
+		t.Errorf("acl rejected: %v", err)
+	}
 	for name, doc := range map[string]string{
-		"not a secret field": wrap(`{"key":"s","label":"S","generate":{"passwordKey":"p"}}`),
-		"no password key":    wrap(`{"key":"s","label":"S","kind":"secret","generate":{}}`),
-		"both password keys": wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"p","passwordKeyField":"k"}},{"key":"k","label":"K"}`),
-		"user without a key": wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"p","user":"admin"}}`),
-		"unknown key field":  wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKeyField":"ghost"}}`),
-		"odd key":            wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"a b"}}`),
+		"not a secret field":       wrap(`{"key":"s","label":"S","generate":{"passwordKey":"p"}}`),
+		"no password key":          wrap(`{"key":"s","label":"S","kind":"secret","generate":{}}`),
+		"both password keys":       wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"p","passwordKeyField":"k"}},{"key":"k","label":"K"}`),
+		"user without a key":       wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"p","user":"admin"}}`),
+		"unknown key field":        wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKeyField":"ghost"}}`),
+		"odd key":                  wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"a b"}}`),
+		"acl for the default user": wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"password","user":"default","acl":"user.acl"}}`),
+		"acl without a user":       wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"password","acl":"user.acl"}}`),
+		"acl on the password key":  wrap(`{"key":"s","label":"S","kind":"secret","generate":{"passwordKey":"x","user":"app","acl":"x"}}`),
 	} {
 		if _, err := loadRecipes([]byte(doc)); err == nil {
 			t.Errorf("%s: accepted", name)

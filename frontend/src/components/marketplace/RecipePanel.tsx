@@ -309,6 +309,36 @@ function FieldInput({
       }
       return;
     }
+    if (g.acl && g.passwordKey && g.user) {
+      // Redis ACL: the operator signs in as "default" with passwordKey's value; applications use the
+      // named user. Both passwords are generated here and live only in this Secret.
+      setGenBusy(true);
+      setGenMsg(null);
+      try {
+        const adminPw = randomPassword();
+        const userPw = randomPassword();
+        await createSecret(namespace, secretName, {
+          [g.passwordKey]: adminPw,
+          [`${g.user}-password`]: userPw,
+          [g.acl]: `user default on >${adminPw} ~* &* +@all
+user ${g.user} on >${userPw} ~* &* +@all
+`,
+        });
+        onFill({ [field.key]: secretName });
+        setGenMsg({
+          ok: true,
+          text: t(
+            "Secret {name} created in {ns} with a generated password. You can read it later on the Secrets page (reading a value is audited).",
+            { name: secretName, ns: namespace },
+          ),
+        });
+      } catch (e) {
+        setGenMsg({ ok: false, text: friendlyErrorMessage(e) });
+      } finally {
+        setGenBusy(false);
+      }
+      return;
+    }
     const pwKey = (
       g.passwordKey ??
       fields[g.passwordKeyField ?? ""] ??
