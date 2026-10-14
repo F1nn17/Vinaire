@@ -1967,5 +1967,166 @@
     "after": [
       "WordPress is at the address you chose (inside the cluster: the Service {release} in {namespace}, port 80). The administrator's user and password are in the Secret {release} in {namespace} (open the Secrets page; reading a value is audited)."
     ]
+  },
+  "minio-aistor/aistor-operator": {
+    "summary": "MinIO AIStor's operator: the controller that runs AIStor object stores. It needs a licence from MinIO (SUBNET); install it first, then install an object store (the aistor-objectstore chart).",
+    "guide": [
+      "Licence: the operator reads it from a Secret named minio-license (key minio.license) in its own namespace. Paste the licence here and the Secret is created for you — or point at one that already exists. Use the decoded licence (it starts with eyJ), not the encrypted block (it starts with ZXlK).",
+      "Without a licence the operator starts, but the object stores it runs refuse S3 requests until one is installed."
+    ],
+    "after": [
+      "The operator runs in {namespace}. Now install an object store: Marketplace → minio-aistor → aistor-objectstore."
+    ],
+    "sections": [
+      {
+        "id": "license",
+        "title": "MinIO licence",
+        "help": "From MinIO SUBNET. It is stored only in a Secret, never in the Helm values.",
+        "options": [
+          {
+            "id": "secret",
+            "title": "A Secret named minio-license in this namespace",
+            "default": true,
+            "note": "The name is fixed: it is where the operator looks.",
+            "fields": [
+              {
+                "key": "licenseSecret",
+                "label": "Licence Secret",
+                "kind": "secret",
+                "default": "minio-license",
+                "required": true,
+                "pattern": "^minio-license$",
+                "help": "Paste the licence below to create it, copy one from another namespace, or leave an existing Secret as it is.",
+                "paste": {
+                  "key": "minio.license",
+                  "prefix": "eyJ",
+                  "hint": "A MinIO licence is a JWT that starts with eyJ. A block that starts with ZXlK is the encrypted one — use the decoded licence."
+                }
+              }
+            ],
+            "set": []
+          },
+          {
+            "id": "later",
+            "title": "I'll add the licence later",
+            "note": "The operator starts; the object stores it runs refuse S3 requests until a Secret named minio-license exists in this namespace.",
+            "set": []
+          }
+        ]
+      }
+    ]
+  },
+  "minio-aistor/aistor-objectstore": {
+    "summary": "A MinIO AIStor object store, run by the AIStor operator (install the aistor-operator chart first, with a licence).",
+    "guide": [
+      "Size: the chart's default is 4 servers with 4 drives each — sixteen volumes, which is a real cluster. For a home or test cluster pick the single-server option.",
+      "Root credentials: the object store reads them from a Secret. Create one here with a generated password (nothing is typed into the Helm values)."
+    ],
+    "after": [
+      "The object store {release} in {namespace} comes up when its pods are ready. Its S3 API is the Service {release}-hl / minio on port 9000, the console on 9001 — see the Routing page to publish it.",
+      "The root user and its password are in the Secret you chose (key config.env); read them on the Secrets page (reading a value is audited)."
+    ],
+    "sections": [
+      {
+        "id": "credentials",
+        "title": "Root credentials",
+        "options": [
+          {
+            "id": "generated",
+            "title": "A Secret with a generated password",
+            "default": true,
+            "fields": [
+              {
+                "key": "credsSecret",
+                "label": "Secret for the root credentials",
+                "kind": "secret",
+                "default": "myminio-env-configuration",
+                "required": true,
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "Created with the button below (user minioadmin, a generated password, key config.env); or name one that exists.",
+                "generate": {
+                  "envFile": "config.env",
+                  "user": "minioadmin"
+                }
+              }
+            ],
+            "set": [
+              {
+                "path": "secrets.name",
+                "value": "{credsSecret}"
+              },
+              {
+                "path": "secrets.existingSecret",
+                "value": true
+              }
+            ]
+          },
+          {
+            "id": "existing",
+            "title": "A Secret I made myself",
+            "note": "It must hold the key config.env: export MINIO_ROOT_USER=\"…\" and export MINIO_ROOT_PASSWORD=\"…\", one per line.",
+            "fields": [
+              {
+                "key": "credsSecret",
+                "label": "Secret for the root credentials",
+                "kind": "secret",
+                "required": true,
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+              }
+            ],
+            "set": [
+              {
+                "path": "secrets.name",
+                "value": "{credsSecret}"
+              },
+              {
+                "path": "secrets.existingSecret",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "size",
+        "title": "Size",
+        "options": [
+          {
+            "id": "single",
+            "title": "One server, one drive (home / test)",
+            "default": true,
+            "note": "No redundancy: if the volume is lost the data is.",
+            "fields": [
+              {
+                "key": "volume",
+                "label": "Volume size",
+                "default": "10Gi",
+                "required": true,
+                "pattern": "^[1-9][0-9]*(Mi|Gi|Ti)$"
+              }
+            ],
+            "set": [
+              {
+                "path": "objectStore.pools",
+                "value": [
+                  {
+                    "name": "pool-0",
+                    "servers": 1,
+                    "volumesPerServer": 1,
+                    "size": "{volume}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "default",
+            "title": "The chart's default: 4 servers × 4 drives",
+            "note": "Sixteen volumes of 10 GiB. Needs at least four nodes' worth of room to be useful.",
+            "set": []
+          }
+        ]
+      }
+    ]
   }
 }
