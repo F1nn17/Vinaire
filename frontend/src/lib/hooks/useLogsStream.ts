@@ -32,6 +32,24 @@ export function useLogsStream(
 
     let ws: WebSocket | undefined;
     let cancelled = false;
+    // Lines arrive one WebSocket message each — the 200-line backfill is 200 messages in a burst.
+    // Setting state per message re-rendered the whole list (up to 1000 rows) for every one of them,
+    // which is what made a tab with a lot of log feel slow to fill. They are collected here and
+    // handed to React once per animation frame instead.
+    let pending: LogLine[] = [];
+    let frame = 0;
+    const flush = () => {
+      frame = 0;
+      if (cancelled || pending.length === 0) return;
+      const batch = pending;
+      pending = [];
+      setLines((prev) => {
+        const next = prev.concat(batch);
+        return next.length > MAX_LINES
+          ? next.slice(next.length - MAX_LINES)
+          : next;
+      });
+    };
 
     (async () => {
       const query = container
@@ -58,17 +76,14 @@ export function useLogsStream(
         } catch {
           return;
         }
-        setLines((prev) => {
-          const next = [...prev, line];
-          return next.length > MAX_LINES
-            ? next.slice(next.length - MAX_LINES)
-            : next;
-        });
+        pending.push(line);
+        if (!frame) frame = requestAnimationFrame(flush);
       };
     })();
 
     return () => {
       cancelled = true;
+      if (frame) cancelAnimationFrame(frame);
       ws?.close();
     };
   }, [namespace, name, container, enabled]);
