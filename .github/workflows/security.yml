@@ -157,6 +157,11 @@ jobs:
           # kept dropping, leaving ZAP with "connection refused")
           k3d cluster create vinaire-sec --agents 0 -p "8080:80@loadbalancer" --wait --timeout 120s
           k3d image import vinaire:ci -c vinaire-sec
+          # k3d reports the cluster created before its API server always answers: helm then failed with
+          # "Kubernetes cluster unreachable: the server is currently unable to handle the request".
+          # Wait until the API is ready and the node is Ready.
+          for i in $(seq 1 60); do kubectl get --raw=/readyz >/dev/null 2>&1 && break; sleep 2; done
+          kubectl wait --for=condition=Ready nodes --all --timeout=120s
           # the chart's own defaults: non-root, read-only root filesystem, no capabilities
           helm install vinaire charts/vinaire -n vinaire --create-namespace \
             --set image.repository=vinaire --set image.tag=ci --set image.pullPolicy=Never \
