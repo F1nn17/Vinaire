@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-14
+
 ### Fixed
 
 - **The bell no longer lists alerts that have already resolved.** Alertmanager keeps a resolved alert for a while (its `endsAt` is already in the past); those are now left out, and silenced or inhibited ones are marked as such and don't count as news.
