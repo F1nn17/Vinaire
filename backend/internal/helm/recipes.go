@@ -75,9 +75,22 @@ type RecipeField struct {
 	// password" — for an administrator account, where nothing outside the cluster has to agree with
 	// the password. It says which keys the new Secret gets.
 	Generate *RecipeGenerate `json:"generate,omitempty"`
+	// Paste (secret fields only) lets the interface offer "create this Secret from what I paste" for
+	// something Vinaire can't make up — a licence key. The text is typed into the page and goes
+	// straight into the new Secret under Paste.Key; it never becomes a Helm value.
+	Paste *RecipePaste `json:"paste,omitempty"`
 	// Pattern (a regular expression) is what the interface and the tests hold the value to; every
 	// value ends up inside YAML, so a field that can reach a text template is always constrained.
 	Pattern string `json:"pattern,omitempty"`
+}
+
+// RecipePaste names the key a pasted text is stored under, and what it should look like.
+type RecipePaste struct {
+	Key string `json:"key"`
+	// Prefix is how the text begins when it is the right thing (a licence JWT starts with "eyJ"); a text
+	// that doesn't is refused with Hint, so the wrong block isn't stored.
+	Prefix string `json:"prefix,omitempty"`
+	Hint   string `json:"hint,omitempty"`
 }
 
 // RecipeGenerate names the keys of a Secret the interface may create with a generated password:
@@ -89,6 +102,10 @@ type RecipeGenerate struct {
 	User             string `json:"user,omitempty"`
 	UserKey          string `json:"userKey,omitempty"`
 	UserKeyField     string `json:"userKeyField,omitempty"`
+	// EnvFile, instead of the keys above, makes one key of that name hold both credentials as an
+	// environment file (export MINIO_ROOT_USER=… / export MINIO_ROOT_PASSWORD=…), which is how
+	// MinIO's operator reads its root credentials. It needs User.
+	EnvFile string `json:"envFile,omitempty"`
 }
 
 // RecipeSet puts one value at a path ("a.b.0.c": numbers index lists). Strings (also inside
@@ -256,12 +273,28 @@ func (o RecipeOption) validate() error {
 		fields[f.Key] = f
 	}
 	for _, f := range o.Fields {
+		if f.Paste != nil {
+			if f.Kind != "secret" || f.Generate != nil {
+				return fmt.Errorf("field %s: paste belongs on a secret field without generate", f.Key)
+			}
+			if !regexp.MustCompile(`^[A-Za-z0-9._-]+$`).MatchString(f.Paste.Key) {
+				return fmt.Errorf("field %s: paste key %q", f.Key, f.Paste.Key)
+			}
+		}
 		if f.Generate == nil {
 			continue
 		}
 		g := f.Generate
 		if f.Kind != "secret" {
 			return fmt.Errorf("field %s: only a secret field can have a generated password", f.Key)
+		}
+		if g.EnvFile != "" {
+			if g.User == "" || g.PasswordKey != "" || g.PasswordKeyField != "" || g.UserKey != "" || g.UserKeyField != "" ||
+				!regexp.MustCompile(`^[A-Za-z0-9._-]+$`).MatchString(g.EnvFile) ||
+				!regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`).MatchString(g.User) {
+				return fmt.Errorf("field %s: envFile needs a user and no other key", f.Key)
+			}
+			continue
 		}
 		if (g.PasswordKey == "") == (g.PasswordKeyField == "") {
 			return fmt.Errorf("field %s: generate needs exactly one of passwordKey and passwordKeyField", f.Key)

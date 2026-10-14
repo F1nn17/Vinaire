@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **MinIO AIStor in the Marketplace.** The catalog has MinIO's own repository (`https://helm.min.io/`, in Storage), with the operator (`aistor-operator`) and the object store (`aistor-objectstore`) told apart as *operator* and *cluster*. Guided setup for both. **Operator:** the licence goes into the Secret `minio-license` (key `minio.license`) that the operator reads — paste it on the page and the Secret is created (the encrypted `ZXlK…` block is refused, the decoded `eyJ…` JWT is stored; it never becomes a Helm value), or copy the one found in another namespace of the cluster, or add it later. **Object store:** root credentials as a generated Secret with a `config.env` (the chart's `secrets.existingSecret`), and a size choice — one server with one drive for a home cluster (the chart's default is 4 × 4 = sixteen volumes). The new recipe field kinds (`paste`, `generate.envFile`) are validated like the rest.
+
+### Added
+
 - **Redis and Valkey from an image: an ACL option.** A check box "Use ACL" switches the instance from one shared password (Redis' default user, no user name) to a named user: the default user is turned off and a user (default `app`, may run every command, password generated) is created — what applications that sign in with a user name and password need. The Secret then also holds `username`. Checked against a real Redis 7.4: the named user signs in, the default user gets `NOAUTH`.
 
 ### Fixed
