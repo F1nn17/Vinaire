@@ -320,6 +320,7 @@ flow.
   replaces the bearer token of a cluster added with a token: right `clusters.vinaire.io` `update`, secure
   transport only, verified by a real call, must be the **same** cluster (kube-system UID), audited as
   `rotate-cluster-credentials` — never the token. No endpoint ever returns a stored credential.
+- Dashboards (Roadmap Phase 68, `frontend/src/lib/dashboards`, `app/(shell)/dashboards`) add **no write path**: the panels are reads of the cluster's Prometheus through the existing `/api/v1/metrics/query[_range]` proxy (as the caller); a person's own dashboard and "Add to Grafana" are a ConfigMap created or updated through Phase 25's generic YAML apply (as the caller, audited as `apply-create`/`apply-update`), written as JSON strings so typed text can't change the document. Don't add a delete endpoint for them without raising it.
 - Projects (Roadmap Phase 53, `internal/api/projects.go`) add **no write path**: a project is the label
   `vinaire.io/project` on namespaces, `GET /api/v1/projects[/{name}]` only read (as the caller), and the UI changes
   a project exclusively through Phase 25's YAML apply (labels, namespaces, ResourceQuota) and Phase 44's

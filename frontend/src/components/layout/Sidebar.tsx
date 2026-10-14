@@ -50,6 +50,12 @@ const groups: NavGroup[] = [
         isActive: (p) => p === "/",
       },
       {
+        href: "/dashboards",
+        label: "Dashboards",
+        icon: <GaugeIcon />,
+        isActive: (p) => p.startsWith("/dashboards"),
+      },
+      {
         href: "/clusters",
         label: "Clusters",
         icon: <ClustersIcon />,
