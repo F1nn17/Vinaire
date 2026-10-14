@@ -862,6 +862,30 @@
           "otel"
         ]
       }
+    },
+    {
+      "name": "minio-aistor",
+      "url": "https://helm.min.io/",
+      "description": "MinIO AIStor — S3-compatible object storage for Kubernetes (the operator, and the object store it runs; needs a licence from MinIO)",
+      "category": "Storage",
+      "roles": {
+        "aistor-objectstore": "cluster",
+        "aistor-operator": "operator"
+      },
+      "chartTags": {
+        "aistor-operator": [
+          "minio",
+          "s3",
+          "object-storage",
+          "aistor"
+        ],
+        "aistor-objectstore": [
+          "minio",
+          "s3",
+          "object-storage",
+          "aistor"
+        ]
+      }
     }
   ]
 }

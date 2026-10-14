@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Overview: the cluster's disk, and percentages on the cards.** A new "Cluster disk" card shows the nodes' disks added together — used against size, with a bar that turns amber at 75 % and red at 90 % — from the node-exporter's filesystem series in Prometheus (each block device counted once per node, however many places it is mounted; memory-backed, overlay and loop filesystems left out). Without Prometheus it shows only the size the nodes report as ephemeral storage and says what is needed for the rest. The CPU and memory cards now show the percentage next to "used / total". (`GET /api/v1/dashboard/summary` has a new `disk` field.)
+- **MinIO AIStor from an image (the "Install from an image" wizard).** A new preset runs `quay.io/minio/aistor/minio` as `minio server /mnt/data --console-address :9001 --license /minio.license`, as in the owner's compose file: the licence is pasted into the form (the decoded `eyJ…` JWT; the encrypted `ZXlK…` block is refused), stored only in the instance's Secret, masked in the preview, and mounted read-only as the file `/minio.license` — in no environment variable. Root user, a generated password, 1 vCPU-light defaults, a data volume and the metrics open inside the cluster, as in the compose file. Tag lists now work for Quay's nested repositories (`quay.io/minio/aistor/minio`) and no longer show cosign's `sha256-….sig` tags. Run against the real image: the server formats its drive and reads the licence file.
 
 ### Added
 
