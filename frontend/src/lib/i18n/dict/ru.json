@@ -18,6 +18,7 @@
  "(OCI)": "(OCI)",
  "(e.g. local-path or your CSI driver), or PersistentVolumeClaims stay Pending.": "(например, local-path или ваш CSI-драйвер), иначе PersistentVolumeClaim останутся в Pending.",
  "(newest 500 — narrow the filters)": "(новейшие 500 — сузьте фильтры)",
+ "(no label)": "(без метки)",
  "(not installed yet)": "(ещё не установлен)",
  "(not set)": "(не задано)",
  "(or bind it from Vinaire's Access control page).": "(или привяжите роль на странице Access control в Vinaire).",

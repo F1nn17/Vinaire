@@ -106,13 +106,7 @@ export function PanelView({
   );
 }
 
-function Note({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "err";
-}) {
+function Note({ children, tone }: { children: React.ReactNode; tone?: "err" }) {
   return (
     <div
       className={`flex flex-1 items-center justify-center px-3 py-6 text-center text-xs ${
@@ -135,60 +129,72 @@ function Chart({
 }) {
   const rows = toRows(series);
   return (
-    <div className="mt-2 h-[210px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={rows} margin={{ top: 6, right: 12, bottom: 0, left: 4 }}>
-          <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-          <XAxis
-            dataKey="t"
-            type="number"
-            domain={["dataMin", "dataMax"]}
-            tickFormatter={(t: number) => tick(t, rangeSec)}
-            tick={{ fill: "var(--text-muted)", fontSize: 10 }}
-            stroke="var(--border)"
-          />
-          <YAxis
-            width={64}
-            tickFormatter={(v: number) => formatPanelValue(v, unit)}
-            tick={{ fill: "var(--text-muted)", fontSize: 10 }}
-            stroke="var(--border)"
-          />
-          <Tooltip
-            content={({ active, payload, label }) => {
-              if (!active || !payload?.length) return null;
-              return (
-                <div className="rounded-lg border border-border bg-surface px-3 py-2 text-xs shadow-lg">
-                  <div className="font-mono text-text-muted">
-                    {new Date(Number(label)).toLocaleString()}
-                  </div>
-                  {payload.map((p) => (
-                    <div key={String(p.dataKey)} className="mt-1 font-mono">
-                      <span style={{ color: p.color }}>● </span>
-                      {String(p.name)}: {formatPanelValue(Number(p.value), unit)}
-                    </div>
-                  ))}
-                </div>
-              );
-            }}
-          />
-          {series.map((s, i) => (
-            <Line
-              key={i}
-              type="monotone"
-              dataKey={`s${i}`}
-              name={s.name}
-              stroke={colors[i % colors.length]}
-              strokeWidth={1.6}
-              dot={rows.length <= 2 ? { r: 3 } : false}
-              isAnimationActive={false}
-              connectNulls
+    <div className="mt-2 w-full">
+      <div className="h-[210px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={rows}
+            margin={{ top: 6, right: 12, bottom: 0, left: 4 }}
+          >
+            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+            <XAxis
+              dataKey="t"
+              type="number"
+              domain={["dataMin", "dataMax"]}
+              tickFormatter={(t: number) => tick(t, rangeSec)}
+              tick={{ fill: "var(--text-muted)", fontSize: 10 }}
+              stroke="var(--border)"
             />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10.5px] text-text-muted">
+            <YAxis
+              width={64}
+              tickFormatter={(v: number) => formatPanelValue(v, unit)}
+              tick={{ fill: "var(--text-muted)", fontSize: 10 }}
+              stroke="var(--border)"
+            />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                return (
+                  <div className="rounded-lg border border-border bg-surface px-3 py-2 text-xs shadow-lg">
+                    <div className="font-mono text-text-muted">
+                      {new Date(Number(label)).toLocaleString()}
+                    </div>
+                    {payload.map((p) => (
+                      <div key={String(p.dataKey)} className="mt-1 font-mono">
+                        <span style={{ color: p.color }}>● </span>
+                        {String(p.name)}:{" "}
+                        {formatPanelValue(Number(p.value), unit)}
+                      </div>
+                    ))}
+                  </div>
+                );
+              }}
+            />
+            {series.map((s, i) => (
+              <Line
+                key={i}
+                type="monotone"
+                dataKey={`s${i}`}
+                name={s.name}
+                stroke={colors[i % colors.length]}
+                strokeWidth={1.6}
+                dot={rows.length <= 2 ? { r: 3 } : false}
+                isAnimationActive={false}
+                connectNulls
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      {/* the legend is outside the fixed-height chart box, so a long list grows the card instead of
+          spilling out of it; a long name is cut with an ellipsis and shown in full on hover */}
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[10.5px] text-text-muted">
         {series.slice(0, 10).map((s, i) => (
-          <span key={i} className="font-mono">
+          <span
+            key={i}
+            title={s.name}
+            className="max-w-[260px] truncate font-mono"
+          >
             <span style={{ color: colors[i % colors.length] }}>● </span>
             {s.name}
           </span>
