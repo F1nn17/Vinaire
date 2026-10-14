@@ -468,3 +468,31 @@ func (h *Handler) DaemonSetMetrics(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) JobMetrics(w http.ResponseWriter, r *http.Request) {
 	h.serveResourceMetrics(w, r, "jobs", chi.URLParam(r, "namespace"), chi.URLParam(r, "name"))
 }
+
+// promInstant runs an instant query that yields one number (a sum); ok is false when Prometheus
+// can't answer or has no such series.
+func promInstant(ctx context.Context, fetch promFetch, expr string) (float64, bool) {
+	params := url.Values{}
+	params.Set("query", expr)
+	body, err := fetch(ctx, "/api/v1/query", params)
+	if err != nil {
+		return 0, false
+	}
+	var m struct {
+		Status string `json:"status"`
+		Data   struct {
+			Result []struct {
+				Value [2]any `json:"value"`
+			} `json:"result"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(body, &m) != nil || m.Status != "success" || len(m.Data.Result) == 0 {
+		return 0, false
+	}
+	str, _ := m.Data.Result[0].Value[1].(string)
+	f, err := strconv.ParseFloat(str, 64)
+	if err != nil || f != f { // NaN
+		return 0, false
+	}
+	return f, true
+}

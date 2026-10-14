@@ -133,3 +133,22 @@ func TestClusterPlanSumsTheRootCgroupOfEveryNode(t *testing.T) {
 		}
 	}
 }
+
+func TestPromInstantReadsASumAndRefusesNothingOrNaN(t *testing.T) {
+	ok := `{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"123.5"]}]}}`
+	if v, got := promInstant(context.Background(), fetchReturning(ok, nil), "sum(x)"); !got || v != 123.5 {
+		t.Errorf("a sum: %v %v", v, got)
+	}
+	for name, body := range map[string]string{
+		"nothing": `{"status":"success","data":{"resultType":"vector","result":[]}}`,
+		"nan":     `{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"NaN"]}]}}`,
+		"error":   `{"status":"error"}`,
+	} {
+		if _, got := promInstant(context.Background(), fetchReturning(body, nil), "sum(x)"); got {
+			t.Errorf("%s must not count as an answer", name)
+		}
+	}
+	if _, got := promInstant(context.Background(), fetchReturning("", errors.New("down")), "sum(x)"); got {
+		t.Error("a failing Prometheus is no answer")
+	}
+}

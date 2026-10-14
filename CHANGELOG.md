@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Overview: the cluster's disk, and percentages on the cards.** A new "Cluster disk" card shows the nodes' disks added together — used against size, with a bar that turns amber at 75 % and red at 90 % — from the node-exporter's filesystem series in Prometheus (each block device counted once per node, however many places it is mounted; memory-backed, overlay and loop filesystems left out). Without Prometheus it shows only the size the nodes report as ephemeral storage and says what is needed for the rest. The CPU and memory cards now show the percentage next to "used / total". (`GET /api/v1/dashboard/summary` has a new `disk` field.)
+
+### Added
+
 - **Redis and Valkey from an image: an ACL option.** A check box "Use ACL" switches the instance from one shared password (Redis' default user, no user name) to a named user: the default user is turned off and a user (default `app`, may run every command, password generated) is created — what applications that sign in with a user name and password need. The Secret then also holds `username`. Checked against a real Redis 7.4: the named user signs in, the default user gets `NOAUTH`.
 
 ### Fixed
