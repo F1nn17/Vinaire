@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The bell no longer lists alerts that have already resolved.** Alertmanager keeps a resolved alert for a while (its `endsAt` is already in the past); those are now left out, and silenced or inhibited ones are marked as such and don't count as news.
+
+### Added
+
+- **Notifications: "read" and an unread count.** The bell shows the number of unread alerts on its badge; each alert has "Mark as read", and "Mark all as read" clears the lot. Read and silenced alerts stay in the list, dimmed, under the unread ones. What was read is remembered in a cookie, per occurrence (an alert that fires again later is unread again).
+
 ### Added
 
 - **Overview: the cluster's disk, and percentages on the cards.** A new "Cluster disk" card shows the nodes' disks added together — used against size, with a bar that turns amber at 75 % and red at 90 % — from the node-exporter's filesystem series in Prometheus (each block device counted once per node, however many places it is mounted; memory-backed, overlay and loop filesystems left out). Without Prometheus it shows only the size the nodes report as ephemeral storage and says what is needed for the rest. The CPU and memory cards now show the percentage next to "used / total". (`GET /api/v1/dashboard/summary` has a new `disk` field.)
