@@ -1,5 +1,6 @@
 "use client";
 
+import { SettingsTabs } from "@/components/settings/SettingsTabs";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -70,6 +71,7 @@ function ResourceDetail() {
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
+      <SettingsTabs active="resources" />
       <div>
         <div className="font-mono text-xs text-text-faint">
           <Link href="/resources">All resources</Link> /{" "}

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { SettingsTabs } from "@/components/settings/SettingsTabs";
 import { useState } from "react";
 import {
   useSecurityChecks,
@@ -105,15 +105,10 @@ export default function SecurityPage() {
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
+      <SettingsTabs active="security" />
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-[15px] font-semibold">
-            <Link href="/settings" className="font-normal text-text-muted">
-              Settings
-            </Link>{" "}
-            / Security checks
-          </div>
-          <div className="mt-1 max-w-3xl text-xs text-text-muted">
+          <div className="max-w-3xl text-xs text-text-muted">
             A quick review of the cluster, made only from what you are allowed
             to read — nothing is changed and nothing runs on the nodes. It does
             not replace a full benchmark such as kube-bench, which looks at the
