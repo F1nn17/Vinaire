@@ -2176,7 +2176,7 @@
           {
             "id": "acl",
             "title": "ACL: a named user for applications",
-            "note": "The operator keeps signing in as the default user with its own password; applications use the named user (user app, all commands) — narrow it later with ACL SETUSER.",
+            "note": "The operator keeps signing in as the default user with its own password; applications use the named user (user app, all commands). The ACL file comes from this Secret and is read-only: to change who may do what, edit user.acl in the Secret and restart the pods — a user made with ACL SETUSER does not survive a restart (\"Install from an image\" keeps its ACL file on the data volume).",
             "fields": [
               {
                 "key": "authSecret",
@@ -2265,7 +2265,7 @@
           {
             "id": "acl",
             "title": "ACL: a named user for applications",
-            "note": "The operator keeps signing in as the default user with its own password; applications use the named user (user app, all commands) — narrow it later with ACL SETUSER.",
+            "note": "The operator keeps signing in as the default user with its own password; applications use the named user (user app, all commands). The ACL file comes from this Secret and is read-only: to change who may do what, edit user.acl in the Secret and restart the pods — a user made with ACL SETUSER does not survive a restart (\"Install from an image\" keeps its ACL file on the data volume).",
             "fields": [
               {
                 "key": "authSecret",

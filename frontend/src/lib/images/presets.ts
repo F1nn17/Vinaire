@@ -1,4 +1,5 @@
 import { stringify as dump } from "yaml";
+import { aclArgs } from "./redisAcl";
 
 // Kubernetes reads YAML 1.1, where a bare yes / no / on / off is a boolean: this makes strings that
 // look like one come out quoted ("--appendonly yes" must stay a string).
@@ -225,7 +226,7 @@ export const presets: Preset[] = [
         id: "acl",
         label: T("Use ACL (a named user instead of one shared password)"),
         hint: T(
-          "Off: a single shared password, no user name (Redis' default user). On: the default user is switched off and a named user with the generated password is created — what applications that sign in with a user name and password (ACL) need.",
+          "Off: a single shared password, no user name (Redis' default user). On: the default user is switched off and a named user with the generated password is created, in an ACL file on the data volume — what applications that sign in with a user name and password (ACL) need. Users you add later with ACL SETUSER stay across restarts once you run ACL SAVE.",
         ),
         default: "",
         pattern: /^(true)?$/,
@@ -236,7 +237,7 @@ export const presets: Preset[] = [
         id: "user",
         label: T("ACL user name"),
         hint: T(
-          "The user applications sign in as. It may run every command; make narrower users later with ACL SETUSER.",
+          "The user applications sign in as. It may run every command; make narrower users later with ACL SETUSER, then ACL SAVE.",
         ),
         default: "app",
         pattern: word,
@@ -250,25 +251,16 @@ export const presets: Preset[] = [
       ...(v.acl === "true" ? { username: v.user } : {}),
     }),
     env: () => [{ name: "REDIS_PASSWORD", secret: "password" }],
-    args: (v) => [
-      "redis-server",
-      "--appendonly",
-      "yes",
-      ...(v.acl === "true"
-        ? [
-            "--user",
-            "default",
-            "off",
-            "--user",
-            v.user,
-            "on",
-            ">$(REDIS_PASSWORD)",
-            "~*",
-            "&*",
-            "+@all",
-          ]
-        : ["--requirepass", "$(REDIS_PASSWORD)"]),
-    ],
+    args: (v) =>
+      v.acl === "true"
+        ? aclArgs("redis-server", "REDIS_PASSWORD", v.user)
+        : [
+            "redis-server",
+            "--appendonly",
+            "yes",
+            "--requirepass",
+            "$(REDIS_PASSWORD)",
+          ],
     probe: { tcp: 6379 },
     resources: { cpu: "50m", memory: "128Mi", memoryLimit: "512Mi" },
     connect: (v, host, secret) => [
@@ -277,7 +269,7 @@ export const presets: Preset[] = [
       [T("Password"), `${T("Secret")} ${secret}, ${T("key")} password`],
     ],
     note: T(
-      "One instance with the append-only file on. Without ACL there is no user name: Redis asks for the password only.",
+      "One instance with the append-only file on. Without ACL there is no user name: Redis asks for the password only. With ACL the users are in the file /data/users.acl on the data volume (without a volume they are lost with the pod).",
     ),
   },
   {
@@ -297,7 +289,7 @@ export const presets: Preset[] = [
         id: "acl",
         label: T("Use ACL (a named user instead of one shared password)"),
         hint: T(
-          "Off: a single shared password, no user name (Redis' default user). On: the default user is switched off and a named user with the generated password is created — what applications that sign in with a user name and password (ACL) need.",
+          "Off: a single shared password, no user name (Redis' default user). On: the default user is switched off and a named user with the generated password is created, in an ACL file on the data volume — what applications that sign in with a user name and password (ACL) need. Users you add later with ACL SETUSER stay across restarts once you run ACL SAVE.",
         ),
         default: "",
         pattern: /^(true)?$/,
@@ -308,7 +300,7 @@ export const presets: Preset[] = [
         id: "user",
         label: T("ACL user name"),
         hint: T(
-          "The user applications sign in as. It may run every command; make narrower users later with ACL SETUSER.",
+          "The user applications sign in as. It may run every command; make narrower users later with ACL SETUSER, then ACL SAVE.",
         ),
         default: "app",
         pattern: word,
@@ -322,25 +314,16 @@ export const presets: Preset[] = [
       ...(v.acl === "true" ? { username: v.user } : {}),
     }),
     env: () => [{ name: "VALKEY_PASSWORD", secret: "password" }],
-    args: (v) => [
-      "valkey-server",
-      "--appendonly",
-      "yes",
-      ...(v.acl === "true"
-        ? [
-            "--user",
-            "default",
-            "off",
-            "--user",
-            v.user,
-            "on",
-            ">$(VALKEY_PASSWORD)",
-            "~*",
-            "&*",
-            "+@all",
-          ]
-        : ["--requirepass", "$(VALKEY_PASSWORD)"]),
-    ],
+    args: (v) =>
+      v.acl === "true"
+        ? aclArgs("valkey-server", "VALKEY_PASSWORD", v.user)
+        : [
+            "valkey-server",
+            "--appendonly",
+            "yes",
+            "--requirepass",
+            "$(VALKEY_PASSWORD)",
+          ],
     probe: { tcp: 6379 },
     resources: { cpu: "50m", memory: "128Mi", memoryLimit: "512Mi" },
     connect: (v, host, secret) => [
