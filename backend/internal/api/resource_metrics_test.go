@@ -82,16 +82,16 @@ func fetchReturning(body string, err error) promFetch {
 func TestExplainNoDataSaysWhatIsMissing(t *testing.T) {
 	none := `{"status":"success","data":{"resultType":"vector","result":[]}}`
 	some := `{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"37"]}]}}`
-	if got := explainNoData(context.Background(), fetchReturning(none, nil), "nodes"); !strings.Contains(got, "isn't scraping the kubelet") {
+	if got := explainNoData(context.Background(), fetchReturning(none, nil), "nodes", "cpu"); !strings.Contains(got, "isn't scraping the kubelet") {
 		t.Errorf("no container metrics at all: %q", got)
 	}
-	if got := explainNoData(context.Background(), fetchReturning(some, nil), "nodes"); !strings.Contains(got, "none it can tie to this node") {
+	if got := explainNoData(context.Background(), fetchReturning(some, nil), "nodes", "cpu"); !strings.Contains(got, "none it can tie to this node") {
 		t.Errorf("metrics exist but not for this node: %q", got)
 	}
-	if got := explainNoData(context.Background(), fetchReturning(some, nil), "pods"); !strings.Contains(got, "may not be exported") {
+	if got := explainNoData(context.Background(), fetchReturning(some, nil), "pods", "cpu"); !strings.Contains(got, "may not be exported") {
 		t.Errorf("a pod with no data keeps the general message: %q", got)
 	}
-	if got := explainNoData(context.Background(), fetchReturning("", errors.New("down")), "nodes"); !strings.Contains(got, "may not be exported") {
+	if got := explainNoData(context.Background(), fetchReturning("", errors.New("down")), "nodes", "cpu"); !strings.Contains(got, "may not be exported") {
 		t.Errorf("a failed probe falls back to the general message: %q", got)
 	}
 }
@@ -150,5 +150,67 @@ func TestPromInstantReadsASumAndRefusesNothingOrNaN(t *testing.T) {
 	}
 	if _, got := promInstant(context.Background(), fetchReturning("", errors.New("down")), "sum(x)"); got {
 		t.Error("a failing Prometheus is no answer")
+	}
+}
+
+// Roadmap Phase 72: on k3s (containerd) cAdvisor has no container disk series, and kube-prometheus-stack
+// drops the root cgroup, so a node's and the cluster's disk chart said "no data". The node-exporter's
+// node_filesystem_* is the last resort — used only when cAdvisor has nothing at all.
+func TestDiskOfNodesAndClusterFallsBackToTheNodeExporter(t *testing.T) {
+	for _, kind := range []string{"nodes", "cluster"} {
+		plan, ok := planFor(kind, "", "k3s-1", "filesystem")
+		if !ok || len(plan.queries) != 1 {
+			t.Fatalf("%s: %+v", kind, plan)
+		}
+		q := plan.queries[0].promql
+		cadvisor, rest, found := strings.Cut(q, ") or ((sum by (device) (max by (instance, device)")
+		if !found {
+			t.Fatalf("%s: no node-exporter tier after cAdvisor's: %q", kind, q)
+		}
+		if !strings.Contains(cadvisor, "container_fs_usage_bytes") || strings.Contains(cadvisor, "node_filesystem") {
+			t.Errorf("%s: cAdvisor's tier first and alone: %q", kind, cadvisor)
+		}
+		if !strings.Contains(rest, "node_filesystem_size_bytes") || !strings.Contains(rest, "node_filesystem_avail_bytes") ||
+			!strings.Contains(rest, `mountpoint="/"`) || !strings.Contains(rest, `fstype!~"tmpfs|overlay|squashfs|ramfs"`) {
+			t.Errorf("%s: used = size - available of the real root disks: %q", kind, rest)
+		}
+		if !strings.Contains(rest, ") and on() absent(") {
+			t.Errorf("%s: the node-exporter's answer counts only when cAdvisor has none: %q", kind, q)
+		}
+		// a node is found through node_uname_info (the node-exporter labels its series with an address)
+		node := strings.Contains(q, `node_uname_info{nodename="k3s-1"}`)
+		if node != (kind == "nodes") {
+			t.Errorf("%s: narrowed to the node = %v: %q", kind, node, q)
+		}
+		if plan.queries[0].splitBy != "device" {
+			t.Errorf("%s: one line per device", kind)
+		}
+	}
+	// a pod, a workload: cAdvisor only — the node-exporter knows nothing of containers
+	for _, kind := range []string{"pods", "deployments", "statefulsets"} {
+		plan, _ := planFor(kind, "app", "web", "filesystem")
+		if strings.Contains(plan.queries[0].promql, "node_filesystem") {
+			t.Errorf("%s must not read the node-exporter: %q", kind, plan.queries[0].promql)
+		}
+	}
+}
+
+func TestExplainNoDiskSaysWhichSourceIsMissing(t *testing.T) {
+	none := `{"status":"success","data":{"resultType":"vector","result":[]}}`
+	some := `{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[1,"37"]}]}}`
+	ctx := context.Background()
+	if got := explainNoData(ctx, fetchReturning(none, nil), "cluster", "filesystem"); !strings.Contains(got, "node-exporter") {
+		t.Errorf("no node disk series: %q", got)
+	}
+	if got := explainNoData(ctx, fetchReturning(none, nil), "pods", "filesystem"); !strings.Contains(got, "containerd") {
+		t.Errorf("no container disk series: %q", got)
+	}
+	// the node-exporter is there: the general node explanation applies
+	if got := explainNoData(ctx, fetchReturning(some, nil), "nodes", "filesystem"); !strings.Contains(got, "none it can tie to this node") {
+		t.Errorf("series exist but not for this node: %q", got)
+	}
+	// other metric types are unaffected
+	if got := explainNoData(ctx, fetchReturning(none, nil), "pods", "cpu"); strings.Contains(got, "containerd") {
+		t.Errorf("a CPU chart must not talk about disks: %q", got)
 	}
 }

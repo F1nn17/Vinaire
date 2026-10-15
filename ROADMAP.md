@@ -4816,13 +4816,27 @@ PostgreSQL из мастера «из образа».
   to anything other than everest-system»), показывается словами чарта с подсказкой, но без поля; рецепт Redis не проверялся установкой
   на настоящем Redis; exporter для MinIO/Keycloak не нужен (метрики внутри приложения) — это Phase 74.
 
-## Phase 72 — Файловая система кластера на k3s (P1) ⬜ запланировано
+## Phase 72 — Файловая система кластера на k3s (P1) ✅ done
 
 **Заметка 17.** На домашнем k3s вкладка Metrics → Filesystem у кластера: «No filesystem data for this cluster». Причина (по коду):
 `planFor("filesystem")` берёт только `container_fs_usage_bytes` из cAdvisor, а на k3s/containerd этих серий часто нет. Правка: для
 кластера и ноды — запасной запрос по `node_filesystem_size_bytes − node_filesystem_avail_bytes` (корень, без tmpfs/overlay; та же
 логика, что в карточке «Диск кластера» Phase 67/68); для пода/контейнера — как сейчас, с понятным пояснением, если серий нет.
 Тест на PromQL и сообщение; проверить на наборе метрик без `container_fs_*`.
+
+**Итог (2026-10-15, ветка fix/filesystem-metrics-without-cadvisor).** Запрос для ноды и кластера теперь трёхступенчатый: корневой
+cgroup cAdvisor → поды cAdvisor → **node-exporter** (`node_filesystem_size_bytes − node_filesystem_avail_bytes`, корень без
+tmpfs/overlay/squashfs/ramfs, каждое блочное устройство один раз на ноду, линия на устройство); следующая ступень берётся только если
+предыдущие пусты совсем (`and on() absent(...)`), смешивания нет. Ноду node-exporter находит через `node_uname_info` (его серии помечены
+адресом `instance`, а имя ноды — в `nodename`). Для пода и рабочих нагрузок источник один (cAdvisor), поэтому пустой график теперь
+объясняется: «среда запуска контейнеров не отдаёт диск контейнеров (containerd), диск ноды — на её странице и на Overview»; без
+node-exporter у ноды/кластера сообщение ведёт на страницу Metrics stack. Тесты: `TestDiskOfNodesAndClusterFallsBackToTheNodeExporter`,
+`TestExplainNoDiskSaysWhichSourceIsMissing`.
+**Проверено на dev-кластере:** запрос из плана выполнен в Prometheus — в штатном режиме отвечает cAdvisor (без смешивания), при
+«отсутствующем» cAdvisor — node-exporter, и для ноды, и для кластера; страница пода показывает новое объяснение (на dev-k3s
+`container_fs_usage_bytes{pod!=""}` действительно пуст — тот самый симптом). **Не проверено** на самом домашнем кластере с
+kube-prometheus-stack (на dev стоит обычный Prometheus с корневым cgroup, а точки монтирования `/` у контейнера k3d нет, поэтому
+ступень node-exporter проверена запросом с подменой точки монтирования).
 
 ## Phase 73 — Redis: постоянный ACL-файл (P1) ⬜ запланировано
 
