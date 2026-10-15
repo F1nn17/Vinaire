@@ -145,7 +145,8 @@ func renderObjects(ctx context.Context, cfg *rest.Config, req InstallRequest, rl
 	}
 	rel, err := in.RunWithContext(ctx, ch, vals)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w: the chart doesn't render with these values: %v", ErrInvalid, ErrRender, err)
+		// a missing value the chart asks for is described, so the UI can ask for it (problems.go)
+		return nil, classifyRenderError(err, ch.Values)
 	}
 	docs := rel.Manifest
 	for _, h := range rel.Hooks {
