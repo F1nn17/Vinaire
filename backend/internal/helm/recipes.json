@@ -2306,5 +2306,296 @@
         ]
       }
     ]
+  },
+  "prometheus-community/prometheus-postgres-exporter": {
+    "summary": "Exports a PostgreSQL's metrics for Prometheus (what the PostgreSQL dashboard reads). The chart cannot start until it is told which database to connect to and with which password.",
+    "guide": [
+      "Database: this exporter connects to a PostgreSQL that already runs. The password is read from a Secret that already exists in the install namespace, so it never passes through this form — a PostgreSQL made with \"Install from an image\" has one named after it, with the key password.",
+      "A read-only monitoring user is the safe choice: the exporter only needs to read statistics. The database's own owner works too, with more rights than needed."
+    ],
+    "after": [
+      "The exporter {release} in {namespace} serves metrics on its Service (port 80, which forwards to 9187). Open the Dashboards page in a minute: the PostgreSQL dashboard fills in once Prometheus has read it."
+    ],
+    "sections": [
+      {
+        "id": "database",
+        "title": "Which PostgreSQL",
+        "discover": "postgres",
+        "help": "The exporter connects here.",
+        "options": [
+          {
+            "id": "external",
+            "title": "A PostgreSQL and a user with a password Secret",
+            "default": true,
+            "fields": [
+              {
+                "key": "host",
+                "label": "Host",
+                "required": true,
+                "placeholder": "postgres.db.svc.cluster.local",
+                "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$",
+                "help": "A Service name (name.namespace.svc.cluster.local) or any host name."
+              },
+              {
+                "key": "port",
+                "label": "Port",
+                "default": "5432",
+                "pattern": "^[0-9]{1,5}$"
+              },
+              {
+                "key": "database",
+                "label": "Database",
+                "default": "postgres",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]*$"
+              },
+              {
+                "key": "username",
+                "label": "User",
+                "default": "postgres",
+                "required": true,
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"
+              },
+              {
+                "key": "passwordSecret",
+                "label": "Secret with the password",
+                "kind": "secret",
+                "required": true,
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "An existing Secret in the install namespace."
+              },
+              {
+                "key": "passwordKey",
+                "label": "Key in that Secret",
+                "default": "password",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "config.datasource.host",
+                "value": "{host}"
+              },
+              {
+                "path": "config.datasource.port",
+                "value": "{port}"
+              },
+              {
+                "path": "config.datasource.database",
+                "value": "{database}"
+              },
+              {
+                "path": "config.datasource.user",
+                "value": "{username}"
+              },
+              {
+                "path": "config.datasource.passwordSecret.name",
+                "value": "{passwordSecret}"
+              },
+              {
+                "path": "config.datasource.passwordSecret.key",
+                "value": "{passwordKey}"
+              }
+            ]
+          },
+          {
+            "id": "dsn",
+            "title": "A Secret with the whole connection string",
+            "note": "For a connection string you keep whole (postgresql://user:password@host:5432/db?sslmode=disable), in one key of a Secret.",
+            "fields": [
+              {
+                "key": "dsnSecret",
+                "label": "Secret with the connection string",
+                "kind": "secret",
+                "required": true,
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+              },
+              {
+                "key": "dsnKey",
+                "label": "Key in that Secret",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "config.datasourceSecret.name",
+                "value": "{dsnSecret}"
+              },
+              {
+                "path": "config.datasourceSecret.key",
+                "value": "{dsnKey}"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "scrape",
+        "title": "How Prometheus finds it",
+        "help": "An exporter does nothing until Prometheus is told to read it.",
+        "options": [
+          {
+            "id": "annotations",
+            "title": "Annotations (the metrics stack Vinaire installs)",
+            "default": true,
+            "note": "Adds prometheus.io/scrape and prometheus.io/port to the Service; the Prometheus from the Metrics stack page reads Services marked that way.",
+            "set": [
+              {
+                "path": "service.annotations",
+                "value": {
+                  "prometheus.io/scrape": "true",
+                  "prometheus.io/port": "9187"
+                }
+              }
+            ],
+            "auto": true
+          },
+          {
+            "id": "servicemonitor",
+            "title": "A ServiceMonitor (kube-prometheus-stack)",
+            "note": "Turns on the chart's serviceMonitor. kube-prometheus-stack only picks it up if its serviceMonitorSelector allows this release.",
+            "set": [
+              {
+                "path": "serviceMonitor.enabled",
+                "value": true
+              }
+            ]
+          },
+          {
+            "id": "none",
+            "title": "Nothing — I'll point Prometheus at it myself",
+            "set": []
+          }
+        ]
+      }
+    ]
+  },
+  "prometheus-community/prometheus-redis-exporter": {
+    "summary": "Exports a Redis' or Valkey's metrics for Prometheus (what the Redis dashboard reads). By default it points at a Redis called myredis, which is rarely yours.",
+    "guide": [
+      "Redis: the exporter connects to an instance that already runs. If it asks for a password, the password is read from an existing Secret in the install namespace — it never passes through this form. An instance made with \"Install from an image\" keeps it in its own Secret, key password.",
+      "An instance that uses ACL users needs a user for the exporter too; the shared password option below is for the usual single-password Redis."
+    ],
+    "after": [
+      "The exporter {release} in {namespace} serves metrics on port 9121 of its Service. Open the Dashboards page in a minute: the Redis dashboard fills in once Prometheus has read it."
+    ],
+    "sections": [
+      {
+        "id": "redis",
+        "title": "Which Redis",
+        "help": "The exporter connects here.",
+        "options": [
+          {
+            "id": "nopassword",
+            "title": "A Redis without a password",
+            "fields": [
+              {
+                "key": "address",
+                "label": "Address",
+                "required": true,
+                "placeholder": "redis://redis.db.svc.cluster.local:6379",
+                "pattern": "^rediss?://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$",
+                "help": "redis://host:port (rediss:// for TLS)."
+              }
+            ],
+            "set": [
+              {
+                "path": "redisAddress",
+                "value": "{address}"
+              }
+            ]
+          },
+          {
+            "id": "password",
+            "title": "A Redis with a password in a Secret",
+            "default": true,
+            "fields": [
+              {
+                "key": "address",
+                "label": "Address",
+                "required": true,
+                "placeholder": "redis://redis.db.svc.cluster.local:6379",
+                "pattern": "^rediss?://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$",
+                "help": "redis://host:port (rediss:// for TLS)."
+              },
+              {
+                "key": "passwordSecret",
+                "label": "Secret with the password",
+                "kind": "secret",
+                "required": true,
+                "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+                "help": "An existing Secret in the install namespace."
+              },
+              {
+                "key": "passwordKey",
+                "label": "Key in that Secret",
+                "default": "password",
+                "required": true,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              }
+            ],
+            "set": [
+              {
+                "path": "redisAddress",
+                "value": "{address}"
+              },
+              {
+                "path": "auth.enabled",
+                "value": true
+              },
+              {
+                "path": "auth.secret.name",
+                "value": "{passwordSecret}"
+              },
+              {
+                "path": "auth.secret.key",
+                "value": "{passwordKey}"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "scrape",
+        "title": "How Prometheus finds it",
+        "help": "An exporter does nothing until Prometheus is told to read it.",
+        "options": [
+          {
+            "id": "annotations",
+            "title": "Annotations (the metrics stack Vinaire installs)",
+            "default": true,
+            "note": "Adds prometheus.io/scrape and prometheus.io/port to the Service; the Prometheus from the Metrics stack page reads Services marked that way.",
+            "set": [
+              {
+                "path": "service.annotations",
+                "value": {
+                  "prometheus.io/scrape": "true",
+                  "prometheus.io/port": "9121"
+                }
+              }
+            ],
+            "auto": true
+          },
+          {
+            "id": "servicemonitor",
+            "title": "A ServiceMonitor (kube-prometheus-stack)",
+            "note": "Turns on the chart's serviceMonitor. kube-prometheus-stack only picks it up if its serviceMonitorSelector allows this release.",
+            "set": [
+              {
+                "path": "serviceMonitor.enabled",
+                "value": true
+              }
+            ]
+          },
+          {
+            "id": "none",
+            "title": "Nothing — I'll point Prometheus at it myself",
+            "set": []
+          }
+        ]
+      }
+    ]
   }
 }

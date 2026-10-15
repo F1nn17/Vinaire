@@ -21,6 +21,7 @@ import { YamlEditor } from "@/components/editor/YamlEditor";
 import { ChartIcon } from "@/components/marketplace/ChartIcon";
 import { InstallProgress } from "@/components/marketplace/InstallProgress";
 import { PermissionsCheck } from "@/components/marketplace/PermissionsCheck";
+import { RequiredValues } from "@/components/marketplace/RequiredValues";
 import { RollbackNote } from "@/components/marketplace/RollbackNote";
 import { RecipePanel } from "@/components/marketplace/RecipePanel";
 import { InstallPlan } from "@/components/marketplace/InstallPlan";
@@ -350,6 +351,17 @@ function InstallInner() {
               />
             )}
 
+            {preflight?.problem?.required && !jobId && (
+              <RequiredValues
+                problem={preflight.problem}
+                hasRecipe={!!chart.recipe}
+                namespace={namespace.trim()}
+                release={release.trim()}
+                values={values}
+                onValues={setValues}
+              />
+            )}
+
             <label className="flex items-center gap-2 text-xs text-text-muted">
               <input
                 type="checkbox"
@@ -598,7 +610,8 @@ function InstallInner() {
                       (chart.deprecated && !allowDeprecated) ||
                       !release.trim() ||
                       !namespace.trim() ||
-                      missing.length > 0
+                      missing.length > 0 ||
+                      !!preflight?.problem?.required
                     }
                     className="rounded-lg bg-accent px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-60"
                   >

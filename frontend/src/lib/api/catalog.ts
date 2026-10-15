@@ -1,3 +1,4 @@
+import type { RenderProblem } from "@/lib/values/required";
 import { apiFetch } from "./http";
 import type { Recipe } from "@/lib/values/recipe";
 
@@ -234,6 +235,8 @@ export type Preflight = {
   created: { kind: string; count: number }[];
   volumes: { name: string; size?: string; storageClass?: string }[];
   warnings: { code: string; detail?: string }[];
+  // Roadmap Phase 71: the chart refuses to render until a value is given — which one(s)
+  problem?: RenderProblem;
 };
 
 // The YAML the install would apply, rendered locally with these values (Secret values redacted).

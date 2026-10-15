@@ -408,6 +408,16 @@ func (h *Handler) CatalogInstallPreflight(w http.ResponseWriter, r *http.Request
 		ValuesYAML: b.Values, NodeName: b.NodeName, CreateNamespace: b.CreateNamespace, AllowDeprecated: b.AllowDeprecated,
 	})
 	if err != nil {
+		// The chart asks for a value the request didn't give (`required`, `fail`): that is an answer,
+		// not a failure — say which values, so the install page can ask for them before installing.
+		var problem *helm.RenderProblem
+		if errors.As(err, &problem) {
+			respondJSON(w, map[string]any{
+				"objects": 0, "missing": []any{}, "created": []any{}, "volumes": []any{}, "warnings": []any{},
+				"problem": problem,
+			})
+			return
+		}
 		respondHelmError(w, err)
 		return
 	}
