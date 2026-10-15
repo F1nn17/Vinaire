@@ -1177,11 +1177,10 @@ function KeycloakHelp() {
           <span className="font-mono">AUTH_MODE=token</span> — на экране входа
           вставляется готовый Kubernetes-токен (см. раздел «Подключение
           кластера»). Чтобы вместо этого был обычный вход по логину и паролю,
-          переключите Vinaire в режим{" "}
-          <span className="font-mono">AUTH_MODE=oidc</span> — она проведёт
-          настоящий вход через Keycloak (или любой другой OIDC-провайдер)
-          целиком на своей стороне (в Go-бэкенде), без единой строчки этого в
-          браузере.
+          подключите Keycloak: это делается прямо из Vinaire, на вкладке{" "}
+          <span className="font-mono">Sign-in</span> в Settings, без правки
+          Deployment и без перезапуска. Весь вход идёт через бэкенд Vinaire, в
+          браузере нет ни кода обмена, ни секрета клиента.
         </div>
       </div>
 
@@ -1197,12 +1196,12 @@ function KeycloakHelp() {
             [
               "oidc",
               "для боевого использования",
-              "Логин и пароль через Keycloak, Dex (а через него — Google, GitHub и др.) или другой OIDC-провайдер. API-сервер кластера должен доверять тому же провайдеру (см. ниже).",
+              "Логин и пароль через Keycloak (его можно поставить и настроить со вкладки Sign-in) или другой OIDC-провайдер — Dex, а через него Google, GitHub и др. API-сервер кластера должен доверять тому же провайдеру (см. ниже).",
             ],
             [
               "disabled",
               "только для локальной разработки",
-              "Входа нет, все запросы идут с правами самого Vinaire. Это не «права по умолчанию», а полный доступ для любого, кто откроет адрес — на общих кластерах не включать.",
+              "Входа нет, все запросы идут с правами самого Vinaire. Это не «права по умолчанию», а полный доступ для любого, кто откроет адрес — на общих кластерах не включать. На вкладке Sign-in в этом режиме настройки нет.",
             ],
           ].map(([mode, when, what], i) => (
             <div
@@ -1232,113 +1231,98 @@ function KeycloakHelp() {
         kube-apiserver, или аналог у managed-провайдера). На обычном локальном
         k3d/k3s из коробки такого доверия нет — вход через Keycloak пройдёт, а
         обращения к кластеру будут падать с 401, пока API-сервер не настроен
-        отдельно. Это делает не Vinaire, а администратор кластера — если это не
-        ваш случай, оставайтесь на{" "}
-        <span className="font-mono">AUTH_MODE=token</span>.
+        отдельно. Это делает не Vinaire, а администратор кластера — после
+        настройки мастер показывает готовые флаги. Если это не ваш случай,
+        оставайтесь на токене.
       </div>
 
       <div>
         <div className="font-semibold text-foreground">
-          Включить вход через Keycloak в один клик
-        </div>
-        <div className="text-xs text-text-muted">
-          Вкладка «Sign-in» в Settings: укажите адрес Keycloak и учётную запись
-          его администратора — Vinaire создаст realm, клиента для себя и (по
-          желанию) первого пользователя и включит вход без перезапуска. Пароль
-          администратора используется один раз и нигде не сохраняется;
-          сохраняется только секрет нового клиента, в зашифрованном виде. Вход
-          по токену остаётся запасным, пока вы не выключите его там же. Нужно
-          право на auth.vinaire.io (роль -admin). Чего мастер сделать не может —
-          это настроить API-сервер кластера на доверие к Keycloak (флаги
-          --oidc-*, он покажет их готовыми): без этого вход пройдёт, а обращения
-          к кластеру будут получать 401.
-        </div>
-      </div>
-
-      <div>
-        <div className="font-semibold text-foreground">
-          Быстрый способ: тестовый Keycloak из этого репозитория
-        </div>
-        <div className="mt-1 text-text-muted">
-          В <span className="font-mono">/keycloak</span> уже лежит одноразовый
-          Keycloak для локальной проверки самого входа (переживать за реальных
-          пользователей тут не нужно — данные не сохраняются) — настройки
-          Vinaire по умолчанию уже смотрят именно на него:
-        </div>
-        <Code>{`cd keycloak
-docker compose up -d`}</Code>
-        <div className="mt-1 text-text-muted">
-          Тестовые пользователи: <span className="font-mono">alice/alice</span>{" "}
-          и <span className="font-mono">bob/bob</span>. Подробности — в{" "}
-          <span className="font-mono">keycloak/README.md</span> репозитория.
-        </div>
-      </div>
-
-      <div>
-        <div className="font-semibold text-foreground">
-          Поставить Keycloak прямо из Vinaire (Marketplace)
+          Самый простой путь: всё со вкладки Sign-in
         </div>
         <ol className="mt-1 list-decimal pl-5 text-text-muted">
           <li>
-            Откройте{" "}
-            <Link
-              href="/marketplace/install?repo=keycloak&chart=keycloakx"
-              className="text-accent-text"
-            >
-              Marketplace → keycloak/keycloakx
-            </Link>{" "}
-            (в каталоге есть и Bitnami-версия{" "}
-            <span className="font-mono">keycloak</span>). Для установки нужны
-            права из раздела «Права и роли» — viewer и installer.
+            <span className="font-semibold text-foreground">
+              Нет своего Keycloak
+            </span>{" "}
+            — карточка «У меня ещё нет Keycloak». Укажите namespace (по
+            умолчанию <span className="font-mono">keycloak</span>), адрес, по
+            которому Keycloak будет доступен, класс Ingress и https (сертификат
+            контроллера или свой Secret с сертификатом). Версию выберите из
+            списка — первой стоит последняя. Vinaire создаст PostgreSQL и
+            Keycloak (официальные образы, по одному экземпляру) и Ingress,
+            дождётся запуска и сам заполнит форму ниже: адрес и сгенерированного
+            администратора. Пароли лежат только в Secret-ах{" "}
+            <span className="font-mono">keycloak-db</span> и{" "}
+            <span className="font-mono">keycloak</span> (ключ{" "}
+            <span className="font-mono">admin-password</span>) — прочитать их
+            можно на странице «Secrets» (чтение попадает в аудит).
           </li>
           <li className="mt-1.5">
-            Укажите namespace (например{" "}
-            <span className="font-mono">keycloak</span>) и задайте в values
-            логин и пароль администратора — как именно, написано в README чарта
-            (раскрывается прямо на странице установки). Пароль не оставляйте по
-            умолчанию.
+            <span className="font-semibold text-foreground">
+              Свой Keycloak уже есть
+            </span>{" "}
+            — введите его адрес и учётную запись его администратора. Каждое поле
+            в форме подписано: откуда взять значение и что будет по умолчанию
+            (realm <span className="font-mono">vinaire</span>, клиент{" "}
+            <span className="font-mono">vinaire</span>; они создаются, если их
+            ещё нет).
           </li>
           <li className="mt-1.5">
-            Дождитесь, пока поды станут Ready (прогресс виден на странице
-            установки), откройте админ-консоль Keycloak и создайте realm,
-            confidential client (redirect URI — как ниже) и пользователей.
+            Нажмите «Set up Keycloak sign-in»: Vinaire создаст realm, клиента
+            для себя (confidential, только code flow с PKCE) и, по желанию,
+            первого пользователя, проверит их и включит вход на лету. Пароль
+            администратора используется один раз и нигде не сохраняется;
+            сохраняется только секрет клиента, в зашифрованном виде.
           </li>
           <li className="mt-1.5">
-            Пропишите OIDC-переменные для Vinaire (ниже) — и перезапустите её.
+            Вход по токену остаётся запасным, пока вы не выключите его там же
+            (выключить можно только после включения Keycloak — запереть себя
+            нельзя). Нужно право на{" "}
+            <span className="font-mono">auth.vinaire.io</span> (роль{" "}
+            <span className="font-mono">-admin</span>).
           </li>
         </ol>
         <div className="mt-1.5 text-xs text-text-faint">
-          Vinaire не настраивает realm и клиент сама: это делается в
-          админ-консоли Keycloak. Тестовый вариант из репозитория (
-          <span className="font-mono">/keycloak</span>) уже содержит готовый
-          realm с пользователями <span className="font-mono">alice</span> и{" "}
-          <span className="font-mono">bob</span>.
+          Vinaire общается с Keycloak только по https: у установленного здесь
+          Keycloak должен быть адрес с https (вариант «без https» установит
+          Keycloak, но войти через него не даст). Выдать сертификат (например,
+          cert-manager) и сделать так, чтобы этот адрес открывался из пода
+          Vinaire — задача администратора кластера.
         </div>
       </div>
 
       <div>
         <div className="font-semibold text-foreground">
-          Подключение своего Keycloak
+          Поставить Keycloak другим способом
         </div>
-        <ol className="mt-1 list-decimal pl-5 text-text-muted">
-          <li>
-            В Keycloak создайте realm (или используйте существующий) и в нём —
-            client с включённым{" "}
-            <span className="font-mono">Client authentication</span>{" "}
-            (confidential client). Обмен кодом на токен целиком происходит в
-            бэкенде Vinaire, поэтому client secret не попадает в браузер.
-          </li>
-          <li className="mt-1.5">
-            Valid redirect URI клиента — ровно адрес бэкенда Vinaire, например:
-            <Code>{`https://<адрес-vinaire>/api/v1/auth/oidc/callback`}</Code>
-          </li>
-          <li className="mt-1.5">Сохраните client id и client secret.</li>
-        </ol>
+        <div className="mt-1 text-text-muted">
+          Keycloak можно поставить и из{" "}
+          <Link
+            href="/marketplace/install?repo=keycloak&chart=keycloakx"
+            className="text-accent-text"
+          >
+            Marketplace → keycloak/keycloakx
+          </Link>{" "}
+          (мастер установки подскажет про базу данных и публикацию) или из
+          мастера «Install from an image» (пресет Keycloak, нужен уже
+          существующий PostgreSQL). После этого заполните форму на вкладке
+          Sign-in его адресом и администратором — realm и клиента заводить
+          вручную не нужно.
+        </div>
       </div>
 
       <div>
         <div className="font-semibold text-foreground">
-          Переменные окружения на Deployment Vinaire
+          Для оператора: настройка через переменные окружения
+        </div>
+        <div className="mt-1 text-text-muted">
+          Если Vinaire развёртывается по описанию (GitOps, Helm values), вход
+          можно задать заранее — тогда вкладка Sign-in не используется (режим{" "}
+          <span className="font-mono">AUTH_MODE=oidc</span> принадлежит
+          оператору). Realm и confidential-клиент в этом случае создаются в
+          Keycloak самостоятельно; Valid redirect URI клиента — ровно адрес
+          бэкенда Vinaire.
         </div>
         <Code>
           {`kubectl set env deployment/vinaire -n <namespace> \\
@@ -1350,10 +1334,20 @@ docker compose up -d`}</Code>
 
 kubectl rollout restart deployment/vinaire -n <namespace>`}
         </Code>
-        <div className="mt-1 text-text-muted">
-          После этого экран входа Vinaire ведёт на страницу логина Keycloak
-          вместо поля для вставки токена.
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Для проверки на своём компьютере
         </div>
+        <div className="mt-1 text-text-muted">
+          В <span className="font-mono">/keycloak</span> репозитория лежит
+          одноразовый Keycloak с готовым realm (данные не сохраняются), с
+          пользователями <span className="font-mono">alice/alice</span> и{" "}
+          <span className="font-mono">bob/bob</span>:
+        </div>
+        <Code>{`cd keycloak
+docker compose up -d`}</Code>
       </div>
     </div>
   );

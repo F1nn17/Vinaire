@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Settings → Sign-in is easier to fill in.** The Keycloak version in "I don't have Keycloak yet" is a drop-down of the registry's full versions (the latest first and marked; "Another version…" lets you type one) instead of a text box; every field of the sign-in wizard says where its value comes from and what the default is, and is filled in from the Keycloak just installed; and the help section "Вход по логину и паролю" was rewritten for the current flow (the Sign-in tab does the realm and the client itself; the environment variables are only for an operator who sets it up in advance) — in Russian and English.
 - **"All resources" and "Security checks" now open inside Settings.** They stay pages of their own (the addresses `/resources` and `/security` are unchanged), but the Settings title and tab bar are on them too — and on an object opened from "All resources" — with the current page marked, so a click on "Sign-in", "Custom Resources" or "Справка" goes straight to that tab instead of having to find the way back.
 - **Dashboard legends no longer spill out of their cards.** The legend of a chart sat inside the chart's fixed-height box, so a long list of pods ran past the card and was cut off; it is now below the chart (the card grows), a long name is cut with an ellipsis and shown in full on hover, and a series that lacks the legend's label (`{pod}` on a series without a pod) is called "(no label)" instead of showing the raw placeholder.
 
