@@ -173,6 +173,25 @@ func orJoin(qs []string) string {
 	return strings.Join(qs, " or ")
 }
 
+// nodeExporterDisk is the node-exporter's view of the nodes' root disks, used (size minus what is
+// available) — the same numbers as the Overview's "Cluster disk" card. Each block device counts
+// once per node however many places it is mounted, and memory-backed, overlay and loop filesystems
+// are left out. nodeName narrows it to one node: the node-exporter labels its series with an
+// address (instance), so the node is found through node_uname_info, which carries its name.
+func nodeExporterDisk(nodeName string, perDevice bool) string {
+	const fs = `mountpoint="/",fstype!~"tmpfs|overlay|squashfs|ramfs"`
+	used := `node_filesystem_size_bytes{` + fs + `} - node_filesystem_avail_bytes{` + fs + `}`
+	if nodeName != "" {
+		q := regexp.QuoteMeta(nodeName)
+		used = `(` + used + `) and on(instance) (node_uname_info{nodename=` + promString(nodeName) + `} or node_uname_info{instance=~` + promString(q+`(:[0-9]+)?`) + `})`
+	}
+	once := `max by (instance, device) (` + used + `)`
+	if perDevice {
+		return `sum by (device) (` + once + `)`
+	}
+	return `sum(` + once + `)`
+}
+
 func planFor(kind, namespace, name, metricType string) (metricPlan, bool) {
 	var sels func(containerFilter bool) []string
 	// fallback, for node-level kinds: the same series built from pods, used only when the root
@@ -239,7 +258,17 @@ func planFor(kind, namespace, name, metricType string) (metricPlan, bool) {
 		}}, true
 	case "filesystem":
 		if nodeLevel {
-			return metricPlan{"bytes", []metricQuery{{promql: build(false, `sum by (device) (container_fs_usage_bytes{%s})`), splitBy: "device"}}}, true
+			// cAdvisor's view first (the root cgroup, else the pods'); only when it has nothing at all
+			// the node-exporter's. containerd — k3s and most current clusters — does not report
+			// container disk usage, and kube-prometheus-stack drops the root cgroup, so on such a
+			// cluster cAdvisor has nothing and the node-exporter is the only source (Roadmap Phase 72).
+			cadvisor := build(false, `sum by (device) (container_fs_usage_bytes{%s})`)
+			nodeName := ""
+			if kind == "nodes" {
+				nodeName = name
+			}
+			exporter := nodeExporterDisk(nodeName, true)
+			return metricPlan{"bytes", []metricQuery{{promql: "(" + cadvisor + ") or ((" + exporter + ") and on() absent(" + cadvisor + "))", splitBy: "device"}}}, true
 		}
 		return metricPlan{"bytes", []metricQuery{{name: "filesystem", promql: build(true, `sum(container_fs_usage_bytes{%s})`)}}}, true
 	}
@@ -382,7 +411,7 @@ func (h *Handler) serveResourceMetrics(w http.ResponseWriter, r *http.Request, k
 	resp.Available = true
 	if len(resp.Series) == 0 {
 		resp.NoData = true
-		resp.Reason = explainNoData(r.Context(), fetch, kind)
+		resp.Reason = explainNoData(r.Context(), fetch, kind, metricType)
 	}
 	respondJSON(w, resp)
 }
@@ -390,8 +419,13 @@ func (h *Handler) serveResourceMetrics(w http.ResponseWriter, r *http.Request, k
 // explainNoData says why there is nothing to draw, by asking Prometheus whether it holds
 // container metrics at all (Roadmap Phase 61): "your Prometheus doesn't scrape the kubelet" and
 // "it does, but none of it names this node" call for different fixes.
-func explainNoData(ctx context.Context, fetch promFetch, kind string) string {
+func explainNoData(ctx context.Context, fetch promFetch, kind, metricType string) string {
 	const generic = "Prometheus has no samples for this resource — the metric may not be exported on this cluster"
+	if metricType == "filesystem" {
+		if msg := explainNoDisk(ctx, fetch, kind); msg != "" {
+			return msg
+		}
+	}
 	n, err := promCount(ctx, fetch, `container_cpu_usage_seconds_total`)
 	switch {
 	case err != nil:
@@ -402,6 +436,23 @@ func explainNoData(ctx context.Context, fetch promFetch, kind string) string {
 		return "Prometheus holds container metrics, but none it can tie to this node: Vinaire looks for the node's name in the labels node, instance, kubernetes_io_hostname and nodename, and the scrape config here labels it differently."
 	}
 	return generic
+}
+
+// explainNoDisk is the reason for an empty disk chart (Roadmap Phase 72), or "" when the general
+// ones apply. Disk usage has two sources with different reach: cAdvisor's container_fs_*, which
+// containerd (k3s and most current clusters) does not fill for containers, and the node-exporter's
+// node_filesystem_*, which exists only for whole nodes.
+func explainNoDisk(ctx context.Context, fetch promFetch, kind string) string {
+	if kind == "nodes" || kind == "cluster" {
+		if n, err := promCount(ctx, fetch, `node_filesystem_size_bytes`); err == nil && n == 0 {
+			return "Prometheus has no disk samples for the nodes: neither the kubelet's cAdvisor nor a node-exporter reports them. Install the metrics stack (the Metrics stack page) — it brings the node-exporter."
+		}
+		return ""
+	}
+	if n, err := promCount(ctx, fetch, `container_fs_usage_bytes{pod!=""}`); err == nil && n == 0 {
+		return "Prometheus has no per-container disk samples. The container runtime has to report them to cAdvisor, and containerd (what k3s and most current clusters run) does not — the node's own disk is on its Node page and on the Overview."
+	}
+	return ""
 }
 
 // promCount returns how many series match the selector.
