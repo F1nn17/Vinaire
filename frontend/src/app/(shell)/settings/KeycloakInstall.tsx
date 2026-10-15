@@ -6,11 +6,7 @@ import { applyErrorMessage } from "@/components/editor/useYamlApply";
 import { useResourceTable } from "@/lib/api/allResources";
 import { createResource } from "@/lib/api/resources";
 import { getImageTags } from "@/lib/api/imageTags";
-import {
-  applyInstance,
-  readyReplicas,
-  withBackoff,
-} from "@/lib/images/apply";
+import { applyInstance, readyReplicas, withBackoff } from "@/lib/images/apply";
 import {
   DB_NAME,
   KC_NAME,
@@ -63,7 +59,11 @@ export function KeycloakInstall({
     dbSize: "5Gi",
   });
   const [steps, setSteps] = useState<Record<Step, StepState>>(
-    () => Object.fromEntries(stepNames.map((s) => [s, "todo"])) as Record<Step, StepState>,
+    () =>
+      Object.fromEntries(stepNames.map((s) => [s, "todo"])) as Record<
+        Step,
+        StepState
+      >,
   );
   const [running, setRunning] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -79,15 +79,18 @@ export function KeycloakInstall({
   const tags = useSWR(["kc-tags"], () =>
     getImageTags("quay.io/keycloak/keycloak"),
   );
-  const tag = f.tag || tags.data?.tags?.[0]?.name || "";
+  // plain versions only (26.2.5), newest first: the registry also holds nightlies and variants
+  const versions = (tags.data?.tags ?? [])
+    .map((x) => x.name)
+    .filter((n) => /^\d+\.\d+\.\d+$/.test(n))
+    .slice(0, 20);
+  const [otherVersion, setOtherVersion] = useState(false);
+  const tag = f.tag || versions[0] || tags.data?.tags?.[0]?.name || "";
   const input_: KeycloakInstallInput = { ...f, tag };
   const problems = validateInstall(input_);
   const valid = Object.keys(problems).length === 0;
 
-  const classes = useResourceTable(
-    "networking.k8s.io/v1/ingressclasses",
-    "",
-  );
+  const classes = useResourceTable("networking.k8s.io/v1/ingressclasses", "");
   const classNames = (classes.data?.rows ?? []).map((r) => r.name);
   const set = (patch: Partial<typeof f>) => setF((x) => ({ ...x, ...patch }));
   const mark = (s: Step, v: StepState) =>
@@ -162,11 +165,10 @@ export function KeycloakInstall({
         I don&apos;t have Keycloak yet — install one in this cluster
       </summary>
       <div className="mt-2 text-xs text-text-muted">
-        Creates a PostgreSQL and a Keycloak (official images, one instance
-        each) in the namespace you choose, publishes Keycloak on the address
-        you give through an Ingress, and fills in the form below with the
-        generated administrator. The passwords live only in the instances&apos;
-        Secrets{" "}
+        Creates a PostgreSQL and a Keycloak (official images, one instance each)
+        in the namespace you choose, publishes Keycloak on the address you give
+        through an Ingress, and fills in the form below with the generated
+        administrator. The passwords live only in the instances&apos; Secrets{" "}
         <span className="font-mono">
           {DB_NAME}, {KC_NAME}
         </span>
@@ -183,7 +185,10 @@ export function KeycloakInstall({
             className={input}
           />
         </Field>
-        <Field label="Address Keycloak will be reached on" error={f.host ? problems.host : undefined}>
+        <Field
+          label="Address Keycloak will be reached on"
+          error={f.host ? problems.host : undefined}
+        >
           <input
             aria-label="Keycloak address"
             value={f.host}
@@ -208,12 +213,44 @@ export function KeycloakInstall({
           </datalist>
         </Field>
         <Field label="Keycloak version" error={problems.tag}>
-          <input
-            aria-label="Keycloak version"
-            value={tag}
-            onChange={(e) => set({ tag: e.target.value.trim() })}
-            className={input}
-          />
+          {versions.length > 0 && !otherVersion ? (
+            <select
+              aria-label="Keycloak version"
+              value={tag}
+              onChange={(e) =>
+                e.target.value === "__other"
+                  ? setOtherVersion(true)
+                  : set({ tag: e.target.value })
+              }
+              className={input}
+            >
+              {versions.map((v, i) => (
+                <option key={v} value={v}>
+                  {v}
+                  {i === 0 ? " (latest)" : ""}
+                </option>
+              ))}
+              <option value="__other">Another version…</option>
+            </select>
+          ) : (
+            <input
+              aria-label="Keycloak version"
+              value={tag}
+              placeholder="26.2.5"
+              onChange={(e) => set({ tag: e.target.value.trim() })}
+              className={input}
+            />
+          )}
+          {tags.isLoading && (
+            <span className="text-[11px] text-text-faint">
+              Loading the list of versions…
+            </span>
+          )}
+          {!tags.isLoading && versions.length === 0 && (
+            <span className="text-[11px] text-text-faint">
+              The list of versions could not be loaded; type one, e.g. 26.2.5.
+            </span>
+          )}
         </Field>
         <Field label="https">
           <select
@@ -232,7 +269,10 @@ export function KeycloakInstall({
           </select>
         </Field>
         {f.tls === "secret" && (
-          <Field label="Certificate Secret (type kubernetes.io/tls)" error={problems.tlsSecret}>
+          <Field
+            label="Certificate Secret (type kubernetes.io/tls)"
+            error={problems.tlsSecret}
+          >
             <input
               aria-label="Certificate Secret"
               value={f.tlsSecret}
@@ -253,8 +293,8 @@ export function KeycloakInstall({
 
       {f.tls === "none" && (
         <div className="mt-3 text-xs text-warn">
-          Without https Keycloak will run, but Vinaire will refuse to use it
-          for sign-in (and passwords would cross the network in the clear).
+          Without https Keycloak will run, but Vinaire will refuse to use it for
+          sign-in (and passwords would cross the network in the clear).
         </div>
       )}
 
@@ -272,7 +312,13 @@ export function KeycloakInstall({
                     : "text-text-faint"
             }
           >
-            {steps[s] === "done" ? "✓" : steps[s] === "doing" ? "…" : steps[s] === "error" ? "✗" : "○"}{" "}
+            {steps[s] === "done"
+              ? "✓"
+              : steps[s] === "doing"
+                ? "…"
+                : steps[s] === "error"
+                  ? "✗"
+                  : "○"}{" "}
             {s}
           </li>
         ))}

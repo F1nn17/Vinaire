@@ -214,6 +214,10 @@ function Done({ result }: { result: KeycloakSetupResult }) {
   );
 }
 
+function Hint({ children }: { children: React.ReactNode }) {
+  return <span className="text-[11px] text-text-faint">{children}</span>;
+}
+
 function SetupForm({
   reconfigure,
   prefill,
@@ -285,9 +289,9 @@ function SetupForm({
         {reconfigure ? "Set it up again" : "Set it up"}
       </div>
       <div className="text-[11px] text-text-faint">
-        Don&apos;t have a Keycloak? Install one from the Marketplace first (see
-        Help → Login with a username and password). The URL must be the one both
-        your browser and Vinaire can reach.
+        No Keycloak yet? Use the card above to install one. Already have one?
+        Enter its address and an administrator of it; every field below says
+        where its value comes from.
       </div>
       <label className="flex flex-col gap-1.5 text-xs text-text-muted">
         Keycloak URL
@@ -298,6 +302,11 @@ function SetupForm({
           onChange={(e) => set({ keycloakUrl: e.target.value })}
           className={input}
         />
+        <Hint>
+          {prefill
+            ? "Filled in from the Keycloak installed above."
+            : "The address Keycloak is reached on — one your browser and Vinaire can both open. Vinaire only talks to a Keycloak over https."}
+        </Hint>
       </label>
       <div className="grid grid-cols-3 gap-3">
         <label className="flex flex-col gap-1.5 text-xs text-text-muted">
@@ -309,6 +318,11 @@ function SetupForm({
             className={input}
             autoComplete="off"
           />
+          <Hint>
+            {prefill
+              ? "admin — the account the installed Keycloak was started with."
+              : "A Keycloak administrator (in a Keycloak you installed yourself, the account you created for it)."}
+          </Hint>
         </label>
         <label className="flex flex-col gap-1.5 text-xs text-text-muted">
           Administrator password
@@ -320,6 +334,11 @@ function SetupForm({
             className={input}
             autoComplete="new-password"
           />
+          <Hint>
+            {prefill
+              ? "Generated and filled in. It is also in the Secret keycloak (key admin-password) of the namespace Keycloak was installed in."
+              : "Used once, to log in to Keycloak, and never stored."}
+          </Hint>
         </label>
         <label className="flex flex-col gap-1.5 text-xs text-text-muted">
           Administrator&apos;s realm
@@ -329,6 +348,10 @@ function SetupForm({
             onChange={(e) => set({ adminRealm: e.target.value })}
             className={input}
           />
+          <Hint>
+            Where the administrator account lives: master, unless you changed
+            it.
+          </Hint>
         </label>
         <label className="flex flex-col gap-1.5 text-xs text-text-muted">
           Realm for Vinaire&apos;s users
@@ -338,6 +361,10 @@ function SetupForm({
             onChange={(e) => set({ realm: e.target.value })}
             className={input}
           />
+          <Hint>
+            Created if it does not exist. The people who sign in to Vinaire live
+            here; keep vinaire unless you share this Keycloak.
+          </Hint>
         </label>
         <label className="flex flex-col gap-1.5 text-xs text-text-muted">
           Client id
@@ -347,6 +374,10 @@ function SetupForm({
             onChange={(e) => set({ clientId: e.target.value })}
             className={input}
           />
+          <Hint>
+            The client Vinaire signs in as; created if missing (confidential,
+            code flow with PKCE). Its secret is stored encrypted.
+          </Hint>
         </label>
       </div>
 
