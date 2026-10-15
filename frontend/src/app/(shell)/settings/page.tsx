@@ -8,26 +8,16 @@ import { friendlyErrorMessage } from "@/lib/api/errors";
 import { PuzzleIcon } from "@/components/icons";
 import { KeycloakSetup } from "./KeycloakSetup";
 import {
+  SettingsTabs,
+  type SettingsTab,
+} from "@/components/settings/SettingsTabs";
+import {
   AboutHelp,
   OverviewHelp,
   RolesHelp,
   StartHelp,
   TroubleshootingHelp,
 } from "./HelpGuides";
-
-type SettingsTab = "crds" | "signin" | "help";
-
-// pages that live under Settings (they used to be in the sidebar)
-const toolLinks = [
-  { href: "/resources", label: "All resources" },
-  { href: "/security", label: "Security checks" },
-];
-
-const tabs: { id: SettingsTab; label: string }[] = [
-  { id: "crds", label: "Custom Resources" },
-  { id: "signin", label: "Sign-in" },
-  { id: "help", label: "Справка" },
-];
 
 type HelpSection =
   | "overview"
@@ -111,33 +101,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
-      <div className="text-[15px] font-semibold">Settings</div>
-
-      <div className="flex gap-1 border-b border-border">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`px-3.5 py-2 text-[12.5px] ${
-              tab === t.id
-                ? "border-b-2 border-accent font-semibold text-accent-text"
-                : "text-text-muted"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-        {toolLinks.map((l) => (
-          <Link
-            key={l.href}
-            href={l.href}
-            className="px-3.5 py-2 text-[12.5px] text-text-muted hover:text-text"
-          >
-            {l.label}
-          </Link>
-        ))}
-      </div>
+      <SettingsTabs active={tab} onTab={setTab} />
 
       {tab === "crds" && (
         <div className="max-w-2xl rounded-[10px] border border-border bg-surface p-5">

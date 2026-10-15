@@ -15,6 +15,7 @@ import {
 import { compareCells } from "@/components/ui/DataTable";
 import { FillHeight } from "@/components/ui/FillHeight";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { SettingsTabs } from "@/components/settings/SettingsTabs";
 
 // The kinds most people look for first — shown as shortcuts when the cluster has them.
 const shortcuts: { key: string; label: string }[] = [
@@ -93,14 +94,9 @@ function AllResources() {
 
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
+      <SettingsTabs active="resources" />
       <div>
-        <div className="text-[15px] font-semibold">
-          <Link href="/settings" className="font-normal text-text-muted">
-            Settings
-          </Link>{" "}
-          / All resources
-        </div>
-        <div className="mt-1 max-w-3xl text-xs text-text-muted">
+        <div className="max-w-3xl text-xs text-text-muted">
           Every kind this cluster serves — built-in and custom — listed as{" "}
           <span className="font-mono">kubectl get</span> would. What you see is
           what your own permissions allow. To change an object, open it and use
