@@ -114,9 +114,28 @@ kubectl create clusterrolebinding alice-admin  --clusterrole=<fullname>-admin  -
   credentials Vinaire will then hold.
 - Turn on `networkPolicy.enabled` if your CNI enforces it (inbound only from the ingress,
   outbound only to DNS, 443/6443 and — if you provision over SSH — 22, never the metadata
-  address), and ship the container's stdout to your log system: the durable audit file lives
-  on an `emptyDir` and is lost when the pod is replaced.
+  address), and keep the audit log: either set `audit.persistence.enabled: true` (a volume for the
+  file, see "Keeping the audit log" below) or ship the container's stdout to your log system — by
+  default the audit file lives on an `emptyDir` and is lost when the pod is replaced.
 - `PROVISION_ALLOW_INSECURE` and `GITOPS_ALLOW_INSECURE_GIT` exist only for local development.
+
+## Keeping the audit log
+
+Every audited action is written twice: as a JSON line to the audit file (`AUDIT_LOG_PATH`, `/audit/audit.log`, rotated at
+10 MB, five files kept; the Audit log page reads it) and as a log line on the container's stdout.
+
+- **The file** lives on an `emptyDir` by default: it survives a restart of the container and is lost when the pod is
+  replaced. `audit.persistence.enabled: true` puts it on a PersistentVolumeClaim instead (`audit.persistence.size`,
+  `storageClass`, or your own claim in `existingClaim`). The volume is ReadWriteOnce with one writer, so this needs
+  `replicaCount: 1`, the Deployment then uses the `Recreate` strategy, and the claim is **kept** on `helm uninstall` (it is
+  the record of what was done — delete it yourself to remove it).
+- **stdout** is what a log collector (Promtail/Grafana Alloy, Fluent Bit, a node agent) reads by default, and it works with
+  several replicas. Each audited action is a line with the message `audited action` and the fields `action`, `namespace`,
+  `name`, `identity`, `remoteAddr` and the action's detail — never a secret value. In Loki, for example:
+  `{namespace="vinaire"} |= "audited action"`; to keep only what was changed, filter on `action`. Send it to a place the
+  people whose actions are logged cannot edit.
+
+The two are not exclusive: persist the file for the Audit log page and ship stdout for retention and alerting.
 
 ## Known residual risks
 

@@ -45,6 +45,20 @@ keyProvider:
 sessions:
   store: auto
 
+# The audit log (Roadmap Phase 76). By default it is written to an emptyDir: it survives a restart of
+# the container but not the pod being replaced, so ship the container's stdout to your log system too
+# (every audited action is also a line there — see docs/security.md). To keep the file itself, switch
+# persistence on: a PersistentVolumeClaim is created (or name your own with existingClaim) and mounted
+# at /audit. It is a ReadWriteOnce volume with one writer, so it needs replicaCount: 1 (the Deployment
+# is then replaced rather than rolled, because the new pod can't mount it while the old one holds it),
+# and the claim is kept when the release is uninstalled.
+audit:
+  persistence:
+    enabled: false
+    size: 1Gi
+    storageClass: ""     # empty: the cluster's default class; "-": none (a volume you made yourself)
+    existingClaim: ""    # use this claim instead of creating one
+
 image:
   # The released, signed image (see .github/workflows/release.yml); the tag
   # defaults to the chart's appVersion. To run a build of your own, point this at
