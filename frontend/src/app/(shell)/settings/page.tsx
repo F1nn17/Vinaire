@@ -1374,10 +1374,98 @@ function ObservabilityHelp() {
 
       <div className="rounded-md border border-border bg-surface-2 p-3 text-text-muted">
         <span className="font-semibold text-foreground">Про Grafana: </span>
-        Vinaire не подключается к Grafana и не встраивает её панели — такой
-        интеграции сейчас нет. Если у вас есть Grafana, открывайте её как
-        отдельный инструмент; здесь речь только про Prometheus/Loki/
-        Alertmanager.
+        Vinaire не встраивает Grafana и не подключается к ней, но у неё есть
+        собственные дашборды (страница «Dashboards», см. ниже), и любой из них
+        можно отдать Grafana одной кнопкой «Add to Grafana».
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Дашборды — страница «Dashboards»
+        </div>
+        <div className="mt-1 text-text-muted">
+          Графики рисует сам Vinaire из того же Prometheus, что и вкладка
+          Metrics (от вашего имени, раз в 10 секунд, окно от 15 минут до 24
+          часов), — Grafana для этого не нужна. Встроенные: обзор кластера, ноды
+          и нагрузка по namespace. Дашборды PostgreSQL, Redis/Valkey, MinIO и
+          Keycloak появляются, только когда приложение запущено в кластере
+          (Vinaire находит его по образу контейнера) или его метрики и так есть
+          в Prometheus — например, база вне кластера.
+        </div>
+        <div className="mt-2 text-text-muted">
+          Откуда берутся данные: кластер, ноды и нагрузка — из
+          kube-state-metrics, cAdvisor и node-exporter (их ставит стек метрик);
+          PostgreSQL — из postgres-exporter; Redis/Valkey — из redis_exporter;
+          MinIO и Keycloak отдают метрики сами.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          PostgreSQL и Redis: exporter одной кнопкой
+        </div>
+        <div className="mt-1 text-text-muted">
+          Если база найдена, а метрик у неё нет, на странице её дашборда
+          появляется форма: Service, порт, пользователь и база, Secret с паролем
+          — всё подставлено из того, что есть в кластере. Кнопка «Install the
+          exporter» ставит exporter из Маркетплейса рядом с базой (от вашего
+          имени, как любая установка из Маркетплейса). Пароль не читается и не
+          вводится: exporter получает только имя Secret и ключ. Prometheus
+          находит его по аннотациям на Service (стандартный стек Vinaire) или
+          через ServiceMonitor (kube-prometheus-stack); примерно через минуту
+          дашборд заполняется сам. Пользователь для exporter-а — лучше
+          отдельный, только для чтения.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          MinIO и Keycloak: включить метрики
+        </div>
+        <div className="mt-1 text-text-muted">
+          У них метрики встроены, ставить нечего — их нужно включить и показать
+          Prometheus, где они. Vinaire не меняет уже работающее приложение,
+          поэтому на странице дашборда он показывает две готовые команды с
+          подставленными именами найденного экземпляра:
+        </div>
+        <Code>
+          {`# MinIO
+kubectl -n <ns> set env statefulset/<имя> MINIO_PROMETHEUS_AUTH_TYPE=public
+kubectl -n <ns> annotate service <имя> --overwrite \\
+  prometheus.io/scrape=true prometheus.io/port=9000 \\
+  prometheus.io/path=/minio/v2/metrics/cluster
+
+# Keycloak
+kubectl -n <ns> set env statefulset/<имя> KC_METRICS_ENABLED=true
+kubectl -n <ns> annotate service <имя> --overwrite \\
+  prometheus.io/scrape=true prometheus.io/port=9000 \\
+  prometheus.io/path=/metrics`}
+        </Code>
+        <div className="mt-1 text-text-muted">
+          Первая команда перезапускает поды (данные не затрагиваются). Если
+          приложение ставит оператор или чарт, задайте ту же переменную в его
+          настройках, а не на самом workload — иначе следующая синхронизация её
+          отменит. Аннотации работают с обычным чартом Prometheus; с
+          kube-prometheus-stack вместо них нужен ServiceMonitor на тот же адрес
+          и путь.
+        </div>
+      </div>
+
+      <div>
+        <div className="font-semibold text-foreground">
+          Свои дашборды и Grafana
+        </div>
+        <div className="mt-1 text-text-muted">
+          «+ New dashboard» — конструктор: панели с запросами PromQL, поиск
+          метрик по части имени, живой предпросмотр; встроенный дашборд можно
+          скопировать и изменить. Свой дашборд хранится как ConfigMap в
+          выбранном namespace (для сохранения нужно право создавать ConfigMap).
+          «Add to Grafana» сохраняет дашборд как ConfigMap с меткой{" "}
+          <span className="font-mono">grafana_dashboard=1</span> — его
+          подхватывает sidecar Grafana (по умолчанию он включён в
+          kube-prometheus-stack); «Download Grafana JSON» отдаёт тот же дашборд
+          файлом.
+        </div>
       </div>
 
       <div>
