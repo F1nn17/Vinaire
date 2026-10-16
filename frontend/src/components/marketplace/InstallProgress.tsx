@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { t } from "@/lib/i18n/translate";
 import type { InstallJob, InstallPod } from "@/lib/api/catalog";
 
@@ -194,6 +195,14 @@ export function InstallProgress({
               <span className="text-text-faint">
                 {p.ready}/{p.total} · {p.reason || p.phase}
               </span>
+              {!(p.total > 0 && p.ready === p.total) && (
+                <Link
+                  href={`/workloads/pods/detail?namespace=${encodeURIComponent(job.namespace)}&name=${encodeURIComponent(p.name)}`}
+                  className="font-sans text-accent-text underline"
+                >
+                  {t("Why?")}
+                </Link>
+              )}
             </div>
           ))}
         </div>
