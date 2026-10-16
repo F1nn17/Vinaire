@@ -185,6 +185,17 @@ export type PodDetail = {
   hasController: boolean;
   // Roadmap Phase 26: ports the pod's containers declare (a pod may serve more).
   ports: PodPort[];
+  // Roadmap Phase 75: why the pod is not running or not ready (empty when it is fine)
+  diagnosis: PodFinding[];
+};
+
+export type PodFinding = {
+  severity: "error" | "warning" | "info";
+  code: string;
+  title: string;
+  container?: string;
+  detail?: string;
+  hints?: string[];
 };
 
 export type PodPort = {

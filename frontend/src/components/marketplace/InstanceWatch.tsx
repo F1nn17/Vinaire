@@ -9,6 +9,7 @@ import { useNodeAddress } from "@/lib/hooks/useNodeAddress";
 import { t } from "@/lib/i18n/translate";
 import { useWorkloads } from "@/lib/hooks/useWorkloads";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { WhyNotReady } from "@/components/workloads/WhyNotReady";
 
 // Statuses that don't fix themselves: say what they usually mean instead of leaving the user to guess.
 const PROBLEMS: Record<string, string> = {
@@ -57,7 +58,9 @@ export function InstanceWatch({
       return a === b && a !== "0" && p.status === "Running";
     });
   const outside = useOutsideAddress(namespace, name, expose);
-  const problem = pods.map((p) => PROBLEMS[p.status]).find(Boolean);
+  // a status that has a known meaning is explained by the pod's own diagnosis below; only a pod that is
+  // merely slow gets the "still starting" note
+  const problem = pods.some((p) => PROBLEMS[p.status]);
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-2 p-3 text-xs">
@@ -96,9 +99,21 @@ export function InstanceWatch({
           <span className="font-mono">{outside}</span>
         </div>
       )}
-      {!ready && problem && seconds > 15 && (
-        <span className="text-warn">{t(problem)}</span>
-      )}
+      {!ready &&
+        seconds > 15 &&
+        pods
+          .filter((p) => {
+            const [x, y] = p.ready.split("/");
+            return !(x === y && x !== "0" && p.status === "Running");
+          })
+          .map((p) => (
+            <WhyNotReady
+              key={p.name}
+              namespace={namespace}
+              name={p.name}
+              fallback={PROBLEMS[p.status]}
+            />
+          ))}
       {!ready && !problem && seconds > 90 && (
         <span className="text-text-muted">
           {t(
