@@ -29,6 +29,19 @@ function warning(w: { code: string; detail?: string }): string {
       return t(
         "The chart creates an Ingress, but this cluster has no IngressClass — nothing will serve it until an ingress controller (Traefik, ingress-nginx…) is installed.",
       );
+    case "missing-crd":
+      return t(
+        "The chart creates objects of kinds this cluster doesn't know ({k}) and doesn't bring their definitions. They come from an operator: install the operator's chart first, or this install will fail.",
+        { k: w.detail ?? "" },
+      );
+    case "no-load-balancer":
+      return t(
+        "The chart creates a Service of type LoadBalancer, but nothing in this cluster answers one (no cloud provider, MetalLB or k3s service load balancer), so its external address will stay pending. Use a node port, or install a load balancer such as MetalLB.",
+      );
+    case "database-ingress":
+      return t(
+        "This is a database and the chart creates an Ingress, but an Ingress carries HTTP only and a database speaks its own protocol over TCP — it will not be reachable that way. Publish it with a NodePort or LoadBalancer Service instead.",
+      );
     case "missing-ingress-class":
       return t(
         "An Ingress asks for the class “{c}”, which this cluster doesn't have.",
