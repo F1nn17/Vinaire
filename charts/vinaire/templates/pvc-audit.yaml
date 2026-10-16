@@ -1,0 +1,21 @@
+{{- if and .Values.audit.persistence.enabled (not .Values.audit.persistence.existingClaim) }}
+# Roadmap Phase 76: where the audit log lives when audit.persistence is on. Kept on `helm uninstall`
+# (the log is the record of what was done with the release) — delete the claim yourself to remove it.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "vinaire.fullname" . }}-audit
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.audit.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.audit.persistence.size | quote }}
+{{- end }}

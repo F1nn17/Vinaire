@@ -19,6 +19,29 @@
         "rewrapOnStart": { "type": "boolean" }
       }
     },
+    "audit": {
+      "type": "object",
+      "properties": {
+        "persistence": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Keep the audit log on a PersistentVolumeClaim instead of an emptyDir (needs replicaCount 1)."
+            },
+            "size": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(Mi|Gi|Ti)$",
+              "description": "Size of the claim, e.g. 1Gi."
+            },
+            "storageClass": { "type": "string" },
+            "existingClaim": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "sessions": {
       "type": "object",
       "properties": {

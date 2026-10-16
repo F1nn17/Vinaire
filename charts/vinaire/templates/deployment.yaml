@@ -7,6 +7,14 @@ metadata:
     {{- include "vinaire.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  {{- if .Values.audit.persistence.enabled }}
+  {{- if gt (int .Values.replicaCount) 1 }}
+  {{- fail "audit.persistence.enabled keeps the audit log on one ReadWriteOnce volume with a single writer and needs replicaCount: 1 — with several replicas ship the container's stdout to your log system instead" }}
+  {{- end }}
+  # the volume can be mounted by one pod: the old pod must be gone before the new one starts
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "vinaire.selectorLabels" . | nindent 6 }}
@@ -162,7 +170,12 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
         - name: audit
+          {{- if .Values.audit.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.audit.persistence.existingClaim | default (printf "%s-audit" (include "vinaire.fullname" .)) }}
+          {{- else }}
           emptyDir: {}
+          {{- end }}
         - name: tmp
           emptyDir: {}
       {{- with .Values.nodeSelector }}
