@@ -19,6 +19,8 @@ import {
 } from "@/lib/hooks/useDashboards";
 import { PanelView } from "@/components/dashboards/PanelView";
 import { DashboardEditor } from "@/components/dashboards/DashboardEditor";
+import { ExporterInstall } from "@/components/dashboards/ExporterInstall";
+import { MetricsHowTo } from "@/components/dashboards/MetricsHowTo";
 
 const ranges = [
   { sec: 900, label: "Last 15 minutes" },
@@ -397,36 +399,25 @@ function DashboardView({
         </div>
       )}
 
-      {dashboard.requires && req.data === false && (
-        <div className="rounded-[10px] border border-warn/40 bg-surface p-3 text-xs text-warn">
-          {found && dashboard.exporter ? (
-            <>
-              {t(
-                "{app} runs here, but nothing reports its metrics to Prometheus.",
-                {
-                  app: found.title,
-                },
-              )}{" "}
-              <Link
-                href={`/marketplace/install?repo=${dashboard.exporter.repo}&chart=${dashboard.exporter.chart}`}
-                className="font-semibold underline"
-              >
-                Install the exporter →
-              </Link>
-            </>
-          ) : (
-            <>
-              {t("No series {metric} in this cluster's Prometheus.", {
-                metric: dashboard.requires.metric,
-              })}{" "}
-              {dashboard.requires.hint}{" "}
-              <Link href="/metrics-stack" className="underline">
-                Metrics stack →
-              </Link>
-            </>
-          )}
-        </div>
-      )}
+      {dashboard.requires &&
+        req.data === false &&
+        (found && dashboard.exporter ? (
+          // an exporter fixes it: the form that installs one
+          <ExporterInstall app={found} />
+        ) : found ? (
+          // the application serves its own metrics: say what to switch on
+          <MetricsHowTo app={found} />
+        ) : (
+          <div className="rounded-[10px] border border-warn/40 bg-surface p-3 text-xs text-warn">
+            {t("No series {metric} in this cluster's Prometheus.", {
+              metric: dashboard.requires.metric,
+            })}{" "}
+            {dashboard.requires.hint}{" "}
+            <Link href="/metrics-stack" className="underline">
+              Metrics stack →
+            </Link>
+          </div>
+        ))}
 
       <div className="grid gap-3 md:grid-cols-4">
         {dashboard.panels.map((p, i) => (
