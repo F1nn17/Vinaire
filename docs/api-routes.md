@@ -10,6 +10,7 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/api-resources` | yes | — |
 | GET | `/api/v1/api-resources/{group}/{version}/{resource}/objects` | yes | — |
 | GET | `/api/v1/api-resources/{group}/{version}/{resource}/objects/{name}` | yes | — |
+| GET | `/api/v1/apps/detected` | yes | — |
 | GET | `/api/v1/audit` | yes | — |
 | GET | `/api/v1/auth/config` | no | — |
 | DELETE | `/api/v1/auth/keycloak` | yes | yes |

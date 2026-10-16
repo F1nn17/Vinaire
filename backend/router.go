@@ -133,6 +133,7 @@ func newRouter(d routerDeps) *chi.Mux {
 		protected.Get("/secrets", workloadsHandler.Secrets)
 		protected.Post("/secrets/{namespace}/{name}/reveal", workloadsHandler.RevealSecretKey)
 		protected.Get("/topology", workloadsHandler.Topology)
+		protected.Get("/apps/detected", workloadsHandler.DetectedApps)
 		protected.Get("/ingresses", workloadsHandler.Ingresses)
 		protected.Get("/gateway-routes", workloadsHandler.GatewayRoutes)
 		protected.Get("/clusters", workloadsHandler.ListClusters)

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Dashboards follow what is installed.** `GET /api/v1/apps/detected` finds the well-known applications among the pods the caller may list — PostgreSQL, Redis/Valkey, MinIO, Keycloak — by the repository of their container images (an exporter is not the application it exports), grouped into instances (a StatefulSet, a Deployment). The Dashboards page now lists an application's dashboard only when the application runs in the cluster (or its metrics are in Prometheus anyway, for a database outside); the cluster, node and workload dashboards are always there. The dashboard says where it found the application, and when nothing reports its metrics it says so and offers the Marketplace's exporter for it.
+
 ### Fixed
 
 - **Redis and Valkey with ACL keep their users across a restart.** "Use ACL" in "Install from an image" passed the user as command-line options, so it was created afresh at every start and anything added later with `ACL SETUSER` was gone. The users are now in an ACL file on the data volume (`/data/users.acl`, `--aclfile`): written once on the first start from the generated password — as a SHA-256 hash, the password itself is not left on the volume — and read at every start after that. Run `ACL SAVE` after changing users (Redis writes the file only then): a user saved that way survives deleting the pod, one never saved does not. The Marketplace recipe for the operator's charts now says plainly that its ACL file comes from a read-only Secret, so users made at runtime are not kept there.
