@@ -2,6 +2,7 @@ import useSWR from "swr";
 import { useCurrentCluster } from "@/lib/clusterStore";
 import { loadPanel, queryNow, type PanelData } from "@/lib/dashboards/prom";
 import { listCustomDashboards } from "@/lib/dashboards/store";
+import { getDetectedApps } from "@/lib/api/apps";
 import {
   metricRe,
   labelRe,
@@ -76,4 +77,42 @@ export function useCustomDashboards() {
   return useSWR(["dash-custom", cluster], listCustomDashboards, {
     refreshInterval: 30_000,
   });
+}
+
+// the applications found in the cluster (refreshed now and then: an install appears within a minute)
+export function useDetectedApps() {
+  const cluster = useCurrentCluster();
+  return useSWR(["detected-apps", cluster], getDetectedApps, {
+    refreshInterval: 60_000,
+    shouldRetryOnError: false,
+  });
+}
+
+// For every dashboard that names a required metric: does Prometheus have it? (id -> yes/no; a
+// dashboard whose answer isn't in yet is simply missing from the map.)
+export function useAvailability(dashboards: Dashboard[]) {
+  const cluster = useCurrentCluster();
+  const wanted = dashboards.filter(
+    (d) => d.requires && metricRe.test(d.requires.metric),
+  );
+  const key = wanted.map((d) => `${d.id}=${d.requires?.metric}`).join(",");
+  return useSWR<Record<string, boolean>>(
+    wanted.length ? ["dash-availability", cluster, key] : null,
+    async () => {
+      const out: Record<string, boolean> = {};
+      await Promise.all(
+        wanted.map(async (d) => {
+          try {
+            out[d.id] = (await queryNow(`count(${d.requires?.metric})`)).some(
+              (r) => r.v > 0,
+            );
+          } catch {
+            out[d.id] = false;
+          }
+        }),
+      );
+      return out;
+    },
+    { refreshInterval: 60_000, revalidateOnFocus: false },
+  );
 }

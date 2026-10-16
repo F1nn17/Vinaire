@@ -218,6 +218,8 @@ export const builtinDashboards: Dashboard[] = [
   },
   {
     id: "postgresql",
+    app: "postgresql",
+    exporter: { repo: "prometheus-community", chart: "prometheus-postgres-exporter" },
     group: "Databases",
     title: "PostgreSQL",
     description: "From the postgres-exporter.",
@@ -275,6 +277,8 @@ export const builtinDashboards: Dashboard[] = [
   },
   {
     id: "redis",
+    app: "redis",
+    exporter: { repo: "prometheus-community", chart: "prometheus-redis-exporter" },
     group: "Databases",
     title: "Redis / Valkey",
     description: "From the redis_exporter.",
@@ -330,6 +334,7 @@ export const builtinDashboards: Dashboard[] = [
   },
   {
     id: "minio",
+    app: "minio",
     group: "Storage & identity",
     title: "MinIO",
     description: "From MinIO's own Prometheus endpoint (cluster metrics).",
@@ -388,6 +393,7 @@ export const builtinDashboards: Dashboard[] = [
   },
   {
     id: "keycloak",
+    app: "keycloak",
     group: "Storage & identity",
     title: "Keycloak",
     description: "From Keycloak's metrics endpoint (Quarkus).",
