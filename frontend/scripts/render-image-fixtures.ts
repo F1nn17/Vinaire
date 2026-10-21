@@ -12,7 +12,9 @@ import { build, newForm, presets, validate } from "../src/lib/images/presets";
 
 const [outDir, namespace, ...specs] = process.argv.slice(2);
 if (!outDir || !namespace || specs.length === 0) {
-  console.error("usage: render-image-fixtures.ts <outDir> <namespace> <preset>:<name>...");
+  console.error(
+    "usage: render-image-fixtures.ts <outDir> <namespace> <preset>:<name>...",
+  );
   process.exit(2);
 }
 mkdirSync(outDir, { recursive: true });
@@ -37,7 +39,10 @@ for (const spec of specs) {
     preset.secrets.map((k) => [k, "ci-test-password"]),
   );
   const docs = build(form, passwords);
-  writeFileSync(join(outDir, `${name}.yaml`), docs.map((d) => d.yaml).join("---\n"));
+  writeFileSync(
+    join(outDir, `${name}.yaml`),
+    docs.map((d) => d.yaml).join("---\n"),
+  );
   // what the tests need to know about the instance without parsing YAML
   writeFileSync(
     join(outDir, `${name}.json`),
