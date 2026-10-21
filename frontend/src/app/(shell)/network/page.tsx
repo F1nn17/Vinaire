@@ -173,7 +173,7 @@ function cell(
 }
 
 const openLink = (kind: string, row: { namespace?: string; name: string }) =>
-  `/resources/detail?r=${encodeURIComponent(kind)}&ns=${encodeURIComponent(row.namespace ?? "")}&name=${encodeURIComponent(row.name)}`;
+  `/network/detail?r=${encodeURIComponent(kind)}&ns=${encodeURIComponent(row.namespace ?? "")}&name=${encodeURIComponent(row.name)}`;
 
 export default function NetworkPage() {
   const [tab, setTab] = useRememberedState<Tab>("network-tab", "ingress");
@@ -348,6 +348,14 @@ export default function NetworkPage() {
             columns={gatewayColumns}
             rows={gatewayResult.rows ?? []}
             rowKey={(r) => `${r.namespace}/${r.kind}/${r.name}`}
+            rowHref={(r) =>
+              openLink(
+                r.kind === "Gateway"
+                  ? "gateway.networking.k8s.io/v1/gateways"
+                  : "gateway.networking.k8s.io/v1/httproutes",
+                r,
+              )
+            }
             emptyLabel={`No Gateway API resources found${namespace ? ` in namespace "${namespace}"` : ""}.`}
           />
         ))}
