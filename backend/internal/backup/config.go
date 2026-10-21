@@ -111,7 +111,7 @@ func LoadConfig(path string) (*Config, error) {
 	if path == "" {
 		return c, nil
 	}
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- the path is the operator's BACKUP_TARGETS setting, never from a request
 	if err != nil {
 		return nil, fmt.Errorf("read backup configuration: %w", err)
 	}
