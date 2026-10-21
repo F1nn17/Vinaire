@@ -2044,5 +2044,16 @@
  "Dump file (empty: the newest)": "Файл дампа (пусто: самый свежий)",
  "Load the dump": "Загрузить дамп",
  "Restore to a new claim": "Восстановить в новый том",
- "Name of the NEW volume claim to create from this snapshot": "Имя НОВОГО тома (PVC), который создать из этого снимка"
+ "Name of the NEW volume claim to create from this snapshot": "Имя НОВОГО тома (PVC), который создать из этого снимка",
+ "Version": "Версия",
+ "Change the version of": "Изменить версию",
+ "Now:": "Сейчас:",
+ "Only the tag changes; the pod restarts with the new version.": "Меняется только тег; под перезапустится с новой версией.",
+ "New tag": "Новый тег",
+ "The major version changes (or cannot be compared). A database usually cannot read the data of another major version — it may not start, and going back may not work. I have a backup and accept this.": "Меняется основная версия (или версии нельзя сравнить). База обычно не читает данные другой основной версии — она может не запуститься, а вернуться назад может не получиться. У меня есть копия, я принимаю это.",
+ "Take a dump into the backup volume first (recommended)": "Сначала сделать дамп в том для копий (рекомендуется)",
+ "Taking a dump first…": "Сначала делаю дамп…",
+ "Changing the version…": "Меняю версию…",
+ "Go back to the previous version": "Вернуться к предыдущей версии",
+ "Change version": "Изменить версию"
 }

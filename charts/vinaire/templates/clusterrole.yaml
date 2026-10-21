@@ -128,19 +128,20 @@ rules:
     verbs: ["create"]
 ---
 {{- end }}
-{{- if .Values.rbac.backupAdmin.create }}
-# Backups of applications installed from an image (Roadmap Phase 77b): a dump Job or
-# CronJob, the volume claim it writes to, and VolumeSnapshots. Kept apart from -viewer
-# and -installer so that who may start copying a database's data out is a decision.
+{{- if .Values.rbac.lifecycleAdmin.create }}
+# Lifecycle of applications installed from an image (Roadmap Phase 77): backups (a dump Job
+# or CronJob, the claim it writes to, VolumeSnapshots), restore, and changing the image tag
+# of an instance. Kept apart from -viewer and -installer so that who may copy a database's
+# data out, or change the version it runs, is a decision.
 # Bind it IN ADDITION to -viewer. Not bound to anyone by default.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "vinaire.fullname" . }}-backup-admin
+  name: {{ include "vinaire.fullname" . }}-lifecycle-admin
   labels:
     {{- include "vinaire.labels" . | nindent 4 }}
   annotations:
-    description: "Create and delete backup Jobs, CronJobs and VolumeSnapshots; create the claim dumps are written to. Bind together with the -viewer role."
+    description: "Back up, restore and upgrade applications installed from an image: Jobs, CronJobs, VolumeSnapshots, backup claims, StatefulSet image. Bind together with the -viewer role."
 rules:
   - apiGroups: ["batch"]
     resources: [jobs, cronjobs]
@@ -154,6 +155,10 @@ rules:
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: [volumesnapshotclasses]
     verbs: ["get", "list"]
+  # changing the image tag of an instance (Phase 77d)
+  - apiGroups: ["apps"]
+    resources: [statefulsets]
+    verbs: ["get", "list", "patch"]
 ---
 {{- end }}
 {{- if .Values.rbac.rbacAdmin.create }}
@@ -186,7 +191,7 @@ rules:
       - {{ include "vinaire.fullname" . }}-viewer
       - {{ include "vinaire.fullname" . }}-installer
       - {{ include "vinaire.fullname" . }}-node-admin
-      - {{ include "vinaire.fullname" . }}-backup-admin
+      - {{ include "vinaire.fullname" . }}-lifecycle-admin
       - {{ include "vinaire.fullname" . }}-rbac-admin
       - {{ include "vinaire.fullname" . }}-admin
   - apiGroups: ["authorization.k8s.io"]

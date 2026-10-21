@@ -4,6 +4,9 @@ import { useState } from "react";
 import { useInstances, type Instance } from "@/lib/api/instances";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { UpgradeInstanceModal } from "@/components/instances/UpgradeInstanceModal";
+import { UpgradeModal } from "@/components/marketplace/UpgradeModal";
+import { useReleases } from "@/lib/hooks/useCatalog";
 import { BackupsModal } from "@/components/instances/BackupsModal";
 import { DeleteInstanceModal } from "@/components/instances/DeleteInstanceModal";
 
@@ -14,6 +17,15 @@ export default function InstancesPage() {
   const [open, setOpen] = useState<Instance | null>(null);
   const [deleting, setDeleting] = useState<Instance | null>(null);
   const [backing, setBacking] = useState<Instance | null>(null);
+  const [upgrading, setUpgrading] = useState<Instance | null>(null);
+  const { data: releases } = useReleases();
+  const release =
+    upgrading?.origin === "helm"
+      ? (releases ?? []).find(
+          (r) =>
+            r.name === upgrading.name && r.namespace === upgrading.namespace,
+        )
+      : undefined;
 
   const columns: DataTableColumn<Instance>[] = [
     {
@@ -55,7 +67,7 @@ export default function InstancesPage() {
     },
     {
       header: "",
-      width: "1.4fr",
+      width: "1.9fr",
       render: (r) => (
         <span className="flex justify-end gap-2 pr-2">
           <button
@@ -67,6 +79,17 @@ export default function InstancesPage() {
             className="rounded-lg border border-border bg-surface-2 px-2.5 py-1 text-xs"
           >
             What is in it
+          </button>
+          <button
+            type="button"
+            disabled={r.system}
+            onClick={(e) => {
+              e.stopPropagation();
+              setUpgrading(r);
+            }}
+            className="rounded-lg border border-border bg-surface-2 px-2.5 py-1 text-xs disabled:opacity-40"
+          >
+            Version
           </button>
           <button
             type="button"
@@ -171,6 +194,24 @@ export default function InstancesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {upgrading && upgrading.origin === "image" && (
+        <UpgradeInstanceModal
+          instance={upgrading}
+          onClose={() => setUpgrading(null)}
+          onDone={() => {
+            setUpgrading(null);
+            void mutate();
+          }}
+        />
+      )}
+      {upgrading && release && (
+        <UpgradeModal
+          release={release}
+          onClose={() => setUpgrading(null)}
+          onDone={() => void mutate()}
+        />
       )}
 
       {backing && (

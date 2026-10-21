@@ -195,7 +195,7 @@
           "type": "object",
           "properties": { "create": { "type": "boolean" } }
         },
-        "backupAdmin": {
+        "lifecycleAdmin": {
           "type": "object",
           "properties": { "create": { "type": "boolean" } }
         },

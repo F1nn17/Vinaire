@@ -73,8 +73,12 @@ type Instance struct {
 	App       string `json:"app,omitempty"`
 	Version   string `json:"version,omitempty"`
 	// System is true in the cluster's own namespaces; deleting is refused there.
-	System bool   `json:"system"`
-	Parts  []Part `json:"parts"`
+	System bool `json:"system"`
+	// Image is the image of an image-installed instance's `app` container, and PreviousImage the one
+	// before its last upgrade (Phase 77d); both empty for a chart.
+	Image         string `json:"image,omitempty"`
+	PreviousImage string `json:"previousImage,omitempty"`
+	Parts         []Part `json:"parts"`
 	// Stays counts the parts that remain after a delete (volume claims, Secrets nobody owns).
 	Stays int `json:"stays"`
 }
@@ -136,6 +140,16 @@ func Build(s Snapshot) []Instance {
 	for _, w := range s.StatefulSets {
 		if k, ok := keyOf(w.Namespace, w.Labels); ok {
 			in := get(k, w.Labels)
+			if k.origin == OriginImage {
+				for _, c := range w.Spec.Template.Spec.Containers {
+					if c.Name == "app" && imageRe.MatchString(c.Image) {
+						in.Image = c.Image
+					}
+				}
+				if p := w.Annotations[AnnotationPreviousImage]; imageRe.MatchString(p) {
+					in.PreviousImage = p
+				}
+			}
 			in.Parts = append(in.Parts, Part{Kind: "StatefulSet", Name: w.Name, Detail: ready(w.Status.ReadyReplicas, w.Spec.Replicas), Fate: "removed"})
 		}
 	}

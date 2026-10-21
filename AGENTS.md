@@ -364,7 +364,7 @@ flow.
   request names a target and a Secret holding `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, never an endpoint; the upload image is
   pinned. A backup carries no `app.kubernetes.io/instance` label, so deleting an instance never deletes its backups. Snapshots need
   the CSI snapshot CRDs and a VolumeSnapshotClass; otherwise the API says "unavailable". Audited as `backup-create` (kind, target,
-  schedule — never a credential) and `backup-delete`. The chart ships the rights as the separate, unbound `<fullname>-backup-admin`
+  schedule — never a credential) and `backup-delete`. The chart ships the rights as the separate, unbound `<fullname>-lifecycle-admin`
   role (jobs/cronjobs get/list/create/delete, PVC get/list/create, volumesnapshots get/list/create/delete, volumesnapshotclasses
   get/list).
 - Restore (Roadmap Phase 77c, `internal/backup/restore.go`, `internal/api/backups_restore.go`) — never over a running instance, as the
@@ -376,9 +376,15 @@ flow.
   snapshot). `POST .../restore-snapshot` creates a **new** claim from a snapshot Vinaire took of that instance (`dataSource`; the
   snapshot's labels are checked) and touches no existing claim. Audited as `backup-restore` and `backup-restore-snapshot`. Restore Jobs
   carry `vinaire.io/restore-into`/`restore-of` (no instance label) and can be deleted through `DELETE /api/v1/backups/.../job/...`.
-- **Approved, not yet implemented — Roadmap Phase 77d** (owner's decision of 2026-10-21): version upgrade of an instance, as the caller.
-  Its endpoint, guard rails and audit name are specified in ROADMAP.md's Phase 77 and must be moved into this list *in the same commit*
-  that adds it.
+- Version upgrade of an instance installed from an image (Roadmap Phase 77d, `internal/instances/upgrade.go`,
+  `internal/k8s/instance_upgrade.go`, `internal/api/instance_upgrade.go`) — as the caller:
+  `POST /api/v1/instances/{namespace}/{name}/upgrade` (`tag`, `acceptMajor`, or `revert`; the body must repeat the instance's name)
+  is one strategic merge patch of the StatefulSet: the `app` container's image and the annotation `vinaire.io/previous-image`.
+  **Only the tag changes** — the repository is the running image's, a request never names an image; the tag is validated by a
+  pattern; a digest-pinned image is refused; a change of major version (or a tag that cannot be compared, like `latest`) needs
+  `acceptMajor`, and a **lower major version is refused** outright; `revert` restores the recorded image only if it is of the same
+  repository. Charts are upgraded from the Marketplace (Phase 28), not here. The UI offers a dump first and waits for it. Audited as
+  `instance-upgrade` / `instance-revert` (from, to, major). The chart's `-lifecycle-admin` role grants `patch` on StatefulSets.
 
 Every other resource kind (Pods, ConfigMaps, Secrets, Ingress, ...) and
 every other verb, on any cluster a user browses, stays read-only.

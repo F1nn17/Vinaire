@@ -195,10 +195,10 @@ rbac:
   # deleting a Node object. Created unbound; bind it IN ADDITION to the viewer role.
   nodeAdmin:
     create: true
-  # A role for backups of applications installed from an image (Roadmap Phase 77b):
-  # dump Jobs/CronJobs, the claim they write to, and VolumeSnapshots. Created unbound;
-  # bind it IN ADDITION to the viewer role.
-  backupAdmin:
+  # A role for the lifecycle of applications installed from an image (Roadmap Phase 77):
+  # backups (Jobs/CronJobs, the claim they write to, VolumeSnapshots), restore, and changing
+  # an instance's image tag. Created unbound; bind it IN ADDITION to the viewer role.
+  lifecycleAdmin:
     create: true
   # A role for managing access: create/delete RoleBindings and ClusterRoleBindings and
   # ask "what can X do?". It may bind this chart's own roles (the `bind` verb) but not

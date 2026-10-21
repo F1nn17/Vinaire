@@ -20,6 +20,9 @@ export type Instance = {
   app?: string;
   version?: string;
   system: boolean;
+  // image-installed instances: the image now, and the one before the last upgrade
+  image?: string;
+  previousImage?: string;
   parts: InstancePart[];
   stays: number;
 };
@@ -34,5 +37,22 @@ export function useInstances() {
   const cluster = useCurrentCluster();
   return useSWR(["instances", cluster], () =>
     apiFetch<InstancesResponse>("/api/v1/instances"),
+  );
+}
+
+// Changing the tag of an image-installed instance (Roadmap Phase 77d), or putting back the previous
+// image. As the caller; the body repeats the instance's name.
+export async function upgradeInstance(
+  namespace: string,
+  name: string,
+  body: { tag: string; acceptMajor?: boolean; revert?: boolean },
+): Promise<{ from: string; to: string }> {
+  return apiFetch(
+    `/api/v1/instances/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/upgrade`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, confirmName: name }),
+    },
   );
 }
