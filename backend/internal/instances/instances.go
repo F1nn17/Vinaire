@@ -152,7 +152,18 @@ func Build(s Snapshot) []Instance {
 		}
 	}
 	for _, c := range s.PVCs {
-		if k, ok := keyOf(c.Namespace, c.Labels); ok {
+		// A claim made from a StatefulSet's volumeClaimTemplate carries the set's selector labels
+		// (name, instance) but not managed-by, so it joins the instance of that name already found.
+		k, ok := keyOf(c.Namespace, c.Labels)
+		if !ok && nameRe.MatchString(c.Labels[labelInstance]) {
+			for _, o := range []string{OriginImage, OriginHelm} {
+				if _, found := m[key{c.Namespace, c.Labels[labelInstance], o}]; found {
+					k, ok = key{c.Namespace, c.Labels[labelInstance], o}, true
+					break
+				}
+			}
+		}
+		if ok {
 			in := get(k, c.Labels)
 			q := c.Spec.Resources.Requests[corev1.ResourceStorage]
 			in.Parts = append(in.Parts, Part{Kind: "PersistentVolumeClaim", Name: c.Name, Detail: q.String(), Fate: "stays",

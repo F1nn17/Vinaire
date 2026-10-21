@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useInstances, type Instance } from "@/lib/api/instances";
 import { friendlyErrorMessage } from "@/lib/api/errors";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { BackupsModal } from "@/components/instances/BackupsModal";
 import { DeleteInstanceModal } from "@/components/instances/DeleteInstanceModal";
 
 const mono = "font-mono text-xs text-text-muted";
@@ -12,6 +13,7 @@ export default function InstancesPage() {
   const { data, isLoading, error, mutate } = useInstances();
   const [open, setOpen] = useState<Instance | null>(null);
   const [deleting, setDeleting] = useState<Instance | null>(null);
+  const [backing, setBacking] = useState<Instance | null>(null);
 
   const columns: DataTableColumn<Instance>[] = [
     {
@@ -53,7 +55,7 @@ export default function InstancesPage() {
     },
     {
       header: "",
-      width: ".9fr",
+      width: "1.4fr",
       render: (r) => (
         <span className="flex justify-end gap-2 pr-2">
           <button
@@ -65,6 +67,22 @@ export default function InstancesPage() {
             className="rounded-lg border border-border bg-surface-2 px-2.5 py-1 text-xs"
           >
             What is in it
+          </button>
+          <button
+            type="button"
+            disabled={r.origin !== "image"}
+            title={
+              r.origin !== "image"
+                ? "Backups are for applications installed from an image"
+                : ""
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              setBacking(r);
+            }}
+            className="rounded-lg border border-border bg-surface-2 px-2.5 py-1 text-xs disabled:opacity-40"
+          >
+            Backups
           </button>
           <button
             type="button"
@@ -153,6 +171,10 @@ export default function InstancesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {backing && (
+        <BackupsModal instance={backing} onClose={() => setBacking(null)} />
       )}
 
       {deleting && (

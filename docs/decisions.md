@@ -51,7 +51,7 @@ The phase list and its order live only in [ROADMAP.md](../ROADMAP.md).
 
 ## Working with agents
 
-- One phase per session; at its end a commit, a CHANGELOG.md entry and a short summary (done / checked / left).
+- Work through phases one after another in a session until the context fills, then continue in a new one. Each phase ends with a commit, a CHANGELOG.md entry and a short summary (done / checked / left).
 - ROADMAP.md is large: find a phase with `grep -n "^## Phase" ROADMAP.md` and read only that section.
 - Do not push; pushing is the owner's job.
 - A phase marked "discuss first" (e.g. Phase 77) needs the owner's decision before any code.

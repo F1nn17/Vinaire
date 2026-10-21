@@ -2020,5 +2020,22 @@
  "Removed:": "Будет удалено:",
  "Stays in the cluster:": "Останется в кластере:",
  "Volume claims stay unless you tick them. Deleting a claim usually deletes its data and cannot be undone.": "Тома (PVC) остаются, если их не отметить. Удаление тома обычно удаляет его данные и необратимо.",
- "Deleting…": "Удаление…"
+ "Deleting…": "Удаление…",
+ "Backups": "Резервные копии",
+ "Backups are for applications installed from an image": "Резервные копии — для приложений, установленных из образа",
+ "Backups here are for applications installed from an image.": "Резервные копии здесь — для приложений, установленных из образа.",
+ "Dump of the data": "Дамп данных",
+ "Volume snapshot": "Снимок тома",
+ "This cluster has no volume snapshot support (CSI snapshots)": "В этом кластере нет поддержки снимков томов (CSI snapshots)",
+ "Where to put it": "Куда положить",
+ "A volume claim in this namespace": "Том (PVC) в этом пространстве имён",
+ "Size of the claim (created if it does not exist)": "Размер тома (создаётся, если его нет)",
+ "Secret with the S3 keys (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY), in this namespace": "Secret с ключами S3 (AWS_ACCESS_KEY_ID и AWS_SECRET_ACCESS_KEY) в этом пространстве имён",
+ "Schedule (cron, e.g. 0 3 * * *) — empty: once, now": "Расписание (cron, например 0 3 * * *) — пусто: один раз, сейчас",
+ "Snapshot class (empty: the cluster default)": "Класс снимков (пусто: по умолчанию в кластере)",
+ "Schedule": "По расписанию",
+ "Back up now": "Скопировать сейчас",
+ "Existing backups": "Имеющиеся копии",
+ "None yet.": "Пока нет.",
+ "Deleting a backup here removes the Job, schedule or snapshot — files already written to a claim or a bucket stay where they are.": "Удаление копии здесь убирает Job, расписание или снимок — файлы, уже записанные в том или бакет, остаются на месте."
 }

@@ -145,6 +145,10 @@ spec:
             - name: ALERTMANAGER_URL
               value: {{ . | quote }}
             {{- end }}
+            {{- if .Values.backup.targets }}
+            - name: BACKUP_TARGETS
+              value: /etc/vinaire/backup/backup.json
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -166,6 +170,9 @@ spec:
             # the only places Vinaire writes: the durable audit log, and scratch space
             - {name: audit, mountPath: /audit}
             - {name: tmp, mountPath: /tmp}
+            {{- if .Values.backup.targets }}
+            - {name: backup, mountPath: /etc/vinaire/backup, readOnly: true}
+            {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
@@ -178,6 +185,11 @@ spec:
           {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.backup.targets }}
+        - name: backup
+          configMap:
+            name: {{ include "vinaire.fullname" . }}-backup
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

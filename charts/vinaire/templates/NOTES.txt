@@ -6,7 +6,7 @@ Vinaire {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installing.
   Namespace:  {{ $ns }}
   Service:    {{ $fullname }}  (port {{ .Values.service.port }})
   Sign-in:    authMode = {{ .Values.authMode }}
-  Roles:      {{ $fullname }}-viewer   {{ $fullname }}-installer   {{ $fullname }}-node-admin   {{ $fullname }}-rbac-admin   {{ $fullname }}-admin
+  Roles:      {{ $fullname }}-viewer   {{ $fullname }}-installer   {{ $fullname }}-node-admin   {{ $fullname }}-backup-admin   {{ $fullname }}-rbac-admin   {{ $fullname }}-admin
 
 1. Wait for the pod to come up:
 
@@ -61,6 +61,9 @@ Vinaire {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installing.
    # optional: operate nodes — cordon, drain, labels, taints, delete (on top of viewer)
    kubectl create clusterrolebinding me-vinaire-node-admin \
      --clusterrole={{ $fullname }}-node-admin --serviceaccount={{ $ns }}:me
+
+   # optional: back up apps installed from an image — dumps, schedules, snapshots (on top of viewer)
+   kubectl create clusterrolebinding me-vinaire-backup-admin      --clusterrole={{ $fullname }}-backup-admin --serviceaccount={{ $ns }}:me
 
    # optional: manage who may do what — RoleBindings, "what can X do?" (on top of viewer)
    kubectl create clusterrolebinding me-vinaire-rbac-admin \

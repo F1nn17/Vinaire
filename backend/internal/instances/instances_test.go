@@ -46,6 +46,21 @@ func TestImageInstanceKeepsClaimsAndUnownedSecrets(t *testing.T) {
 	}
 }
 
+func TestClaimWithOnlySelectorLabelsJoinsItsInstance(t *testing.T) {
+	l := lab("vinaire", "db")
+	sel := map[string]string{labelName: "postgres", labelInstance: "db"}
+	got := Build(Snapshot{
+		StatefulSets: []appsv1.StatefulSet{{ObjectMeta: meta("apps", "db", l)}},
+		PVCs: []corev1.PersistentVolumeClaim{
+			{ObjectMeta: meta("apps", "data-db-0", sel)},
+			{ObjectMeta: meta("other", "data-db-0", sel)}, // same name, another namespace: not ours
+		},
+	})
+	if len(got) != 1 || got[0].Stays != 1 || len(got[0].Parts) != 2 {
+		t.Fatalf("unexpected: %+v", got)
+	}
+}
+
 func TestHelmRecordIsNotAPartAndHelmRemovesItsObjects(t *testing.T) {
 	l := lab("Helm", "pg")
 	got := Build(Snapshot{

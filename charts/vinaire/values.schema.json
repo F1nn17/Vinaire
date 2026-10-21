@@ -4,6 +4,13 @@
   "description": "Validated by Helm on install, upgrade, lint and template. Unknown top-level keys are allowed on purpose, so values files from other versions of the chart still load.",
   "type": "object",
   "properties": {
+    "backup": {
+      "type": "object",
+      "properties": {
+        "targets": { "type": "array" },
+        "uploadImage": { "type": "string" }
+      }
+    },
     "replicaCount": { "type": "integer", "minimum": 0 },
     "keyProvider": {
       "type": "object",
@@ -185,6 +192,10 @@
           "properties": { "create": { "type": "boolean" } }
         },
         "rbacAdmin": {
+          "type": "object",
+          "properties": { "create": { "type": "boolean" } }
+        },
+        "backupAdmin": {
           "type": "object",
           "properties": { "create": { "type": "boolean" } }
         },

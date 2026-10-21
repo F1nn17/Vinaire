@@ -195,6 +195,11 @@ rbac:
   # deleting a Node object. Created unbound; bind it IN ADDITION to the viewer role.
   nodeAdmin:
     create: true
+  # A role for backups of applications installed from an image (Roadmap Phase 77b):
+  # dump Jobs/CronJobs, the claim they write to, and VolumeSnapshots. Created unbound;
+  # bind it IN ADDITION to the viewer role.
+  backupAdmin:
+    create: true
   # A role for managing access: create/delete RoleBindings and ClusterRoleBindings and
   # ask "what can X do?". It may bind this chart's own roles (the `bind` verb) but not
   # arbitrary ones: Kubernetes' escalation check still applies. Created unbound.
@@ -256,6 +261,18 @@ networkPolicy:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# Backups of applications installed from an image (Roadmap Phase 77b). Dumps can always go to a
+# volume claim in the application's namespace; list S3-compatible stores here to offer them too.
+# Only https endpoints; the credentials are never put here - the person making a backup names a
+# Secret (keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) in the application's namespace.
+#   backup:
+#     targets:
+#       - {name: minio, endpoint: "https://minio.example.com", bucket: backups, prefix: vinaire}
+backup:
+  targets: []
+  # the image that uploads a dump (pinned); empty: Vinaire's default
+  uploadImage: ""
 
 # Extra plain env vars, appended as-is:
 #   extraEnv:

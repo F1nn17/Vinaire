@@ -348,10 +348,28 @@ flow.
   It's unavailable (503) when the backend isn't running in-cluster, since
   there's nowhere to durably persist to otherwise.
 
-- **Approved, not yet implemented — Roadmap Phase 77** (owner's decision of 2026-10-21): creating/deleting `VolumeSnapshot`s,
-  `Job`s and `CronJob`s for application backups, restore into a new instance and version upgrade of an instance, all as the caller,
-  with a separate unbound chart role. Backup target: a PVC or external S3, configurable. Until each sub-phase lands, its exact endpoints,
-  guard rails and audit names are specified in ROADMAP.md's Phase 77 and must be moved into this list *in the same commit* that adds them.
+- Backups of an application installed from an image (Roadmap Phase 77b, owner's decision of 2026-10-21; `internal/backup`,
+  `internal/k8s/backup_actions.go`, `internal/api/backups.go`) — all as the caller, so the cluster's RBAC decides:
+  `POST /api/v1/instances/{namespace}/{name}/backups` creates a **dump** (a `Job`, or a `CronJob` with a `schedule`; one
+  schedule per instance) or **VolumeSnapshots** of the instance's claims; `DELETE /api/v1/backups/{namespace}/{kind}/{name}`
+  (`job`|`cronjob`|`snapshot`, body `{"confirmName": name}`) removes one backup object Vinaire made (label
+  `app.kubernetes.io/managed-by: vinaire` + `vinaire.io/backup-of`; files already written to a claim or bucket stay).
+  `GET /api/v1/instances/{ns}/{name}/backups` and `GET /api/v1/backups/config` are reads. Rules to keep: only PostgreSQL, MySQL,
+  MariaDB, Redis and Valkey instances installed from an image are dumped, and the instance's **label and its image repository must
+  agree**; the dump runs in the instance's **own image** with a **fixed script** — nothing typed is spliced into a script, values
+  travel as validated environment variables; the database password is **never read by Vinaire**, the Job gets a `secretKeyRef` to
+  the instance's Secret; pods run non-root, no privilege escalation, all capabilities dropped. A **PVC target** creates the claim
+  `<instance>-backups` if it is missing (size validated, e.g. `5Gi`). An **S3 target** comes **only from the operator's
+  configuration** (`BACKUP_TARGETS`, chart value `backup.targets`: https, no credentials, no loopback/link-local endpoint) — a
+  request names a target and a Secret holding `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, never an endpoint; the upload image is
+  pinned. A backup carries no `app.kubernetes.io/instance` label, so deleting an instance never deletes its backups. Snapshots need
+  the CSI snapshot CRDs and a VolumeSnapshotClass; otherwise the API says "unavailable". Audited as `backup-create` (kind, target,
+  schedule — never a credential) and `backup-delete`. The chart ships the rights as the separate, unbound `<fullname>-backup-admin`
+  role (jobs/cronjobs get/list/create/delete, PVC get/list/create, volumesnapshots get/list/create/delete, volumesnapshotclasses
+  get/list).
+- **Approved, not yet implemented — Roadmap Phase 77c/77d** (owner's decision of 2026-10-21): restore from a backup into a **new**
+  instance, and version upgrade of an instance, as the caller. Their endpoints, guard rails and audit names are specified in ROADMAP.md's
+  Phase 77 and must be moved into this list *in the same commit* that adds them.
 
 Every other resource kind (Pods, ConfigMaps, Secrets, Ingress, ...) and
 every other verb, on any cluster a user browses, stays read-only.

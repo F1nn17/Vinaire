@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Backups of an application installed from an image (Roadmap Phase 77b).** From the Instances page: a **dump** of a PostgreSQL, MySQL, MariaDB, Redis or Valkey now or on a cron schedule (a Job / CronJob running in the instance's own image with a fixed script; the password is passed as a reference to the instance's Secret, never read by Vinaire), to a **volume claim** in the namespace or to an **S3 store the operator configured** (`backup.targets` in the chart / `BACKUP_TARGETS`; the person names a Secret with the keys), and **volume snapshots** where the cluster supports them. Backups can be listed and deleted (files already written stay). The rights are the new, unbound `<fullname>-backup-admin` role. Backups never carry the instance label, so deleting an instance keeps them. Audited as `backup-create` / `backup-delete`.
 - **Instances (Roadmap Phase 77a).** A new page lists the applications installed from the Marketplace or from an image as *instances* — everything that belongs to each (workloads, Services, volume claims, Secrets) — and `GET /api/v1/instances` backs it (read-only, as the caller; a kind the caller may not list is reported, not hidden). Deleting an instance shows what goes and what stays: volume claims always stay unless each is ticked by name, and the instance's name must be typed. It adds no write path — it uses Helm uninstall and the existing workload and volume-claim deletes.
 
 ## [1.2.0] - 2026-10-16
