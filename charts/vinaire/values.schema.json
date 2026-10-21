@@ -95,6 +95,10 @@
       "enum": ["token", "oidc", "disabled"],
       "description": "token (default): paste a ServiceAccount token. oidc: log in through Keycloak/another OIDC provider. disabled: no login at all — local development only."
     },
+    "keycloak": {
+      "type": "object",
+      "properties": { "allowHttpPrivateNetwork": { "type": "boolean" } }
+    },
     "oidc": {
       "type": "object",
       "properties": {

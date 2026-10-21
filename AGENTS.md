@@ -297,7 +297,7 @@ flow.
   from the request, so it is held to the guarded HTTP client (`internal/netguard`: https,
   no loopback/link-local; `OIDC_ALLOW_INSECURE=true` is the dev-only opt-out, never on a
   real deployment) — which is also what OIDC discovery, the token exchange and key
-  fetches use. Not available when `AUTH_MODE` is `disabled` or `oidc` (the operator owns
+  fetches use. **Home server without a certificate** (owner's decision of 2026-10-21, Roadmap Phase 79): the operator may set `OIDC_ALLOW_HTTP_PRIVATE_NETWORK=true` (chart value `keycloak.allowHttpPrivateNetwork`, off by default; a request can never turn it on). Then Keycloak may be reached over plain http **only if the address the connection actually goes to is private** — RFC 1918, 100.64.0.0/10 (NetBird/Tailscale) or IPv6 unique-local, checked in the dialer (`netguard.Options.AllowHTTPOnPrivate`), so an http URL that resolves to a public, loopback or link-local address is refused, and an https → http redirect is never followed — and the administrator's password may arrive over plain http **only from a client on a private network** (the peer and every `X-Forwarded-For` entry; a guard against an administrator's mistake, not against an attacker). It does not touch `OIDC_ALLOW_INSECURE` (loopback, dev only) or `PROVISION_ALLOW_INSECURE`, and every other credential-taking route still needs TLS. Not available when `AUTH_MODE` is `disabled` or `oidc` (the operator owns
   that). Audited as `keycloak-setup` / `keycloak-setup-failed` (Keycloak host, realm,
   client, steps — no credentials), `keycloak-token-login`, `keycloak-disable`. What Vinaire
   cannot do is make the **cluster's API server trust the issuer** — the wizard shows the

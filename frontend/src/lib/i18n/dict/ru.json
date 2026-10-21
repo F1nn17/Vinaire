@@ -2055,5 +2055,10 @@
  "Taking a dump first…": "Сначала делаю дамп…",
  "Changing the version…": "Меняю версию…",
  "Go back to the previous version": "Вернуться к предыдущей версии",
- "Change version": "Изменить версию"
+ "Change version": "Изменить версию",
+ "On the internet give Keycloak an address with https. On a private network (home server, NetBird) http works: this Vinaire is set up to allow it.": "В интернете дайте Keycloak адрес с https. В частной сети (домашний сервер, NetBird) http работает: этот Vinaire настроен это разрешать.",
+ "For real use give Keycloak an address with https: Vinaire only talks to a Keycloak over https.": "Для настоящего использования дайте Keycloak адрес с https: Vinaire общается с Keycloak только по https.",
+ "Without https the passwords cross the network in the clear. Vinaire accepts that only for an address on a private network (192.168.x, 10.x, 172.16-31.x, 100.64-127.x); never use it across the internet.": "Без https пароли ходят по сети открытым текстом. Vinaire допускает это только для адреса в частной сети (192.168.x, 10.x, 172.16-31.x, 100.64-127.x); никогда не используйте это через интернет.",
+ "Without https Keycloak will run, but Vinaire will refuse to use it for sign-in (and passwords would cross the network in the clear). On a home server without a certificate the operator can allow http on a private network: chart value keycloak.allowHttpPrivateNetwork=true.": "Без https Keycloak запустится, но Vinaire откажется использовать его для входа (и пароли ходили бы по сети открытым текстом). На домашнем сервере без сертификата оператор может разрешить http в частной сети: значение чарта keycloak.allowHttpPrivateNetwork=true.",
+ "Use https; http is accepted only for an address on a private network (home server, NetBird).": "Используйте https; http принимается только для адреса в частной сети (домашний сервер, NetBird)."
 }

@@ -17,6 +17,8 @@ export type KeycloakStatus = {
   setUpBy?: string;
   pendingError?: string;
   operatorManaged?: boolean;
+  // the operator allowed plain http to a Keycloak on a private network (home server without TLS)
+  allowHttpPrivateNetwork?: boolean;
 };
 
 export type KeycloakSetupRequest = {

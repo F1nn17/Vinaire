@@ -227,6 +227,7 @@ function SetupForm({
   prefill: InstalledKeycloak | null;
   onDone: (r: KeycloakSetupResult) => void;
 }) {
+  const { data: kcStatus } = useKeycloakStatus();
   const [f, setF] = useState({
     keycloakUrl: prefill?.url ?? "",
     adminRealm: "master",
@@ -305,7 +306,7 @@ function SetupForm({
         <Hint>
           {prefill
             ? "Filled in from the Keycloak installed above."
-            : "The address Keycloak is reached on — one your browser and Vinaire can both open. Vinaire only talks to a Keycloak over https."}
+            : `The address Keycloak is reached on — one your browser and Vinaire can both open. ${kcStatus?.allowHttpPrivateNetwork ? "Use https; http is accepted only for an address on a private network (home server, NetBird)." : "Vinaire only talks to a Keycloak over https."}`}
         </Hint>
       </label>
       <div className="grid grid-cols-3 gap-3">
