@@ -2005,5 +2005,20 @@
  "● metrics are arriving": "● метрики поступают",
  "✓ Allowed": "✓ Разрешено",
  "✓ You have the permissions this chart needs.": "✓ У вас есть права, которые нужны этому чарту.",
- "✕ Not allowed": "✕ Не разрешено"
+ "✕ Not allowed": "✕ Не разрешено",
+ "Instances": "Экземпляры",
+ "Installed with": "Установлен через",
+ "Marketplace (Helm)": "Маркетплейс (Helm)",
+ "Objects": "Объекты",
+ "What is in it": "Что внутри",
+ "Cluster namespaces are not deleted here": "Системные пространства имён здесь не удаляются",
+ "Applications installed from the Marketplace or from an image, with everything that belongs to each. Deleting one shows what goes and what stays — volume claims always stay unless you choose them.": "Приложения, установленные из Маркетплейса или из образа, со всем, что к ним относится. При удалении видно, что уйдёт и что останется: тома (PVC) остаются, пока вы сами их не выберете.",
+ "You may not list": "У вас нет права просматривать",
+ "No instances yet — install an application from the Marketplace.": "Экземпляров пока нет — установите приложение из Маркетплейса.",
+ "stays": "остаётся",
+ "removed": "удаляется",
+ "Removed:": "Будет удалено:",
+ "Stays in the cluster:": "Останется в кластере:",
+ "Volume claims stay unless you tick them. Deleting a claim usually deletes its data and cannot be undone.": "Тома (PVC) остаются, если их не отметить. Удаление тома обычно удаляет его данные и необратимо.",
+ "Deleting…": "Удаление…"
 }

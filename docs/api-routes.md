@@ -89,6 +89,7 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/ingresses` | yes | — |
 | DELETE | `/api/v1/ingresses/{namespace}/{name}` | yes | yes |
 | GET | `/api/v1/install/environment` | yes | — |
+| GET | `/api/v1/instances` | yes | — |
 | GET | `/api/v1/jobs` | yes | — |
 | DELETE | `/api/v1/jobs/{namespace}/{name}` | yes | yes |
 | GET | `/api/v1/jobs/{namespace}/{name}` | yes | — |

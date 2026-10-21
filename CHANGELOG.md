@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Instances (Roadmap Phase 77a).** A new page lists the applications installed from the Marketplace or from an image as *instances* — everything that belongs to each (workloads, Services, volume claims, Secrets) — and `GET /api/v1/instances` backs it (read-only, as the caller; a kind the caller may not list is reported, not hidden). Deleting an instance shows what goes and what stays: volume claims always stay unless each is ticked by name, and the instance's name must be typed. It adds no write path — it uses Helm uninstall and the existing workload and volume-claim deletes.
+
 ## [1.2.0] - 2026-10-16
 
 ### Added
