@@ -173,7 +173,7 @@ function cell(
 }
 
 const openLink = (kind: string, row: { namespace?: string; name: string }) =>
-  `/resources/detail?r=${encodeURIComponent(kind)}&ns=${encodeURIComponent(row.namespace ?? "")}&name=${encodeURIComponent(row.name)}`;
+  `/network/detail?r=${encodeURIComponent(kind)}&ns=${encodeURIComponent(row.namespace ?? "")}&name=${encodeURIComponent(row.name)}`;
 
 export default function NetworkPage() {
   const [tab, setTab] = useRememberedState<Tab>("network-tab", "ingress");
