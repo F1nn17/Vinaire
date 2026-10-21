@@ -19,6 +19,7 @@ import (
 
 	"github.com/f1nn17/vinaire/backend/internal/audit"
 	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/backup"
 	"github.com/f1nn17/vinaire/backend/internal/clusters"
 	"github.com/f1nn17/vinaire/backend/internal/gitops"
 	"github.com/f1nn17/vinaire/backend/internal/helm"
@@ -84,6 +85,9 @@ type Handler struct {
 	// nil means "not configured" and the endpoints answer 503.
 	Catalog  *helm.Catalog
 	Releases *helm.Releases
+	// Backup is the operator's backup configuration (Roadmap Phase 77b): the S3 targets dumps may go
+	// to. nil means PVC targets only.
+	Backup *backup.Config
 	// InstallJobs runs Marketplace installs in the background so the UI can show progress.
 	InstallJobs *helm.Jobs
 

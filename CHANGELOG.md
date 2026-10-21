@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Change the version of an application installed from an image (Roadmap Phase 77d).** The Instances page has a "Version" action: for an image install it changes only the image tag (the repository stays the running one), can take a dump first and waits for it, requires an explicit acknowledgement for a change of major version, refuses a lower major, and can go back to the previous image; for a chart it opens the Marketplace's upgrade. Audited as `instance-upgrade` / `instance-revert`.
+- The chart's new unbound role is `<fullname>-lifecycle-admin` (backups, restore and version change of image installs).
+- **Restore from a backup, into a new instance (Roadmap Phase 77c).** A dump is loaded into another, new instance of the same database in the namespace (a Job in that instance's image, reading the backup claim read-only; the target's name must be typed), never over the one it came from; a volume snapshot is restored into a **new** claim. Redis and Valkey are restored from a snapshot, since a running server does not load an RDB file. Audited as `backup-restore` / `backup-restore-snapshot`.
+- **Backups of an application installed from an image (Roadmap Phase 77b).** From the Instances page: a **dump** of a PostgreSQL, MySQL, MariaDB, Redis or Valkey now or on a cron schedule (a Job / CronJob running in the instance's own image with a fixed script; the password is passed as a reference to the instance's Secret, never read by Vinaire), to a **volume claim** in the namespace or to an **S3 store the operator configured** (`backup.targets` in the chart / `BACKUP_TARGETS`; the person names a Secret with the keys), and **volume snapshots** where the cluster supports them. Backups can be listed and deleted (files already written stay). The rights are the new, unbound `<fullname>-lifecycle-admin` role. Backups never carry the instance label, so deleting an instance keeps them. Audited as `backup-create` / `backup-delete`.
+- **Instances (Roadmap Phase 77a).** A new page lists the applications installed from the Marketplace or from an image as *instances* — everything that belongs to each (workloads, Services, volume claims, Secrets) — and `GET /api/v1/instances` backs it (read-only, as the caller; a kind the caller may not list is reported, not hidden). Deleting an instance shows what goes and what stays: volume claims always stay unless each is ticked by name, and the instance's name must be typed. It adds no write path — it uses Helm uninstall and the existing workload and volume-claim deletes.
+
 ## [1.2.0] - 2026-10-16
 
 ### Added

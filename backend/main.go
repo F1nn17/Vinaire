@@ -21,6 +21,7 @@ import (
 	"github.com/f1nn17/vinaire/backend/internal/api"
 	"github.com/f1nn17/vinaire/backend/internal/audit"
 	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/backup"
 	"github.com/f1nn17/vinaire/backend/internal/clusters"
 	"github.com/f1nn17/vinaire/backend/internal/config"
 	"github.com/f1nn17/vinaire/backend/internal/gitops"
@@ -216,6 +217,13 @@ func main() {
 		} else {
 			slog.Info("loaded install recipes", "path", path, "count", n)
 		}
+	}
+	// Roadmap Phase 77b: where dumps may be uploaded, from the operator's file only.
+	if bc, err := backup.LoadConfig(os.Getenv("BACKUP_TARGETS")); err != nil {
+		slog.Error("BACKUP_TARGETS is invalid — backups go to a volume claim only", "error", err)
+		workloadsHandler.Backup = &backup.Config{}
+	} else {
+		workloadsHandler.Backup = bc
 	}
 	workloadsHandler.Catalog = helm.NewCatalog(catalogCfg)
 	// Load every repository's index in the background so the first search is quick.

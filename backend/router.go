@@ -134,6 +134,9 @@ func newRouter(d routerDeps) *chi.Mux {
 		protected.Post("/secrets/{namespace}/{name}/reveal", workloadsHandler.RevealSecretKey)
 		protected.Get("/topology", workloadsHandler.Topology)
 		protected.Get("/apps/detected", workloadsHandler.DetectedApps)
+		protected.Get("/instances", workloadsHandler.Instances)
+		protected.Get("/backups/config", workloadsHandler.BackupConfig)
+		protected.Get("/instances/{namespace}/{name}/backups", workloadsHandler.InstanceBackups)
 		protected.Get("/install/environment", workloadsHandler.InstallEnvironment)
 		protected.Get("/ingresses", workloadsHandler.Ingresses)
 		protected.Get("/gateway-routes", workloadsHandler.GatewayRoutes)
@@ -187,6 +190,13 @@ func newRouter(d routerDeps) *chi.Mux {
 			w.Use(writeLimiter.Middleware)
 			// Roadmap Phase 40: node lifecycle - see internal/api/node_actions.go and AGENTS.md.
 			// Roadmap Phase 44: RoleBindings / ClusterRoleBindings - see internal/api/rbac_actions.go and AGENTS.md.
+			// Roadmap Phase 77b: backups (Jobs, CronJobs, VolumeSnapshots) - see internal/api/backups.go and AGENTS.md.
+			w.Post("/instances/{namespace}/{name}/backups", workloadsHandler.CreateBackup)
+			// Roadmap Phase 77d: version upgrade of an instance installed from an image.
+			w.Post("/instances/{namespace}/{name}/upgrade", workloadsHandler.UpgradeInstance)
+			w.Post("/instances/{namespace}/{name}/restore", workloadsHandler.RestoreBackup)
+			w.Post("/instances/{namespace}/{name}/restore-snapshot", workloadsHandler.RestoreSnapshot)
+			w.Delete("/backups/{namespace}/{kind}/{name}", workloadsHandler.DeleteBackup)
 			w.Post("/rbac/bindings", workloadsHandler.CreateBinding)
 			w.Delete("/rbac/rolebindings/{namespace}/{name}", workloadsHandler.DeleteRoleBinding)
 			w.Delete("/rbac/clusterrolebindings/{name}", workloadsHandler.DeleteClusterRoleBinding)
