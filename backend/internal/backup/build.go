@@ -33,6 +33,8 @@ type engine struct {
 	port   string
 	keep   []string // environment variables copied from the instance's container
 	script string
+	// restore loads $f into the instance; empty: this engine cannot be restored from a dump (Redis).
+	restore string
 }
 
 // The scripts are fixed text. Values arrive in environment variables (BACKUP_HOST, BACKUP_PREFIX and
@@ -46,6 +48,7 @@ f="/backup/${BACKUP_PREFIX}-$(date -u +%Y%m%dT%H%M%SZ).dump"
 PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$BACKUP_HOST" -p "$BACKUP_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f "$f.part"
 mv "$f.part" "$f"
 echo "wrote $f"`,
+		restore: `PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$BACKUP_HOST" -p "$BACKUP_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --exit-on-error "$f"`,
 	},
 	{
 		id: "mysql", repo: regexp.MustCompile(`^(docker\.io/)?(library/)?mysql$`), ext: "sql", port: "3306",
@@ -55,6 +58,7 @@ f="/backup/${BACKUP_PREFIX}-$(date -u +%Y%m%dT%H%M%SZ).sql"
 MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -h "$BACKUP_HOST" -P "$BACKUP_PORT" -uroot --single-transaction --all-databases > "$f.part"
 mv "$f.part" "$f"
 echo "wrote $f"`,
+		restore: `MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$BACKUP_HOST" -P "$BACKUP_PORT" -uroot < "$f"`,
 	},
 	{
 		id: "mariadb", repo: regexp.MustCompile(`^(docker\.io/)?(library/)?mariadb$`), ext: "sql", port: "3306",
@@ -64,6 +68,7 @@ f="/backup/${BACKUP_PREFIX}-$(date -u +%Y%m%dT%H%M%SZ).sql"
 MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb-dump -h "$BACKUP_HOST" -P "$BACKUP_PORT" -uroot --single-transaction --all-databases > "$f.part"
 mv "$f.part" "$f"
 echo "wrote $f"`,
+		restore: `MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb -h "$BACKUP_HOST" -P "$BACKUP_PORT" -uroot < "$f"`,
 	},
 	{
 		id: "redis", repo: regexp.MustCompile(`^(docker\.io/)?(library/)?redis$`), ext: "rdb", port: "6379",

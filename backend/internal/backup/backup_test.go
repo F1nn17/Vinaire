@@ -163,3 +163,55 @@ func TestConfigRefusesUnsafeTargets(t *testing.T) {
 		t.Error("the upload image must be pinned")
 	}
 }
+
+func TestRestoreIsIntoANewInstanceFromAValidatedSource(t *testing.T) {
+	into, err := SourceFrom(pg())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 21, 1, 2, 3, 0, time.UTC)
+	if _, err := RestoreJob(into, "db", "", now); err == nil {
+		t.Fatal("restoring over the source itself must be refused")
+	}
+	for _, bad := range []string{"Bad Name", "a/b", ""} {
+		if _, err := RestoreJob(into, bad, "", now); err == nil {
+			t.Errorf("source %q should be refused", bad)
+		}
+	}
+	for _, bad := range []string{"../x.dump", "a b", "x;rm"} {
+		if _, err := RestoreJob(into, "old", bad, now); err == nil {
+			t.Errorf("file %q should be refused", bad)
+		}
+	}
+	job, err := RestoreJob(into, "old", "", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vol := job.Spec.Template.Spec.Volumes[1].PersistentVolumeClaim
+	if vol.ClaimName != "old-backups" || !vol.ReadOnly {
+		t.Errorf("the dump claim must be mounted read-only: %+v", vol)
+	}
+	if job.Labels["app.kubernetes.io/instance"] != "" || job.Labels[LabelRestoreInto] != "db" {
+		t.Errorf("labels: %v", job.Labels)
+	}
+}
+
+func TestRedisDumpsCannotBeRestoredByAJob(t *testing.T) {
+	into, _ := SourceFrom(sts("redis", "redis:8", secretEnv("REDIS_PASSWORD")))
+	if _, err := RestoreJob(into, "old", "", time.Now()); err == nil {
+		t.Fatal("redis restore from a dump must be refused")
+	}
+}
+
+func TestClaimFromSnapshot(t *testing.T) {
+	c, err := ClaimFromSnapshot("apps", "db", "db-restored", "data-db-0-snap-1", "5Gi")
+	if err != nil || c.Spec.DataSource.Kind != "VolumeSnapshot" || *c.Spec.DataSource.APIGroup != "snapshot.storage.k8s.io" {
+		t.Fatalf("unexpected: %+v %v", c, err)
+	}
+	if _, err := ClaimFromSnapshot("apps", "db", "Bad_Name", "s", "5Gi"); err == nil {
+		t.Error("claim name is validated")
+	}
+	if _, err := ClaimFromSnapshot("apps", "db", "ok", "s", "lots"); err == nil {
+		t.Error("size is validated")
+	}
+}

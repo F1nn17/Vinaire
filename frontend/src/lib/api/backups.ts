@@ -6,6 +6,7 @@ import { useCurrentCluster } from "@/lib/clusterStore";
 // creating and deleting are the audited POST/DELETE below, decided by the cluster's own RBAC.
 export type BackupItem = {
   kind: "job" | "cronjob" | "snapshot";
+  role?: "restore";
   name: string;
   created: string;
   state: string;
@@ -77,6 +78,38 @@ export async function deleteBackup(
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ confirmName: name }),
+    },
+  );
+}
+
+// Restoring (Roadmap Phase 77c) never goes over a running instance: a dump is loaded into a NEW
+// instance (the one in the URL, named again in confirmName), a snapshot becomes a NEW claim.
+export async function restoreDump(
+  namespace: string,
+  target: string,
+  body: { source: string; file?: string },
+): Promise<{ created: string[] }> {
+  return apiFetch(
+    `/api/v1/instances/${encodeURIComponent(namespace)}/${encodeURIComponent(target)}/restore`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, confirmName: target }),
+    },
+  );
+}
+
+export async function restoreSnapshot(
+  namespace: string,
+  instance: string,
+  body: { snapshot: string; claim: string; size?: string },
+): Promise<{ created: string[] }> {
+  return apiFetch(
+    `/api/v1/instances/${encodeURIComponent(namespace)}/${encodeURIComponent(instance)}/restore-snapshot`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     },
   );
 }

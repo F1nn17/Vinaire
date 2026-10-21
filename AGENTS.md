@@ -367,9 +367,18 @@ flow.
   schedule — never a credential) and `backup-delete`. The chart ships the rights as the separate, unbound `<fullname>-backup-admin`
   role (jobs/cronjobs get/list/create/delete, PVC get/list/create, volumesnapshots get/list/create/delete, volumesnapshotclasses
   get/list).
-- **Approved, not yet implemented — Roadmap Phase 77c/77d** (owner's decision of 2026-10-21): restore from a backup into a **new**
-  instance, and version upgrade of an instance, as the caller. Their endpoints, guard rails and audit names are specified in ROADMAP.md's
-  Phase 77 and must be moved into this list *in the same commit* that adds them.
+- Restore (Roadmap Phase 77c, `internal/backup/restore.go`, `internal/api/backups_restore.go`) — never over a running instance, as the
+  caller: `POST /api/v1/instances/{namespace}/{name}/restore` loads a dump (`source`, optional `file`; empty = the newest) **into the
+  instance {name}**, which must be another image-installed instance — the body must repeat its name (`confirmName`) and the source may
+  not be the target. It is a `Job` in the target's own image, mounting the claim `<source>-backups` **read-only** (refused unless
+  that claim carries `managed-by: vinaire` and `vinaire.io/backup-of: <source>`), signing in through a `secretKeyRef` to the target's
+  Secret; the dump file name is validated (a plain name, no path). Redis/Valkey dumps are not loaded by a Job (refused: use a
+  snapshot). `POST .../restore-snapshot` creates a **new** claim from a snapshot Vinaire took of that instance (`dataSource`; the
+  snapshot's labels are checked) and touches no existing claim. Audited as `backup-restore` and `backup-restore-snapshot`. Restore Jobs
+  carry `vinaire.io/restore-into`/`restore-of` (no instance label) and can be deleted through `DELETE /api/v1/backups/.../job/...`.
+- **Approved, not yet implemented — Roadmap Phase 77d** (owner's decision of 2026-10-21): version upgrade of an instance, as the caller.
+  Its endpoint, guard rails and audit name are specified in ROADMAP.md's Phase 77 and must be moved into this list *in the same commit*
+  that adds it.
 
 Every other resource kind (Pods, ConfigMaps, Secrets, Ingress, ...) and
 every other verb, on any cluster a user browses, stays read-only.

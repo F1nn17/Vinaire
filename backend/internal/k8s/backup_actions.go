@@ -141,3 +141,30 @@ func ListSnapshotClasses(ctx context.Context, dyn dynamic.Interface) ([]string, 
 	}
 	return out, nil
 }
+
+// ListRestoreJobs lists the restore Jobs that loaded something into one instance.
+func ListRestoreJobs(ctx context.Context, cs *kubernetes.Clientset, namespace, instance string) ([]batchv1.Job, error) {
+	l, err := cs.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: backup.LabelRestoreInto + "=" + instance + "," + backup.LabelManagedBy + "=vinaire"})
+	if err != nil {
+		return nil, fmt.Errorf("list restore jobs: %w", err)
+	}
+	return l.Items, nil
+}
+
+// GetSnapshot reads one VolumeSnapshot.
+func GetSnapshot(ctx context.Context, dyn dynamic.Interface, namespace, name string) (*unstructured.Unstructured, error) {
+	s, err := dyn.Resource(backup.SnapshotGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get snapshot %s/%s: %w", namespace, name, err)
+	}
+	return s, nil
+}
+
+// CreateClaim creates a claim built by internal/backup (a restore of a snapshot into a new claim).
+func CreateClaim(ctx context.Context, cs *kubernetes.Clientset, pvc *corev1.PersistentVolumeClaim) error {
+	if _, err := cs.CoreV1().PersistentVolumeClaims(pvc.Namespace).Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
+		return fmt.Errorf("create claim %s/%s: %w", pvc.Namespace, pvc.Name, err)
+	}
+	return nil
+}

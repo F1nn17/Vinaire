@@ -53,7 +53,8 @@ func (h *Handler) BackupConfig(w http.ResponseWriter, r *http.Request) {
 
 // BackupItem is one backup of an instance, as the list shows it.
 type BackupItem struct {
-	Kind      string    `json:"kind"` // job | cronjob | snapshot
+	Kind      string    `json:"kind"`           // job | cronjob | snapshot
+	Role      string    `json:"role,omitempty"` // "restore" for a Job that loaded a dump
 	Name      string    `json:"name"`
 	Created   time.Time `json:"created"`
 	State     string    `json:"state"` // running | succeeded | failed | scheduled | ready | pending
@@ -97,6 +98,12 @@ func (h *Handler) InstanceBackups(w http.ResponseWriter, r *http.Request) {
 		susp := c.Spec.Suspend != nil && *c.Spec.Suspend
 		items = append(items, BackupItem{Kind: "cronjob", Name: c.Name, Created: c.CreationTimestamp.Time, State: "scheduled",
 			Schedule: c.Spec.Schedule, Target: c.Annotations[targetAnnotation], Suspended: susp})
+	}
+	if restores, err := k8s.ListRestoreJobs(r.Context(), cs, namespace, name); err == nil {
+		for _, j := range restores {
+			items = append(items, BackupItem{Kind: "job", Role: "restore", Name: j.Name, Created: j.CreationTimestamp.Time, State: jobState(j),
+				Target: "from " + j.Labels[backup.LabelRestoreOf]})
+		}
 	}
 	// Snapshots need the CRDs; a cluster without them just has none.
 	if dyn, _, ok := h.resolveDynamic(w, r); ok {
@@ -298,7 +305,7 @@ func (h *Handler) DeleteBackup(w http.ResponseWriter, r *http.Request) {
 		respondK8sError(w, err)
 		return
 	}
-	if labels[backup.LabelManagedBy] != "vinaire" || labels[backup.LabelBackupOf] == "" {
+	if labels[backup.LabelManagedBy] != "vinaire" || (labels[backup.LabelBackupOf] == "" && labels[backup.LabelRestoreInto] == "") {
 		respondError(w, http.StatusConflict, "this object is not a backup made by Vinaire")
 		return
 	}

@@ -2037,5 +2037,12 @@
  "Back up now": "Скопировать сейчас",
  "Existing backups": "Имеющиеся копии",
  "None yet.": "Пока нет.",
- "Deleting a backup here removes the Job, schedule or snapshot — files already written to a claim or a bucket stay where they are.": "Удаление копии здесь убирает Job, расписание или снимок — файлы, уже записанные в том или бакет, остаются на месте."
+ "Deleting a backup here removes the Job, schedule or snapshot — files already written to a claim or a bucket stay where they are.": "Удаление копии здесь убирает Job, расписание или снимок — файлы, уже записанные в том или бакет, остаются на месте.",
+ "Load a dump into this instance": "Загрузить дамп в этот экземпляр",
+ "For a NEW, empty instance of the same database in this namespace: install it first, then load the dump of another instance here. Redis and Valkey are restored from a snapshot instead.": "Для НОВОГО пустого экземпляра той же базы в этом пространстве имён: сначала установите его, затем загрузите сюда дамп другого экземпляра. Redis и Valkey восстанавливаются из снимка.",
+ "Instance the dump came from": "Экземпляр, с которого сделан дамп",
+ "Dump file (empty: the newest)": "Файл дампа (пусто: самый свежий)",
+ "Load the dump": "Загрузить дамп",
+ "Restore to a new claim": "Восстановить в новый том",
+ "Name of the NEW volume claim to create from this snapshot": "Имя НОВОГО тома (PVC), который создать из этого снимка"
 }

@@ -192,6 +192,8 @@ func newRouter(d routerDeps) *chi.Mux {
 			// Roadmap Phase 44: RoleBindings / ClusterRoleBindings - see internal/api/rbac_actions.go and AGENTS.md.
 			// Roadmap Phase 77b: backups (Jobs, CronJobs, VolumeSnapshots) - see internal/api/backups.go and AGENTS.md.
 			w.Post("/instances/{namespace}/{name}/backups", workloadsHandler.CreateBackup)
+			w.Post("/instances/{namespace}/{name}/restore", workloadsHandler.RestoreBackup)
+			w.Post("/instances/{namespace}/{name}/restore-snapshot", workloadsHandler.RestoreSnapshot)
 			w.Delete("/backups/{namespace}/{kind}/{name}", workloadsHandler.DeleteBackup)
 			w.Post("/rbac/bindings", workloadsHandler.CreateBinding)
 			w.Delete("/rbac/rolebindings/{namespace}/{name}", workloadsHandler.DeleteRoleBinding)

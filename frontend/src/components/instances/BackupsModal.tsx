@@ -6,6 +6,8 @@ import type { Instance } from "@/lib/api/instances";
 import {
   createBackup,
   deleteBackup,
+  restoreDump,
+  restoreSnapshot,
   useBackupConfig,
   useBackups,
   type BackupItem,
@@ -36,6 +38,9 @@ export function BackupsModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [from, setFrom] = useState("");
+  const [file, setFile] = useState("");
+  const [typed, setTyped] = useState("");
 
   const canSnapshot = cfg?.snapshots.available ?? false;
   const imageOnly = instance.origin === "image";
@@ -61,6 +66,43 @@ export function BackupsModal({
       setError(friendlyErrorMessage(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function load() {
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    try {
+      const res = await restoreDump(instance.namespace, instance.name, {
+        source: from,
+        ...(file ? { file } : {}),
+      });
+      setNote(`Restoring: ${res.created.join(", ")}`);
+      setTyped("");
+      void mutate();
+    } catch (e) {
+      setError(friendlyErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function snapshotToClaim(b: BackupItem) {
+    const claim = window.prompt(
+      "Name of the NEW volume claim to create from this snapshot",
+      `${b.claim ?? instance.name}-restored`,
+    );
+    if (!claim) return;
+    setError(null);
+    try {
+      const res = await restoreSnapshot(instance.namespace, instance.name, {
+        snapshot: b.name,
+        claim,
+      });
+      setNote(`Created the claim: ${res.created.join(", ")}`);
+    } catch (e) {
+      setError(friendlyErrorMessage(e));
     }
   }
 
@@ -192,6 +234,54 @@ export function BackupsModal({
           </div>
         )}
 
+        {imageOnly && (
+          <div className="mt-3 flex flex-col gap-2 rounded-lg border border-border bg-surface-2 p-3">
+            <div className="text-xs font-semibold">
+              Load a dump into this instance
+            </div>
+            <div className="text-xs text-text-muted">
+              For a NEW, empty instance of the same database in this namespace:
+              install it first, then load the dump of another instance here.
+              Redis and Valkey are restored from a snapshot instead.
+            </div>
+            <label className="flex flex-col gap-1 text-xs text-text-muted">
+              Instance the dump came from
+              <input
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className={field}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-text-muted">
+              Dump file (empty: the newest)
+              <input
+                value={file}
+                onChange={(e) => setFile(e.target.value)}
+                className={field}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-text-muted">
+              Type <span className="font-mono text-text">{instance.name}</span>{" "}
+              to confirm
+              <input
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                className={field}
+              />
+            </label>
+            <div>
+              <button
+                type="button"
+                disabled={busy || !from || typed !== instance.name}
+                onClick={() => void load()}
+                className="rounded-lg border border-border bg-surface px-3.5 py-2 text-[12.5px] disabled:opacity-50"
+              >
+                Load the dump
+              </button>
+            </div>
+          </div>
+        )}
+
         {note && <div className="mt-3 text-xs text-text-muted">{note}</div>}
         {error && (
           <div className="mt-3 rounded-lg border border-err/30 bg-surface-2 p-3 text-xs text-err">
@@ -210,7 +300,7 @@ export function BackupsModal({
               className="flex items-baseline justify-between gap-3 text-xs"
             >
               <span className="font-mono">
-                {b.kind} {b.name}
+                {b.role === "restore" ? "restore" : b.kind} {b.name}
                 <span className="text-text-muted">
                   {" "}
                   · {b.state}
@@ -218,6 +308,15 @@ export function BackupsModal({
                   {b.target ? ` · ${b.target}` : ""}
                 </span>
               </span>
+              {b.kind === "snapshot" && b.state === "ready" && (
+                <button
+                  type="button"
+                  onClick={() => void snapshotToClaim(b)}
+                  className="text-accent"
+                >
+                  Restore to a new claim
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void remove(b)}

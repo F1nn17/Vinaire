@@ -94,6 +94,8 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/instances` | yes | — |
 | GET | `/api/v1/instances/{namespace}/{name}/backups` | yes | — |
 | POST | `/api/v1/instances/{namespace}/{name}/backups` | yes | yes |
+| POST | `/api/v1/instances/{namespace}/{name}/restore` | yes | yes |
+| POST | `/api/v1/instances/{namespace}/{name}/restore-snapshot` | yes | yes |
 | GET | `/api/v1/jobs` | yes | — |
 | DELETE | `/api/v1/jobs/{namespace}/{name}` | yes | yes |
 | GET | `/api/v1/jobs/{namespace}/{name}` | yes | — |
