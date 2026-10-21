@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **A row in Routing now opens inside Routing.** Clicking a Service, a NodePort/LoadBalancer or an Ingress used to land on the "All resources" page with the Settings header, so editing an Ingress (HTTP to HTTPS, a wrong host) felt like being thrown into Settings. It now opens at `/network/detail` — the same overview and YAML editor, with Routing kept selected in the sidebar and a way back to the list.
+- **A row in Routing now opens inside Routing.** Clicking a Service, a NodePort/LoadBalancer or an Ingress used to land on the "All resources" page with the Settings header, so editing an Ingress (HTTP to HTTPS, a wrong host) felt like being thrown into Settings. It now opens at `/network/detail` — the same overview and YAML editor, with Routing kept selected in the sidebar and a way back to the list. The rows of the Gateway API tab (Gateways and HTTPRoutes), which were not clickable at all, open there too.
 
 ## [1.2.0] - 2026-10-16
 
