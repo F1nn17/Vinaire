@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Instructions for AI coding agents (Claude Code and similar) working in this
-repository.
+repository. Key project decisions that are not rules for code: [docs/decisions.md](docs/decisions.md).
 
 ## The core rule: writes are narrow, explicit, and always audited
 
@@ -341,6 +341,11 @@ flow.
   action against a target cluster's resources with the caller's own RBAC.
   It's unavailable (503) when the backend isn't running in-cluster, since
   there's nowhere to durably persist to otherwise.
+
+- **Approved, not yet implemented — Roadmap Phase 77** (owner's decision of 2026-10-21): creating/deleting `VolumeSnapshot`s,
+  `Job`s and `CronJob`s for application backups, restore into a new instance and version upgrade of an instance, all as the caller,
+  with a separate unbound chart role. Backup target: a PVC or external S3, configurable. Until each sub-phase lands, its exact endpoints,
+  guard rails and audit names are specified in ROADMAP.md's Phase 77 and must be moved into this list *in the same commit* that adds them.
 
 Every other resource kind (Pods, ConfigMaps, Secrets, Ingress, ...) and
 every other verb, on any cluster a user browses, stays read-only.
