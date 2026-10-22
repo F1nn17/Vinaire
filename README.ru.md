@@ -346,6 +346,28 @@ helm upgrade --install vinaire ./charts/vinaire … --set cookie.secure=false
 > ⚠️ С `cookie.secure=false` cookie сессии тоже идёт без шифрования — любой на пути по сети
 > может её прочитать. Никогда не делайте так на общем или настоящем кластере.
 
+#### Вход через Keycloak на домашнем сервере без HTTPS (`keycloak.allowHttpPrivateNetwork`)
+
+Настройка входа через Keycloak (Settings → Sign-in) по умолчанию требует HTTPS: Vinaire общается с Keycloak и принимает
+пароль его администратора только по TLS. На домашнем сервере в частной сети сертификата обычно нет. Именно для этого
+случая оператор может разрешить обычный HTTP — **только в частной сети**:
+
+```bash
+helm upgrade vinaire oci://ghcr.io/f1nn17/charts/vinaire --namespace vinaire --reuse-values \
+  --set keycloak.allowHttpPrivateNetwork=true \
+  --set cookie.secure=false
+```
+
+(или те же два ключа в вашем файле значений; без Helm задайте переменные окружения
+`OIDC_ALLOW_HTTP_PRIVATE_NETWORK=true` и `COOKIE_SECURE=false`). После этого адрес Keycloak может быть `http://`, а пароль
+администратора — уходить по HTTP, но только если адрес из RFC 1918 (`10.x`, `172.16–31.x`, `192.168.x`),
+`100.64.0.0/10` (NetBird, Tailscale) или IPv6 unique-local — это проверяется по адресу, к которому реально идёт соединение,
+поэтому `http://`-имя, ведущее на публичный адрес, всё равно отклоняется. `cookie.secure=false` нужен, потому что браузер не
+хранит `Secure`-cookie по HTTP (см. выше).
+
+> ⚠️ В частной сети трафик всё равно может прочитать любой, кто в ней есть. В интернете используйте HTTPS.
+> По умолчанию выключено; включить может только оператор — запросом это не включить.
+
 #### Мастер-ключ вне кластера
 
 По умолчанию ключ, которым запечатано хранилище Vinaire, лежит в Secret рядом с данными. Если у вас есть HashiCorp Vault
