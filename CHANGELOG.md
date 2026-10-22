@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-10-22
+
 ### Added
 
 - **Keycloak sign-in now works without the cluster trusting Keycloak (Roadmap Phase 80).** After setting up Keycloak from Settings → Sign-in, Vinaire used to hand Keycloak's ID token to the Kubernetes API and print `--oidc-*` flags for the API server — but Kubernetes accepts an OIDC issuer over https only, so with an http Keycloak (a home server) the wizard said all was well while every call came back 401. Vinaire now verifies the sign-in itself and gives each person a ServiceAccount of their own in a dedicated namespace (`<release>-vinaire-users`, chart value `keycloak.userNamespace`) with a short-lived token for it, so nothing about the API server or K3s needs to change, Kubernetes RBAC still decides everything, and a new account has no rights until a role is bound to it. If Keycloak is down only new sign-ins wait; pasting a token still works. The Sign-in tab lets you choose how people reach the cluster and shows the first administrator's `kubectl` command, and the user menu shows the name the cluster knows you by (`GET /api/v1/auth/me`). The chart creates the namespace and a narrow Role (ServiceAccounts get/list/create and their tokens, in that namespace only). Audited as `oidc-user-provisioned` and `oidc-token-issued`. Keycloak groups are not carried over.
