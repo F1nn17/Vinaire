@@ -1,0 +1,13 @@
+{{- if .Values.backup.targets }}
+# Where backups of applications installed from an image may be uploaded (Roadmap Phase 77b).
+# Read by Vinaire (BACKUP_TARGETS); a request can name one of these, never an address.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vinaire.fullname" . }}-backup
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+data:
+  backup.json: |
+    {{- dict "targets" .Values.backup.targets "uploadImage" .Values.backup.uploadImage | toPrettyJson | nindent 4 }}
+{{- end }}

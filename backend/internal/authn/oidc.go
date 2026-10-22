@@ -110,12 +110,14 @@ func (m *Manager) HandleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 // redirects the browser here with `code`/`state` after a successful
 // login. Exchanges the code for tokens, verifies the ID token, and starts
 // a session exactly like token mode's, just sourced from Keycloak instead
-// of a pasted token — the K8s bearer for this session is the ID token
-// itself; the target cluster's API server needs its own
+// of a pasted token. By default the K8s bearer for this session is the ID
+// token itself; the target cluster's API server then needs its own
 // --oidc-issuer-url/--oidc-client-id configured (and a ClusterRoleBinding
-// for the resulting user/group) for RBAC to actually recognize it — see
-// AGENTS.md's example. Vinaire itself never evaluates permissions; the K8s
-// API does, on every call, same as token mode.
+// for the resulting user/group) for RBAC to actually recognize it — and
+// Kubernetes accepts only an https issuer. With an IdentityBroker (broker.go,
+// Roadmap Phase 80) the bearer is a ServiceAccount token of the person's own
+// instead, which needs nothing from the API server. Either way Vinaire itself
+// never evaluates permissions; the K8s API does, on every call, same as token mode.
 func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	oc := m.getOIDC()
 	if m.Mode == ModeDisabled || oc == nil {
@@ -166,15 +168,27 @@ func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = idToken.Claims(&claims)
 
-	expiry := m.capExpiry(idToken.Expiry)
+	// By default the ID token itself is the bearer for the cluster. With a broker (Roadmap Phase 80) Vinaire
+	// has verified the sign-in and the cluster is given an ordinary credential of the person's own instead,
+	// so the cluster doesn't have to trust the issuer — which Kubernetes only does over https.
+	bearer, kubeUser, expiry := rawIDToken, "", m.capExpiry(idToken.Expiry)
+	if broker := m.IdentityBroker(); broker != nil {
+		bt, err := broker.TokenFor(oc.ctx(r.Context()), Identity{Subject: idToken.Subject, Username: claims.PreferredUsername})
+		if err != nil {
+			respondError(w, http.StatusBadGateway, "signed in with the identity provider, but Vinaire couldn't get a Kubernetes credential for you: "+err.Error())
+			return
+		}
+		bearer, kubeUser, expiry = bt.Token, bt.KubernetesUser, m.capExpiry(bt.Expiry)
+	}
 	if old, err := r.Cookie(sessionCookie); err == nil {
 		m.Sessions.Delete(old.Value) // a new login never inherits an existing session
 	}
 	sess := &Session{
-		ID:        NewSessionID(),
-		K8sToken:  rawIDToken,
-		Username:  claims.PreferredUsername,
-		ExpiresAt: expiry,
+		ID:             NewSessionID(),
+		K8sToken:       bearer,
+		Username:       claims.PreferredUsername,
+		KubernetesUser: kubeUser,
+		ExpiresAt:      expiry,
 	}
 	if err := m.Sessions.Create(sess); err != nil {
 		respondError(w, http.StatusServiceUnavailable, "the server can't take more logins right now")

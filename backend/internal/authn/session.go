@@ -39,10 +39,13 @@ const maxSessions = 5000
 
 // Session is one logged-in user's server-side state.
 type Session struct {
-	ID        string
-	K8sToken  string
-	Username  string // best-effort: OIDC's preferred_username, empty in token mode
-	ExpiresAt time.Time
+	ID       string
+	K8sToken string
+	Username string // best-effort: OIDC's preferred_username, empty in token mode
+	// KubernetesUser is the name the cluster knows this session by when it is known to Vinaire (a brokered
+	// OIDC login: system:serviceaccount:<ns>:<name>); empty otherwise. Not a secret.
+	KubernetesUser string
+	ExpiresAt      time.Time
 }
 
 // OwnerKey is a stable identifier for "who is this" that is safe to compare and

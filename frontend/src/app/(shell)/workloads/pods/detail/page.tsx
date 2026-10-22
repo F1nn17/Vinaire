@@ -9,6 +9,7 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { MetricsPanel } from "@/components/metrics/MetricsPanel";
 import { ConfigRefs } from "@/components/workloads/ConfigRefs";
+import { PodDiagnosis } from "@/components/workloads/PodDiagnosis";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { EventRow } from "@/components/ui/EventRow";
 import { ActionBar, ActionButton } from "@/components/ui/ActionBar";
@@ -130,6 +131,8 @@ function PodDetailPage() {
           />
         </ActionBar>
       </div>
+
+      <PodDiagnosis findings={pod.diagnosis ?? []} />
 
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
 

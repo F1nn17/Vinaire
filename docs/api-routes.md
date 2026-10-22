@@ -10,6 +10,7 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/api-resources` | yes | — |
 | GET | `/api/v1/api-resources/{group}/{version}/{resource}/objects` | yes | — |
 | GET | `/api/v1/api-resources/{group}/{version}/{resource}/objects/{name}` | yes | — |
+| GET | `/api/v1/apps/detected` | yes | — |
 | GET | `/api/v1/audit` | yes | — |
 | GET | `/api/v1/auth/config` | no | — |
 | DELETE | `/api/v1/auth/keycloak` | yes | yes |
@@ -18,10 +19,13 @@ named, with the reason, in `backend/router_test.go`.
 | PUT | `/api/v1/auth/keycloak/token-login` | yes | yes |
 | POST | `/api/v1/auth/login` | no | no |
 | POST | `/api/v1/auth/logout` | no | no |
+| GET | `/api/v1/auth/me` | yes | — |
 | GET | `/api/v1/auth/oidc/callback` | no | — |
 | GET | `/api/v1/auth/oidc/login` | no | — |
 | GET | `/api/v1/auth/sessions` | yes | — |
 | DELETE | `/api/v1/auth/sessions/{ref}` | yes | yes |
+| GET | `/api/v1/backups/config` | yes | — |
+| DELETE | `/api/v1/backups/{namespace}/{kind}/{name}` | yes | yes |
 | GET | `/api/v1/capacity` | yes | — |
 | GET | `/api/v1/catalog/charts` | yes | — |
 | GET | `/api/v1/catalog/charts/{repo}/{chart}` | yes | — |
@@ -87,6 +91,13 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/images/tags` | yes | — |
 | GET | `/api/v1/ingresses` | yes | — |
 | DELETE | `/api/v1/ingresses/{namespace}/{name}` | yes | yes |
+| GET | `/api/v1/install/environment` | yes | — |
+| GET | `/api/v1/instances` | yes | — |
+| GET | `/api/v1/instances/{namespace}/{name}/backups` | yes | — |
+| POST | `/api/v1/instances/{namespace}/{name}/backups` | yes | yes |
+| POST | `/api/v1/instances/{namespace}/{name}/restore` | yes | yes |
+| POST | `/api/v1/instances/{namespace}/{name}/restore-snapshot` | yes | yes |
+| POST | `/api/v1/instances/{namespace}/{name}/upgrade` | yes | yes |
 | GET | `/api/v1/jobs` | yes | — |
 | DELETE | `/api/v1/jobs/{namespace}/{name}` | yes | yes |
 | GET | `/api/v1/jobs/{namespace}/{name}` | yes | — |

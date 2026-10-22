@@ -72,8 +72,10 @@ type Manager struct {
 	limiter *loginLimiter
 	// oidc is the OIDC client: set at startup when Mode == ModeOIDC, or switched on
 	// and off at run time by the Keycloak setup (Roadmap Phase 47) in token mode.
-	oidcMu        sync.RWMutex
-	oidc          *oidcClient
+	oidcMu sync.RWMutex
+	oidc   *oidcClient
+	// broker, when set, gives OIDC sessions a ServiceAccount token instead of the ID token (broker.go)
+	broker        IdentityBroker
 	tokenLoginOff bool // token sign-in turned off while OIDC is active
 }
 
@@ -250,7 +252,7 @@ func (m *Manager) DisableOIDC() {
 		return
 	}
 	m.oidcMu.Lock()
-	m.oidc, m.tokenLoginOff = nil, false
+	m.oidc, m.tokenLoginOff, m.broker = nil, false, nil
 	m.oidcMu.Unlock()
 }
 

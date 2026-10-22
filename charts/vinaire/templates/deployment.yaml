@@ -7,6 +7,14 @@ metadata:
     {{- include "vinaire.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  {{- if .Values.audit.persistence.enabled }}
+  {{- if gt (int .Values.replicaCount) 1 }}
+  {{- fail "audit.persistence.enabled keeps the audit log on one ReadWriteOnce volume with a single writer and needs replicaCount: 1 — with several replicas ship the container's stdout to your log system instead" }}
+  {{- end }}
+  # the volume can be mounted by one pod: the old pod must be gone before the new one starts
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "vinaire.selectorLabels" . | nindent 6 }}
@@ -121,6 +129,14 @@ spec:
             - name: TRUST_FORWARDED_FOR
               value: "true"
             {{- end }}
+            {{- if .Values.keycloak.serviceAccountSignIn.enabled }}
+            - name: OIDC_USER_NAMESPACE
+              value: {{ include "vinaire.userNamespace" . | quote }}
+            {{- end }}
+            {{- if .Values.keycloak.allowHttpPrivateNetwork }}
+            - name: OIDC_ALLOW_HTTP_PRIVATE_NETWORK
+              value: "true"
+            {{- end }}
             - name: COOKIE_SECURE
               value: {{ .Values.cookie.secure | quote }}
             - name: COOKIE_SAMESITE
@@ -136,6 +152,10 @@ spec:
             {{- with .Values.observability.alertmanagerURL }}
             - name: ALERTMANAGER_URL
               value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.backup.targets }}
+            - name: BACKUP_TARGETS
+              value: /etc/vinaire/backup/backup.json
             {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
@@ -158,13 +178,26 @@ spec:
             # the only places Vinaire writes: the durable audit log, and scratch space
             - {name: audit, mountPath: /audit}
             - {name: tmp, mountPath: /tmp}
+            {{- if .Values.backup.targets }}
+            - {name: backup, mountPath: /etc/vinaire/backup, readOnly: true}
+            {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
         - name: audit
+          {{- if .Values.audit.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.audit.persistence.existingClaim | default (printf "%s-audit" (include "vinaire.fullname" .)) }}
+          {{- else }}
           emptyDir: {}
+          {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.backup.targets }}
+        - name: backup
+          configMap:
+            name: {{ include "vinaire.fullname" . }}-backup
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

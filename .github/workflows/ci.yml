@@ -93,6 +93,24 @@ jobs:
           kubectl wait --for=condition=ready pod -l app=demo-sts -n vinaire-ci-test --timeout=120s
           kubectl wait --for=condition=complete job/demo-job -n vinaire-ci-test --timeout=120s
 
+      # Roadmap Phase 78: the lifecycle scenarios (install -> recreate the pod -> dump -> restore ->
+      # delete, for PostgreSQL and Redis) install exactly what the "Install from an image" wizard
+      # builds, so its code renders the manifests (frontend/scripts/render-image-fixtures.ts).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Render the wizard's manifests for the lifecycle scenarios
+        working-directory: frontend
+        run: |
+          npm ci
+          fx="$RUNNER_TEMP/lifecycle-fixtures"
+          npx --yes tsx@4.20.3 scripts/render-image-fixtures.ts "$fx" lifecycle-ci postgres:pgsrc postgres:pgdst
+          npx --yes tsx@4.20.3 scripts/render-image-fixtures.ts "$fx" lifecycle-ci-redis redis:rd
+          echo "LIFECYCLE_FIXTURES=$fx" >> "$GITHUB_ENV"
+
       - uses: actions/setup-go@v5
         with:
           go-version: "1.27"
@@ -114,7 +132,8 @@ jobs:
         working-directory: backend
         env:
           VINAIRE_BASE_URL: http://localhost:8080
-        run: go test -tags=integration -count=1 -v ./integration/...
+          LIFECYCLE_FIXTURES: ${{ env.LIFECYCLE_FIXTURES }}
+        run: go test -tags=integration -count=1 -v -timeout 20m ./integration/...
 
       - name: Stop backend
         working-directory: backend

@@ -15,6 +15,7 @@ import (
 	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 
+	"github.com/f1nn17/vinaire/backend/internal/diagnose"
 	"github.com/f1nn17/vinaire/backend/internal/k8s"
 )
 
@@ -71,6 +72,9 @@ type PodDetailResponse struct {
 	// 26's "Forward port" offers. A pod may serve more than it declares, so
 	// the UI also accepts a manually entered port.
 	Ports []PodPortSummary `json:"ports"`
+	// Diagnosis says why the pod is not running or not ready, in plain words (Roadmap Phase 75);
+	// empty for a healthy pod.
+	Diagnosis []diagnose.Finding `json:"diagnosis"`
 }
 
 // PodPortSummary is one declared containerPort.
@@ -128,6 +132,11 @@ func (h *Handler) buildPodDetail(ctx context.Context, metricsClientset *metricsc
 		eventRows = append(eventRows, podEventRow(e))
 	}
 
+	findings := diagnose.Pod(&pod, events)
+	if findings == nil {
+		findings = []diagnose.Finding{}
+	}
+
 	pod.TypeMeta = metav1.TypeMeta{Kind: "Pod", APIVersion: "v1"}
 	yaml := marshalYAML(pod)
 
@@ -150,6 +159,7 @@ func (h *Handler) buildPodDetail(ctx context.Context, metricsClientset *metricsc
 		YAML:          yaml,
 		HasController: len(pod.OwnerReferences) > 0,
 		Ports:         podPorts(pod),
+		Diagnosis:     findings,
 	}
 }
 
