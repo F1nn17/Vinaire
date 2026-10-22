@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -86,6 +87,13 @@ type Handler struct {
 	// password may arrive over plain http — but only on a private network (netguard.IsPrivate), never
 	// across the internet.
 	OIDCAllowHTTPPrivate bool
+
+	// BrokerClientset/BrokerNamespace/BrokerTTL (Roadmap Phase 80): Vinaire's own identity and the one namespace
+	// where the people who sign in through Keycloak get ServiceAccounts of their own (internal/oidcbroker). Nil/empty
+	// when Vinaire doesn't run in a cluster or the namespace isn't configured.
+	BrokerClientset kubernetes.Interface
+	BrokerNamespace string
+	BrokerTTL       time.Duration
 
 	// Roadmap Phase 28: the Helm application catalog and release operations.
 	// nil means "not configured" and the endpoints answer 503.

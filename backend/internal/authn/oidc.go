@@ -166,15 +166,27 @@ func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = idToken.Claims(&claims)
 
-	expiry := m.capExpiry(idToken.Expiry)
+	// By default the ID token itself is the bearer for the cluster. With a broker (Roadmap Phase 80) Vinaire
+	// has verified the sign-in and the cluster is given an ordinary credential of the person's own instead,
+	// so the cluster doesn't have to trust the issuer — which Kubernetes only does over https.
+	bearer, kubeUser, expiry := rawIDToken, "", m.capExpiry(idToken.Expiry)
+	if broker := m.IdentityBroker(); broker != nil {
+		bt, err := broker.TokenFor(oc.ctx(r.Context()), Identity{Subject: idToken.Subject, Username: claims.PreferredUsername})
+		if err != nil {
+			respondError(w, http.StatusBadGateway, "signed in with the identity provider, but Vinaire couldn't get a Kubernetes credential for you: "+err.Error())
+			return
+		}
+		bearer, kubeUser, expiry = bt.Token, bt.KubernetesUser, m.capExpiry(bt.Expiry)
+	}
 	if old, err := r.Cookie(sessionCookie); err == nil {
 		m.Sessions.Delete(old.Value) // a new login never inherits an existing session
 	}
 	sess := &Session{
-		ID:        NewSessionID(),
-		K8sToken:  rawIDToken,
-		Username:  claims.PreferredUsername,
-		ExpiresAt: expiry,
+		ID:             NewSessionID(),
+		K8sToken:       bearer,
+		Username:       claims.PreferredUsername,
+		KubernetesUser: kubeUser,
+		ExpiresAt:      expiry,
 	}
 	if err := m.Sessions.Create(sess); err != nil {
 		respondError(w, http.StatusServiceUnavailable, "the server can't take more logins right now")

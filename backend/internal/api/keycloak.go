@@ -15,6 +15,7 @@ import (
 	"github.com/f1nn17/vinaire/backend/internal/authn"
 	"github.com/f1nn17/vinaire/backend/internal/keycloak"
 	"github.com/f1nn17/vinaire/backend/internal/netguard"
+	"github.com/f1nn17/vinaire/backend/internal/oidcbroker"
 )
 
 // Sign-in through Keycloak in one click (Roadmap Phase 47). A wizard on the
@@ -33,13 +34,17 @@ const authDocName = "auth-oidc"
 
 // storedOIDC is the sealed document.
 type storedOIDC struct {
-	KeycloakURL  string    `json:"keycloakUrl"`
-	Realm        string    `json:"realm"`
-	Issuer       string    `json:"issuer"`
-	ClientID     string    `json:"clientId"`
-	ClientSecret string    `json:"clientSecret"`
-	RedirectURL  string    `json:"redirectUrl"`
-	AllowToken   bool      `json:"allowToken"`
+	KeycloakURL  string `json:"keycloakUrl"`
+	Realm        string `json:"realm"`
+	Issuer       string `json:"issuer"`
+	ClientID     string `json:"clientId"`
+	ClientSecret string `json:"clientSecret"`
+	RedirectURL  string `json:"redirectUrl"`
+	AllowToken   bool   `json:"allowToken"`
+	// IdentityMode: how a signed-in person reaches the cluster (Phase 80) — IdentityServiceAccount (Vinaire
+	// verifies the sign-in and hands out a ServiceAccount token) or IdentityAPIServer (the ID token itself;
+	// the cluster's API server must trust the issuer, which Kubernetes does over https only). Empty = the latter.
+	IdentityMode string    `json:"identityMode,omitempty"`
 	SetUpBy      string    `json:"setUpBy"`
 	SetUpAt      time.Time `json:"setUpAt"`
 }
@@ -107,6 +112,7 @@ func (h *Handler) RestoreOIDC(ctx context.Context) {
 	try := func() error {
 		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
+		h.Auth.SetIdentityBroker(h.brokerFor(s.mode()))
 		return h.Auth.ConfigureOIDC(cctx, h.oidcHTTPClient(), s.Issuer, s.ClientID, s.ClientSecret, s.RedirectURL, s.AllowToken)
 	}
 	if err := try(); err == nil {
@@ -159,6 +165,12 @@ type KeycloakStatus struct {
 	OperatorManaged bool `json:"operatorManaged,omitempty"`
 	// AllowHTTPPrivate: the operator allowed plain http to a Keycloak on a private network.
 	AllowHTTPPrivate bool `json:"allowHttpPrivateNetwork"`
+	// IdentityMode of the saved setting; BrokerAvailable says whether "serviceaccount" can be used here, and
+	// BrokerReason why not.
+	IdentityMode    string `json:"identityMode,omitempty"`
+	UserNamespace   string `json:"userNamespace,omitempty"`
+	BrokerAvailable bool   `json:"brokerAvailable"`
+	BrokerReason    string `json:"brokerReason,omitempty"`
 }
 
 // KeycloakStatus handles GET /api/v1/auth/keycloak.
@@ -167,6 +179,8 @@ func (h *Handler) KeycloakStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st := KeycloakStatus{Available: true, AllowHTTPPrivate: h.OIDCAllowHTTPPrivate}
+	st.BrokerAvailable, st.BrokerReason = h.brokerAvailable()
+	st.UserNamespace = h.BrokerNamespace
 	oidcOn, tokenOn := h.Auth.SignInMethods()
 	st.Active, st.TokenLogin = oidcOn, tokenOn
 	switch {
@@ -181,6 +195,7 @@ func (h *Handler) KeycloakStatus(w http.ResponseWriter, r *http.Request) {
 	if s, err := h.loadStoredOIDC(r.Context()); err == nil && s != nil {
 		st.Configured, st.Issuer, st.Realm, st.ClientID, st.RedirectURL, st.SetUpBy =
 			true, s.Issuer, s.Realm, s.ClientID, s.RedirectURL, s.SetUpBy
+		st.IdentityMode = s.mode()
 	}
 	h.keycloak.mu.Lock()
 	st.PendingErr = h.keycloak.pendingErr
@@ -202,6 +217,9 @@ type keycloakSetupBody struct {
 	UserChangePassword bool   `json:"userChangePassword"`
 	// AllowTokenLogin keeps pasting a token as a way in next to Keycloak.
 	AllowTokenLogin bool `json:"allowTokenLogin"`
+	// IdentityMode: "serviceaccount" or "apiserver"; empty picks serviceaccount for an http Keycloak and
+	// apiserver for an https one.
+	IdentityMode string `json:"identityMode"`
 }
 
 // KeycloakSetupResult is the answer to a setup.
@@ -211,7 +229,10 @@ type KeycloakSetupResult struct {
 	RedirectURL string          `json:"redirectUrl"`
 	// APIServerFlags: what the cluster's API server needs so it accepts the ID tokens
 	// Keycloak issues — a cluster setting Vinaire can't change.
-	APIServerFlags []string `json:"apiServerFlags"`
+	APIServerFlags []string `json:"apiServerFlags,omitempty"`
+	// IdentityMode says which of the two was set up; UserNamespace is where the people's ServiceAccounts live.
+	IdentityMode  string `json:"identityMode"`
+	UserNamespace string `json:"userNamespace,omitempty"`
 }
 
 // publicOrigin is the scheme://host the browser reached Vinaire on — what Keycloak
@@ -287,6 +308,12 @@ func (h *Handler) KeycloakSetup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	mode, err := h.chooseIdentityMode(b.IdentityMode, p.BaseURL)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	hc := h.oidcHTTPClient()
 	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 	defer cancel()
@@ -305,14 +332,17 @@ func (h *Handler) KeycloakSetup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// switch it on — discovery proves the realm and the secret work before anything is saved
+	previousBroker := h.Auth.IdentityBroker()
+	h.Auth.SetIdentityBroker(h.brokerFor(mode))
 	if err := h.Auth.ConfigureOIDC(ctx, hc, res.IssuerURL, res.ClientID, res.ClientSecret.Reveal(), redirect, b.AllowTokenLogin); err != nil {
+		h.Auth.SetIdentityBroker(previousBroker)
 		h.auditLog(r, "keycloak-setup-failed", "", p.Realm, "keycloak", hostOf(p.BaseURL), "error", "keycloak answered but Vinaire can't use it: "+truncate(err.Error(), 250))
 		respondError(w, http.StatusBadGateway, "Keycloak was set up, but Vinaire couldn't start using it: "+err.Error()+" — the URL Vinaire reaches Keycloak on must be the one the realm's issuer reports")
 		return
 	}
 	doc, _ := json.Marshal(storedOIDC{ // #nosec G117 -- sealed by the store, see above
 		KeycloakURL: strings.TrimRight(p.BaseURL, "/"), Realm: p.Realm, Issuer: res.IssuerURL, ClientID: res.ClientID,
-		ClientSecret: res.ClientSecret.Reveal(), RedirectURL: redirect, AllowToken: b.AllowTokenLogin,
+		ClientSecret: res.ClientSecret.Reveal(), RedirectURL: redirect, AllowToken: b.AllowTokenLogin, IdentityMode: mode,
 		SetUpBy: callerName(r), SetUpAt: time.Now().UTC(),
 	})
 	if err := h.AuthDocs.SaveDoc(r.Context(), authDocName, doc); err != nil {
@@ -325,15 +355,87 @@ func (h *Handler) KeycloakSetup(w http.ResponseWriter, r *http.Request) {
 	h.keycloak.mu.Unlock()
 	h.auditLog(r, "keycloak-setup", "", p.Realm, "keycloak", hostOf(p.BaseURL), "client", res.ClientID,
 		"firstUser", p.User != "", "allowTokenLogin", b.AllowTokenLogin, "steps", stepSummary(res.Steps))
-	respondJSON(w, KeycloakSetupResult{
-		Steps: res.Steps, Issuer: res.IssuerURL, RedirectURL: redirect,
-		APIServerFlags: []string{
+	out := KeycloakSetupResult{Steps: res.Steps, Issuer: res.IssuerURL, RedirectURL: redirect, IdentityMode: mode}
+	if mode == IdentityServiceAccount {
+		out.UserNamespace = h.BrokerNamespace
+	} else {
+		// Only for a cluster that trusts the issuer itself — and Kubernetes accepts an https issuer only.
+		out.APIServerFlags = []string{
 			"--oidc-issuer-url=" + res.IssuerURL,
 			"--oidc-client-id=" + res.ClientID,
 			"--oidc-username-claim=preferred_username",
 			"--oidc-username-prefix=oidc:",
-		},
-	})
+		}
+	}
+	respondJSON(w, out)
+}
+
+// The two ways a person who signed in through Keycloak reaches the cluster (Roadmap Phase 80).
+const (
+	// IdentityServiceAccount: Vinaire verifies the sign-in and gives the person a ServiceAccount of their own
+	// (internal/oidcbroker). Needs nothing from the API server, so it works with an http Keycloak.
+	IdentityServiceAccount = "serviceaccount"
+	// IdentityAPIServer: the ID token itself is the credential; the cluster's API server must be configured
+	// to trust the issuer, and Kubernetes accepts only an https issuer.
+	IdentityAPIServer = "apiserver"
+)
+
+// mode of a saved setting; settings saved before Phase 80 used the ID token.
+func (s *storedOIDC) mode() string {
+	if s.IdentityMode == IdentityServiceAccount {
+		return IdentityServiceAccount
+	}
+	return IdentityAPIServer
+}
+
+// brokerAvailable says whether ServiceAccount sign-in can work here and, if not, why.
+func (h *Handler) brokerAvailable() (bool, string) {
+	switch {
+	case h.BrokerClientset == nil:
+		return false, "Vinaire needs to run inside the cluster to create accounts for the people who sign in"
+	case h.BrokerNamespace == "":
+		return false, "no namespace is set for the people's accounts (chart value keycloak.userNamespace, OIDC_USER_NAMESPACE)"
+	}
+	return true, ""
+}
+
+// brokerFor builds the broker for a mode: nil for the API-server mode.
+func (h *Handler) brokerFor(mode string) authn.IdentityBroker {
+	if mode != IdentityServiceAccount {
+		return nil
+	}
+	if ok, _ := h.brokerAvailable(); !ok {
+		return nil
+	}
+	return &oidcbroker.Broker{Clientset: h.BrokerClientset, Namespace: h.BrokerNamespace, TTL: h.BrokerTTL, Audit: h.AuditBackground}
+}
+
+// chooseIdentityMode picks and checks the mode before anything is created in Keycloak. A Keycloak on plain
+// http can only be used through ServiceAccounts: the API server would refuse the issuer, so every call would
+// come back 401 while the wizard said all was well.
+func (h *Handler) chooseIdentityMode(requested, keycloakURL string) (string, error) {
+	u, _ := url.Parse(keycloakURL)
+	plain := u != nil && u.Scheme != "https"
+	mode := requested
+	if mode == "" {
+		mode = IdentityAPIServer
+		if plain {
+			mode = IdentityServiceAccount
+		}
+	}
+	switch mode {
+	case IdentityAPIServer:
+		if plain {
+			return "", errors.New("Kubernetes accepts only an https issuer, so the cluster's API server could never trust a Keycloak on http; choose signing in through ServiceAccounts (identityMode \"serviceaccount\") or give Keycloak an https address")
+		}
+	case IdentityServiceAccount:
+		if ok, why := h.brokerAvailable(); !ok {
+			return "", errors.New("signing in through ServiceAccounts isn't available here: " + why)
+		}
+	default:
+		return "", errors.New(`identityMode must be "serviceaccount" or "apiserver"`)
+	}
+	return mode, nil
 }
 
 func hostOf(raw string) string {
@@ -447,4 +549,16 @@ func (h *Handler) requireSecureTransportOrPrivate(w http.ResponseWriter, r *http
 		return true
 	}
 	return h.requireSecureTransport(w, r)
+}
+
+// WhoAmI handles GET /api/v1/auth/me: how this session is known. KubernetesUser is the name the cluster sees
+// when Vinaire knows it (a person signed in through Keycloak by ServiceAccount: system:serviceaccount:<ns>:<name>),
+// which is what an administrator binds a role to. It carries no token.
+func (h *Handler) WhoAmI(w http.ResponseWriter, r *http.Request) {
+	sess, ok := authn.FromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	respondJSON(w, map[string]string{"username": sess.Username, "kubernetesUser": sess.KubernetesUser, "mode": string(h.Auth.Mode)})
 }

@@ -19,6 +19,7 @@ named, with the reason, in `backend/router_test.go`.
 | PUT | `/api/v1/auth/keycloak/token-login` | yes | yes |
 | POST | `/api/v1/auth/login` | no | no |
 | POST | `/api/v1/auth/logout` | no | no |
+| GET | `/api/v1/auth/me` | yes | — |
 | GET | `/api/v1/auth/oidc/callback` | no | — |
 | GET | `/api/v1/auth/oidc/login` | no | — |
 | GET | `/api/v1/auth/sessions` | yes | — |
