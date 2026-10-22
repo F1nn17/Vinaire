@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,6 +44,9 @@ type Plan struct {
 	// internal: what the checks below need
 	ingressClasses []string // classes named by rendered Ingresses
 	hasIngress     bool
+	// Roadmap Phase 75b
+	hasLoadBalancer bool // a rendered Service of type LoadBalancer
+	databaseChart   bool // the chart is a database's (set by the caller from the catalog)
 }
 
 const maxVolumes = 50
@@ -80,6 +84,10 @@ func planOf(objs []*unstructured.Unstructured) Plan {
 				class, _, _ := unstructured.NestedString(m, "spec", "storageClassName")
 				label := fmt.Sprintf("%s (%s × %d)", name, o.GetName(), replicas)
 				p.addVolume(VolumeNeed{Name: label, Size: size, StorageClass: class})
+			}
+		case "Service":
+			if t, _, _ := unstructured.NestedString(o.Object, "spec", "type"); t == "LoadBalancer" {
+				p.hasLoadBalancer = true
 			}
 		case "Ingress":
 			p.hasIngress = true
@@ -123,6 +131,15 @@ func clusterWarnings(ctx context.Context, cs kubernetes.Interface, p Plan) []War
 		if list, err := cs.StorageV1().StorageClasses().List(ctx, metav1.ListOptions{}); err == nil {
 			out = append(out, storageWarnings(p.Volumes, list.Items)...)
 		}
+	}
+	if p.hasLoadBalancer {
+		if has, known := loadBalancerAvailable(ctx, cs); known && !has {
+			out = append(out, Warning{Code: "no-load-balancer"})
+		}
+	}
+	if p.hasIngress && p.databaseChart {
+		// a database speaks its own protocol over TCP; an Ingress carries HTTP only
+		out = append(out, Warning{Code: "database-ingress"})
 	}
 	if p.hasIngress {
 		if list, err := cs.NetworkingV1().IngressClasses().List(ctx, metav1.ListOptions{}); err == nil {
@@ -171,4 +188,65 @@ func storageWarnings(vols []VolumeNeed, classes []storagev1.StorageClass) []Warn
 		out = append([]Warning{{Code: "no-default-storage-class"}}, out...)
 	}
 	return out
+}
+
+// loadBalancerAvailable looks for something that answers a Service of type LoadBalancer: a cloud
+// provider (the nodes' providerID names it), k3s's own service load balancer (its `svclb-` pods),
+// MetalLB or kube-vip (their pods). known is false when the cluster could not be read — "unknown" is
+// not "missing". Without any of them an external address stays <pending> for ever (Roadmap Phase 75b).
+func loadBalancerAvailable(ctx context.Context, cs kubernetes.Interface) (has, known bool) {
+	nodes, err := cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return false, false
+	}
+	for _, n := range nodes.Items {
+		id := n.Spec.ProviderID
+		if i := strings.Index(id, "://"); i > 0 {
+			switch id[:i] {
+			case "k3s", "kind", "k3d", "docker":
+			default:
+				return true, true // a cloud provider's controller serves it
+			}
+		}
+	}
+	for _, sel := range []string{"app.kubernetes.io/name=metallb", "app.kubernetes.io/name=kube-vip", "app=metallb", "svccontroller.k3s.cattle.io/svcname"} {
+		if pods, err := cs.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{LabelSelector: sel, Limit: 1}); err == nil && len(pods.Items) > 0 {
+			return true, true
+		}
+	}
+	return false, true
+}
+
+// Environment is what the cluster offers an install, as the caller sees it (Roadmap Phase 75b): the
+// "Install from an image" wizard builds its own objects, so it asks here instead of in a render.
+type Environment struct {
+	StorageClasses      []string `json:"storageClasses"`
+	DefaultStorageClass bool     `json:"defaultStorageClass"`
+	IngressClasses      []string `json:"ingressClasses"`
+	LoadBalancer        bool     `json:"loadBalancer"`
+	LoadBalancerKnown   bool     `json:"loadBalancerKnown"`
+	StorageClassesKnown bool     `json:"storageClassesKnown"`
+}
+
+// ReadEnvironment reads it; a part the caller may not read is reported as not known.
+func ReadEnvironment(ctx context.Context, cs kubernetes.Interface) Environment {
+	env := Environment{StorageClasses: []string{}, IngressClasses: []string{}}
+	if list, err := cs.StorageV1().StorageClasses().List(ctx, metav1.ListOptions{}); err == nil {
+		env.StorageClassesKnown = true
+		for _, c := range list.Items {
+			env.StorageClasses = append(env.StorageClasses, c.Name)
+			if c.Annotations[defaultClassAnnotation] == "true" {
+				env.DefaultStorageClass = true
+			}
+		}
+		sort.Strings(env.StorageClasses)
+	}
+	if list, err := cs.NetworkingV1().IngressClasses().List(ctx, metav1.ListOptions{}); err == nil {
+		for _, c := range list.Items {
+			env.IngressClasses = append(env.IngressClasses, c.Name)
+		}
+		sort.Strings(env.IngressClasses)
+	}
+	env.LoadBalancer, env.LoadBalancerKnown = loadBalancerAvailable(ctx, cs)
+	return env
 }

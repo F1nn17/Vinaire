@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/f1nn17/vinaire/backend/internal/audit"
 	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/backup"
 	"github.com/f1nn17/vinaire/backend/internal/clusters"
 	"github.com/f1nn17/vinaire/backend/internal/gitops"
 	"github.com/f1nn17/vinaire/backend/internal/helm"
@@ -80,10 +82,26 @@ type Handler struct {
 	Provisions             *provision.Registry
 	ProvisionAllowInsecure bool
 
+	// OIDCAllowHTTPPrivate (OIDC_ALLOW_HTTP_PRIVATE_NETWORK, a deliberate operator opt-in for a home
+	// server without a certificate): Keycloak may be reached over plain http and its administrator's
+	// password may arrive over plain http — but only on a private network (netguard.IsPrivate), never
+	// across the internet.
+	OIDCAllowHTTPPrivate bool
+
+	// BrokerClientset/BrokerNamespace/BrokerTTL (Roadmap Phase 80): Vinaire's own identity and the one namespace
+	// where the people who sign in through Keycloak get ServiceAccounts of their own (internal/oidcbroker). Nil/empty
+	// when Vinaire doesn't run in a cluster or the namespace isn't configured.
+	BrokerClientset kubernetes.Interface
+	BrokerNamespace string
+	BrokerTTL       time.Duration
+
 	// Roadmap Phase 28: the Helm application catalog and release operations.
 	// nil means "not configured" and the endpoints answer 503.
 	Catalog  *helm.Catalog
 	Releases *helm.Releases
+	// Backup is the operator's backup configuration (Roadmap Phase 77b): the S3 targets dumps may go
+	// to. nil means PVC targets only.
+	Backup *backup.Config
 	// InstallJobs runs Marketplace installs in the background so the UI can show progress.
 	InstallJobs *helm.Jobs
 

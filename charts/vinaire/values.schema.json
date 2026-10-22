@@ -4,6 +4,13 @@
   "description": "Validated by Helm on install, upgrade, lint and template. Unknown top-level keys are allowed on purpose, so values files from other versions of the chart still load.",
   "type": "object",
   "properties": {
+    "backup": {
+      "type": "object",
+      "properties": {
+        "targets": { "type": "array" },
+        "uploadImage": { "type": "string" }
+      }
+    },
     "replicaCount": { "type": "integer", "minimum": 0 },
     "keyProvider": {
       "type": "object",
@@ -18,6 +25,29 @@
         },
         "rewrapOnStart": { "type": "boolean" }
       }
+    },
+    "audit": {
+      "type": "object",
+      "properties": {
+        "persistence": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Keep the audit log on a PersistentVolumeClaim instead of an emptyDir (needs replicaCount 1)."
+            },
+            "size": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(Mi|Gi|Ti)$",
+              "description": "Size of the claim, e.g. 1Gi."
+            },
+            "storageClass": { "type": "string" },
+            "existingClaim": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "sessions": {
       "type": "object",
@@ -64,6 +94,17 @@
       "type": "string",
       "enum": ["token", "oidc", "disabled"],
       "description": "token (default): paste a ServiceAccount token. oidc: log in through Keycloak/another OIDC provider. disabled: no login at all — local development only."
+    },
+    "keycloak": {
+      "type": "object",
+      "properties": {
+        "allowHttpPrivateNetwork": { "type": "boolean" },
+        "userNamespace": { "type": "string" },
+        "serviceAccountSignIn": {
+          "type": "object",
+          "properties": { "enabled": { "type": "boolean" } }
+        }
+      }
     },
     "oidc": {
       "type": "object",
@@ -162,6 +203,10 @@
           "properties": { "create": { "type": "boolean" } }
         },
         "rbacAdmin": {
+          "type": "object",
+          "properties": { "create": { "type": "boolean" } }
+        },
+        "lifecycleAdmin": {
           "type": "object",
           "properties": { "create": { "type": "boolean" } }
         },

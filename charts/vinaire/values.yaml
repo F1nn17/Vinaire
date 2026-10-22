@@ -45,6 +45,20 @@ keyProvider:
 sessions:
   store: auto
 
+# The audit log (Roadmap Phase 76). By default it is written to an emptyDir: it survives a restart of
+# the container but not the pod being replaced, so ship the container's stdout to your log system too
+# (every audited action is also a line there — see docs/security.md). To keep the file itself, switch
+# persistence on: a PersistentVolumeClaim is created (or name your own with existingClaim) and mounted
+# at /audit. It is a ReadWriteOnce volume with one writer, so it needs replicaCount: 1 (the Deployment
+# is then replaced rather than rolled, because the new pod can't mount it while the old one holds it),
+# and the claim is kept when the release is uninstalled.
+audit:
+  persistence:
+    enabled: false
+    size: 1Gi
+    storageClass: ""     # empty: the cluster's default class; "-": none (a volume you made yourself)
+    existingClaim: ""    # use this claim instead of creating one
+
 image:
   # The released, signed image (see .github/workflows/release.yml); the tag
   # defaults to the chart's appVersion. To run a build of your own, point this at
@@ -111,6 +125,27 @@ oidc:
   existingSecret: ""
   existingSecretKey: clientSecret
   redirectURL: ""
+
+# Signing in through Keycloak set up from Vinaire's Settings -> Sign-in tab normally needs https:
+# Vinaire talks to a Keycloak, and accepts its administrator's password, over TLS only. A home
+# server on a private network often has no certificate. Set this to true to allow plain http for
+# exactly that case: Keycloak may be reached over http, and the administrator's password may arrive
+# over http, ONLY when the address is on a private network (10.x, 172.16-31.x, 192.168.x, 100.64-127.x
+# - NetBird/Tailscale). An http address anywhere else is still refused. Never a substitute for TLS
+# across the internet. Also needs cookie.secure=false, because a browser does not keep a Secure
+# cookie over http.
+keycloak:
+  allowHttpPrivateNetwork: false
+  # How a person who signed in through Keycloak reaches the cluster. Kubernetes' API server accepts an OIDC
+  # issuer only over https, so with an http Keycloak (a home server) it can't be told to trust it. With this on
+  # (the default) Vinaire verifies the sign-in itself and gives each person a ServiceAccount of their own in
+  # userNamespace plus a short-lived token for it: the cluster's RBAC still decides everything, a new account has
+  # no rights until you bind a role to it, and nothing about the API server or K3s needs to change. The chart
+  # creates that namespace and a Role letting Vinaire create accounts and request tokens THERE and nowhere else.
+  serviceAccountSignIn:
+    enabled: true
+  # empty: <release>-vinaire-users, i.e. "<fullname>-users"
+  userNamespace: ""
 
 # The public URL this Vinaire install is reachable at (e.g.
 # "https://vinaire.example.com"), used only to send the browser back to
@@ -181,6 +216,11 @@ rbac:
   # deleting a Node object. Created unbound; bind it IN ADDITION to the viewer role.
   nodeAdmin:
     create: true
+  # A role for the lifecycle of applications installed from an image (Roadmap Phase 77):
+  # backups (Jobs/CronJobs, the claim they write to, VolumeSnapshots), restore, and changing
+  # an instance's image tag. Created unbound; bind it IN ADDITION to the viewer role.
+  lifecycleAdmin:
+    create: true
   # A role for managing access: create/delete RoleBindings and ClusterRoleBindings and
   # ask "what can X do?". It may bind this chart's own roles (the `bind` verb) but not
   # arbitrary ones: Kubernetes' escalation check still applies. Created unbound.
@@ -242,6 +282,18 @@ networkPolicy:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# Backups of applications installed from an image (Roadmap Phase 77b). Dumps can always go to a
+# volume claim in the application's namespace; list S3-compatible stores here to offer them too.
+# Only https endpoints; the credentials are never put here - the person making a backup names a
+# Secret (keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) in the application's namespace.
+#   backup:
+#     targets:
+#       - {name: minio, endpoint: "https://minio.example.com", bucket: backups, prefix: vinaire}
+backup:
+  targets: []
+  # the image that uploads a dump (pinned); empty: Vinaire's default
+  uploadImage: ""
 
 # Extra plain env vars, appended as-is:
 #   extraEnv:

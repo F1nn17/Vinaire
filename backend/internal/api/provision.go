@@ -63,7 +63,7 @@ func (h *Handler) requireSecureTransport(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	respondError(w, http.StatusBadRequest,
-		"SSH credentials may only be sent over HTTPS — open Vinaire through a TLS URL (or set PROVISION_ALLOW_INSECURE=true for local development)")
+		"credentials (SSH, tokens, passwords) may only be sent over HTTPS — open Vinaire through a TLS URL (or set PROVISION_ALLOW_INSECURE=true for local development; for a Keycloak administrator on a private network see OIDC_ALLOW_HTTP_PRIVATE_NETWORK)")
 	return false
 }
 

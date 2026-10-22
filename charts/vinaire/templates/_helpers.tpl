@@ -167,3 +167,8 @@ ClusterRole a person is bound to, and — only when rbac.broad or authMode
   resources: ["namespaces"]
   verbs: ["delete"]
 {{- end -}}
+
+{{/* The namespace of the people who sign in through Keycloak (Phase 80). */}}
+{{- define "vinaire.userNamespace" -}}
+{{- default (printf "%s-users" (include "vinaire.fullname" .)) .Values.keycloak.userNamespace -}}
+{{- end }}

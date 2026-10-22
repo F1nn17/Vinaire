@@ -49,6 +49,7 @@ var (
 type storedSession struct {
 	Token    string `json:"t"`
 	Username string `json:"u,omitempty"`
+	K8sUser  string `json:"k,omitempty"`
 	Expires  int64  `json:"e"`
 }
 
@@ -91,7 +92,7 @@ func (s *SharedStore) decode(sealed []byte, now time.Time) (*Session, bool) {
 	if !exp.After(now) {
 		return nil, false
 	}
-	return &Session{K8sToken: st.Token, Username: st.Username, ExpiresAt: exp}, true
+	return &Session{K8sToken: st.Token, Username: st.Username, KubernetesUser: st.K8sUser, ExpiresAt: exp}, true
 }
 
 // refresh reloads the shared view if it is older than max (a failed reload keeps the
@@ -179,7 +180,7 @@ func (s *SharedStore) Create(sess *Session) error {
 	if live >= maxSharedSessions {
 		return ErrTooManySessions
 	}
-	blob, err := json.Marshal(storedSession{Token: sess.K8sToken, Username: sess.Username, Expires: sess.ExpiresAt.Unix()})
+	blob, err := json.Marshal(storedSession{Token: sess.K8sToken, Username: sess.Username, K8sUser: sess.KubernetesUser, Expires: sess.ExpiresAt.Unix()})
 	if err != nil {
 		return err
 	}

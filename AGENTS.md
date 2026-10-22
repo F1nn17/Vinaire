@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Instructions for AI coding agents (Claude Code and similar) working in this
-repository.
+repository. Key project decisions that are not rules for code: [docs/decisions.md](docs/decisions.md).
 
 ## The core rule: writes are narrow, explicit, and always audited
 
@@ -297,7 +297,7 @@ flow.
   from the request, so it is held to the guarded HTTP client (`internal/netguard`: https,
   no loopback/link-local; `OIDC_ALLOW_INSECURE=true` is the dev-only opt-out, never on a
   real deployment) — which is also what OIDC discovery, the token exchange and key
-  fetches use. Not available when `AUTH_MODE` is `disabled` or `oidc` (the operator owns
+  fetches use. **Home server without a certificate** (owner's decision of 2026-10-21, Roadmap Phase 79): the operator may set `OIDC_ALLOW_HTTP_PRIVATE_NETWORK=true` (chart value `keycloak.allowHttpPrivateNetwork`, off by default; a request can never turn it on). Then Keycloak may be reached over plain http **only if the address the connection actually goes to is private** — RFC 1918, 100.64.0.0/10 (NetBird/Tailscale) or IPv6 unique-local, checked in the dialer (`netguard.Options.AllowHTTPOnPrivate`), so an http URL that resolves to a public, loopback or link-local address is refused, and an https → http redirect is never followed — and the administrator's password may arrive over plain http **only from a client on a private network** (the peer and every `X-Forwarded-For` entry; a guard against an administrator's mistake, not against an attacker). It does not touch `OIDC_ALLOW_INSECURE` (loopback, dev only) or `PROVISION_ALLOW_INSECURE`, and every other credential-taking route still needs TLS. Not available when `AUTH_MODE` is `disabled` or `oidc` (the operator owns
   that). Audited as `keycloak-setup` / `keycloak-setup-failed` (Keycloak host, realm,
   client, steps — no credentials), `keycloak-token-login`, `keycloak-disable`. What Vinaire
   cannot do is make the **cluster's API server trust the issuer** — the wizard shows the
@@ -322,6 +322,16 @@ flow.
   `rotate-cluster-credentials` — never the token. No endpoint ever returns a stored credential.
 - "I don't have Keycloak yet" on the Sign-in tab (Roadmap Phase 69, `app/(shell)/settings/KeycloakInstall.tsx`, `lib/keycloakInstall.ts`, `lib/images/apply.ts`) adds **no write path**: it creates a namespace, a PostgreSQL and a Keycloak StatefulSet with their Secrets and Services (the "Install from an image" presets) and an Ingress through Phase 25's generic YAML create, as the caller. The passwords are generated in the browser and written only into those Secrets. It must not weaken Phase 47's rule that Vinaire talks to a Keycloak only over https.
 - "This chart needs a value" on the install page (Roadmap Phase 71, `internal/helm/problems.go`, `components/marketplace/RequiredValues.tsx`) adds **no write path**: the preflight renders the chart client-side (a read) and describes what the chart asks for; the page writes the answer into the values text, and the only write it can make is a Secret through Phase 25's generic YAML create, as the caller ("Create the Secret with a generated password"). The chart author's error text is untrusted: a name counts only if it resolves in the chart's own default values (`FuzzClassifyRenderError`).
+- "Dashboards follow what is installed" (Roadmap Phase 74a, `internal/apps`, `internal/api/detected_apps.go`) adds **no write path**: `GET /api/v1/apps/detected` lists pods as the caller (`k8s.ListPods`) and recognises PostgreSQL, Redis/Valkey, MinIO and Keycloak by the repository of their images — never by a label — and writes nothing. The image text is untrusted input (`FuzzRepoAndTag`).
+- The exporter form on a dashboard (Roadmap Phase 74b, `components/dashboards/ExporterInstall.tsx`, `lib/dashboards/exporters.ts`) adds **no write path**: it starts the Marketplace's own install (`POST /api/v1/catalog/install-jobs`, as the caller, audited as any Helm install) of the Prometheus community exporter charts next to the database, with values built from what was found in the cluster. A password is never read or typed — the chart is given a Secret's name and key. MinIO and Keycloak get **instructions only** (`MetricsHowTo.tsx`): Vinaire does not edit a running application to switch its metrics on (owner's decision of 2026-10-16).
+- Instances (Roadmap Phase 77a, `internal/instances`, `internal/api/instances.go`, `app/(shell)/instances`) add **no write path**:
+  `GET /api/v1/instances` lists StatefulSets, Deployments, Services, PVCs and Secrets as the caller and groups them by
+  `app.kubernetes.io/instance` + `managed-by` (`vinaire` or `Helm`), saying per object whether a delete removes it or leaves it
+  (volume claims always stay). A Secret contributes its name and type only. The page's Delete is made of calls that already exist —
+  Helm uninstall, `DELETE statefulsets|deployments`, `DELETE pvcs` — with the instance's name typed and each volume claim ticked by
+  name; cluster namespaces are not deletable from it. The labels are untrusted (validated before they are returned).
+- Pod diagnosis (Roadmap Phase 75a, `internal/diagnose`, `components/workloads/PodDiagnosis.tsx`) adds **no write path** and no route: the `diagnosis` field of the pod page's response is computed from the pod and its events, which the handler already reads as the caller. The cluster's messages are untrusted text (`FuzzPodDiagnosis`: bounded detail, never a finding without a title); titles and hints are fixed strings so they can be translated.
+- Install warnings (Roadmap Phase 75b, `internal/helm/plan.go`, `internal/api/install_environment.go`, `components/marketplace/WizardWarnings.tsx`) add **no write path**: the chart plan's new warnings come from the client-side render the preflight already makes plus reads as the caller; `GET /api/v1/install/environment` lists StorageClasses, IngressClasses and looks for a load balancer's pods and nodes' providerID — all reads, a part the caller may not read is "not known", never "missing".
 - Dashboards (Roadmap Phase 68, `frontend/src/lib/dashboards`, `app/(shell)/dashboards`) add **no write path**: the panels are reads of the cluster's Prometheus through the existing `/api/v1/metrics/query[_range]` proxy (as the caller); a person's own dashboard and "Add to Grafana" are a ConfigMap created or updated through Phase 25's generic YAML apply (as the caller, audited as `apply-create`/`apply-update`), written as JSON strings so typed text can't change the document. Don't add a delete endpoint for them without raising it.
 - Projects (Roadmap Phase 53, `internal/api/projects.go`) add **no write path**: a project is the label
   `vinaire.io/project` on namespaces, `GET /api/v1/projects[/{name}]` only read (as the caller), and the UI changes
@@ -337,6 +347,65 @@ flow.
   action against a target cluster's resources with the caller's own RBAC.
   It's unavailable (503) when the backend isn't running in-cluster, since
   there's nowhere to durably persist to otherwise.
+
+- Identity broker for Keycloak sign-in (Roadmap Phase 80, owner's decision of 2026-10-22; `internal/oidcbroker`, `internal/authn/broker.go`,
+  `internal/api/keycloak.go`, chart `templates/users-namespace.yaml`) — the one place where Vinaire acts **with its own identity at
+  sign-in**, because there is no caller yet. Kubernetes' API server accepts an OIDC issuer only over https (`url` and `discoveryURL` are
+  both validated as https), so with a Keycloak on http it can't be made to trust the ID token. Instead, after Vinaire has verified the
+  sign-in itself, `Broker.TokenFor` finds or creates **one ServiceAccount per person** (labelled `vinaire.io/oidc-sub=<sha256 of the
+  OIDC subject>` and `managed-by: vinaire`, named `oidc-<username>`) in **one dedicated namespace** (`<fullname>-users`,
+  `OIDC_USER_NAMESPACE`) and asks the TokenRequest API for a short-lived token for it (lifetime = `SESSION_MAX_TTL`, at least 10 min).
+  The session holds that token instead of the ID token; the cluster sees `system:serviceaccount:<ns>:oidc-<name>` and **RBAC decides
+  everything**. Rules to keep: the broker creates ServiceAccounts and tokens and **never a binding or a role** — a new account has no
+  rights; Vinaire's Role (`<fullname>-user-accounts`) is a namespaced Role on `serviceaccounts` get/list/create and
+  `serviceaccounts/token` create **in that namespace only** (tested against a real cluster: it can't create an account elsewhere, read a
+  Secret, list bindings or mint a token in `kube-system`); an account is used only if it carries both labels for this subject — a
+  same-named account that isn't ours is never taken over (`-<hash>` suffix instead), and two accounts claiming one subject are refused;
+  names are derived and validated (`FuzzAccountName`); **no other ServiceAccount may live in the users' namespace**, because Vinaire can
+  mint a token for any account in it. Deleting an account ends its tokens within seconds and a recreated account of the same name does
+  not revive them. The mode is chosen per setting (`identityMode`: `serviceaccount` | `apiserver`; settings saved before keep
+  `apiserver`): an **http Keycloak is refused in `apiserver` mode** (the wizard used to print `--oidc-*` flags Kubernetes would refuse,
+  and every call came back 401), and `serviceaccount` is refused where Vinaire doesn't run in a cluster or has no users' namespace.
+  `GET /api/v1/auth/me` (a read) says how the session is known (`kubernetesUser`, no token). Audited as `oidc-user-provisioned` and
+  `oidc-token-issued` (account, subject, expiry — never the token). Not done: Keycloak groups (a ServiceAccount token carries none —
+  roles are bound per account), refreshing a token while the Keycloak session lives.
+- Backups of an application installed from an image (Roadmap Phase 77b, owner's decision of 2026-10-21; `internal/backup`,
+  `internal/k8s/backup_actions.go`, `internal/api/backups.go`) — all as the caller, so the cluster's RBAC decides:
+  `POST /api/v1/instances/{namespace}/{name}/backups` creates a **dump** (a `Job`, or a `CronJob` with a `schedule`; one
+  schedule per instance) or **VolumeSnapshots** of the instance's claims; `DELETE /api/v1/backups/{namespace}/{kind}/{name}`
+  (`job`|`cronjob`|`snapshot`, body `{"confirmName": name}`) removes one backup object Vinaire made (label
+  `app.kubernetes.io/managed-by: vinaire` + `vinaire.io/backup-of`; files already written to a claim or bucket stay).
+  `GET /api/v1/instances/{ns}/{name}/backups` and `GET /api/v1/backups/config` are reads. Rules to keep: only PostgreSQL, MySQL,
+  MariaDB, Redis and Valkey instances installed from an image are dumped, and the instance's **label and its image repository must
+  agree**; the dump runs in the instance's **own image** with a **fixed script** — nothing typed is spliced into a script, values
+  travel as validated environment variables; the database password is **never read by Vinaire**, the Job gets a `secretKeyRef` to
+  the instance's Secret; pods run non-root, no privilege escalation, all capabilities dropped. A **PVC target** creates the claim
+  `<instance>-backups` if it is missing (size validated, e.g. `5Gi`). An **S3 target** comes **only from the operator's
+  configuration** (`BACKUP_TARGETS`, chart value `backup.targets`: https, no credentials, no loopback/link-local endpoint) — a
+  request names a target and a Secret holding `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, never an endpoint; the upload image is
+  pinned. A backup carries no `app.kubernetes.io/instance` label, so deleting an instance never deletes its backups. Snapshots need
+  the CSI snapshot CRDs and a VolumeSnapshotClass; otherwise the API says "unavailable". Audited as `backup-create` (kind, target,
+  schedule — never a credential) and `backup-delete`. The chart ships the rights as the separate, unbound `<fullname>-lifecycle-admin`
+  role (jobs/cronjobs get/list/create/delete, PVC get/list/create, volumesnapshots get/list/create/delete, volumesnapshotclasses
+  get/list).
+- Restore (Roadmap Phase 77c, `internal/backup/restore.go`, `internal/api/backups_restore.go`) — never over a running instance, as the
+  caller: `POST /api/v1/instances/{namespace}/{name}/restore` loads a dump (`source`, optional `file`; empty = the newest) **into the
+  instance {name}**, which must be another image-installed instance — the body must repeat its name (`confirmName`) and the source may
+  not be the target. It is a `Job` in the target's own image, mounting the claim `<source>-backups` **read-only** (refused unless
+  that claim carries `managed-by: vinaire` and `vinaire.io/backup-of: <source>`), signing in through a `secretKeyRef` to the target's
+  Secret; the dump file name is validated (a plain name, no path). Redis/Valkey dumps are not loaded by a Job (refused: use a
+  snapshot). `POST .../restore-snapshot` creates a **new** claim from a snapshot Vinaire took of that instance (`dataSource`; the
+  snapshot's labels are checked) and touches no existing claim. Audited as `backup-restore` and `backup-restore-snapshot`. Restore Jobs
+  carry `vinaire.io/restore-into`/`restore-of` (no instance label) and can be deleted through `DELETE /api/v1/backups/.../job/...`.
+- Version upgrade of an instance installed from an image (Roadmap Phase 77d, `internal/instances/upgrade.go`,
+  `internal/k8s/instance_upgrade.go`, `internal/api/instance_upgrade.go`) — as the caller:
+  `POST /api/v1/instances/{namespace}/{name}/upgrade` (`tag`, `acceptMajor`, or `revert`; the body must repeat the instance's name)
+  is one strategic merge patch of the StatefulSet: the `app` container's image and the annotation `vinaire.io/previous-image`.
+  **Only the tag changes** — the repository is the running image's, a request never names an image; the tag is validated by a
+  pattern; a digest-pinned image is refused; a change of major version (or a tag that cannot be compared, like `latest`) needs
+  `acceptMajor`, and a **lower major version is refused** outright; `revert` restores the recorded image only if it is of the same
+  repository. Charts are upgraded from the Marketplace (Phase 28), not here. The UI offers a dump first and waits for it. Audited as
+  `instance-upgrade` / `instance-revert` (from, to, major). The chart's `-lifecycle-admin` role grants `patch` on StatefulSets.
 
 Every other resource kind (Pods, ConfigMaps, Secrets, Ingress, ...) and
 every other verb, on any cluster a user browses, stays read-only.

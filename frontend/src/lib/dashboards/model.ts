@@ -39,6 +39,12 @@ export type Dashboard = {
   description?: string;
   // The built-in group it is listed under; custom dashboards are all in "Custom".
   group: string;
+  // The application this dashboard is about (an id of internal/apps): its dashboard is offered only
+  // when the application runs in the cluster, or its metrics are there anyway (a database outside).
+  app?: string;
+  // The Marketplace chart that exports this application's metrics, when it needs one (MinIO and
+  // Keycloak serve their own).
+  exporter?: { repo: string; chart: string };
   // A metric that has to exist for the dashboard to make sense; without it the page says what is
   // missing instead of drawing empty charts.
   requires?: { metric: string; hint: string };

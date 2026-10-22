@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"k8s.io/client-go/kubernetes/fake"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -104,6 +105,8 @@ func TestKeycloakSetupSwitchesSignInOnAndKeepsSecretsOutOfSight(t *testing.T) {
 	kc := fakeKeycloakServer(t)
 	docs := newFakeDocs(true)
 	hs.h.AuthDocs, hs.h.OIDCAllowInsecure, hs.h.ProvisionAllowInsecure = docs, true, true
+	// the fake Keycloak is on plain http, which only the ServiceAccount mode can use (Phase 80)
+	hs.h.BrokerClientset, hs.h.BrokerNamespace = fake.NewSimpleClientset(), "vinaire-users"
 	hs.api.grant("admin", "vinaire.io/auth/create", "vinaire.io/auth/get", "vinaire.io/auth/update", "vinaire.io/auth/delete")
 	hs.api.grant("viewer", "/pods/list")
 
@@ -143,8 +146,15 @@ func TestKeycloakSetupSwitchesSignInOnAndKeepsSecretsOutOfSight(t *testing.T) {
 			t.Errorf("the response carries %q", leak)
 		}
 	}
-	if !strings.Contains(w.Body.String(), "--oidc-issuer-url="+kc.URL+"/realms/vinaire") || !strings.Contains(w.Body.String(), "https://vinaire.example.com/api/v1/auth/oidc/callback") {
-		t.Errorf("response lacks the issuer flag or the redirect: %s", w.Body)
+	if !strings.Contains(w.Body.String(), `"identityMode":"serviceaccount"`) || !strings.Contains(w.Body.String(), "https://vinaire.example.com/api/v1/auth/oidc/callback") {
+		t.Errorf("response lacks the mode or the redirect: %s", w.Body)
+	}
+	// flags the API server would refuse (an http issuer) must not be offered as if they would work
+	if strings.Contains(w.Body.String(), "--oidc-issuer-url") {
+		t.Errorf("an http Keycloak was offered API-server flags: %s", w.Body)
+	}
+	if hs.mgr.IdentityBroker() == nil {
+		t.Error("the broker was not switched on with the setting")
 	}
 	// what is kept: the client secret (sealed by the store), never the admin's or the user's password
 	saved := string(docs.docs["auth-oidc"])
@@ -170,6 +180,9 @@ func TestKeycloakSetupSwitchesSignInOnAndKeepsSecretsOutOfSight(t *testing.T) {
 	}
 	if o, tk := hs.mgr.SignInMethods(); o || !tk {
 		t.Errorf("after disabling: oidc=%v token=%v", o, tk)
+	}
+	if hs.mgr.IdentityBroker() != nil {
+		t.Error("the broker outlived the setting")
 	}
 	if s, _ := hs.h.loadStoredOIDC(context.Background()); s != nil {
 		t.Error("the saved client secret is still there after disabling")

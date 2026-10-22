@@ -10,6 +10,7 @@ import { applyErrorMessage } from "@/components/editor/useYamlApply";
 import { CodeBlock } from "@/components/ui/CodeBlock";
 import { PillTabs } from "@/components/ui/Tabs";
 import { InstanceWatch } from "@/components/marketplace/InstanceWatch";
+import { WizardWarnings } from "@/components/marketplace/WizardWarnings";
 import { PostgresPicker } from "@/components/marketplace/PostgresPicker";
 import { parse } from "yaml";
 import { ApiError } from "@/lib/api/http";
@@ -506,6 +507,8 @@ function ImageForm({ preset }: { preset: Preset }) {
             />
           </Field>
         </div>
+
+        <WizardWarnings form={form} preset={preset} />
 
         <div className="flex flex-col gap-2">
           <button

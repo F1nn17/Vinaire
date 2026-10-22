@@ -21,6 +21,7 @@ import (
 	"github.com/f1nn17/vinaire/backend/internal/api"
 	"github.com/f1nn17/vinaire/backend/internal/audit"
 	"github.com/f1nn17/vinaire/backend/internal/authn"
+	"github.com/f1nn17/vinaire/backend/internal/backup"
 	"github.com/f1nn17/vinaire/backend/internal/clusters"
 	"github.com/f1nn17/vinaire/backend/internal/config"
 	"github.com/f1nn17/vinaire/backend/internal/gitops"
@@ -166,6 +167,17 @@ func main() {
 	}
 	gitops.InstallTransport(netguard.Client(netguard.Options{Timeout: 2 * time.Minute}), devGit)
 	workloadsHandler.AuthDocs = gitopsDocs
+	// Roadmap Phase 80: people who sign in through Keycloak can be given a ServiceAccount of their own, in one
+	// namespace, using Vinaire's own in-cluster identity (the chart grants a Role there and nowhere else).
+	if ss, ok := clusterStore.(*clusters.SecretStore); ok && clusterStoreOK {
+		workloadsHandler.BrokerClientset = ss.Clientset()
+		workloadsHandler.BrokerNamespace = os.Getenv("OIDC_USER_NAMESPACE")
+		workloadsHandler.BrokerTTL = cfg.SessionMaxTTL
+	}
+	if os.Getenv("OIDC_ALLOW_HTTP_PRIVATE_NETWORK") == "true" {
+		workloadsHandler.OIDCAllowHTTPPrivate = true
+		slog.Warn("OIDC_ALLOW_HTTP_PRIVATE_NETWORK is set: Keycloak may be reached over plain http, and its administrator's password may be sent over plain http, on a private network. Use it for a home server without a certificate; never across the internet.")
+	}
 	if os.Getenv("OIDC_ALLOW_INSECURE") == "true" {
 		workloadsHandler.OIDCAllowInsecure = true // local development only: an http:// Keycloak on loopback
 		slog.Warn("OIDC_ALLOW_INSECURE is set: the Keycloak setup may use http:// on loopback. Never set this on a real deployment.")
@@ -216,6 +228,13 @@ func main() {
 		} else {
 			slog.Info("loaded install recipes", "path", path, "count", n)
 		}
+	}
+	// Roadmap Phase 77b: where dumps may be uploaded, from the operator's file only.
+	if bc, err := backup.LoadConfig(os.Getenv("BACKUP_TARGETS")); err != nil {
+		slog.Error("BACKUP_TARGETS is invalid — backups go to a volume claim only", "error", err)
+		workloadsHandler.Backup = &backup.Config{}
+	} else {
+		workloadsHandler.Backup = bc
 	}
 	workloadsHandler.Catalog = helm.NewCatalog(catalogCfg)
 	// Load every repository's index in the background so the first search is quick.

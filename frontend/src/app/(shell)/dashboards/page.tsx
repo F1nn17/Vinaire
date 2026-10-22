@@ -9,13 +9,18 @@ import { builtinDashboards, dashboardGroups } from "@/lib/dashboards/catalog";
 import { toGrafana } from "@/lib/dashboards/grafana";
 import { addToGrafana } from "@/lib/dashboards/store";
 import type { Dashboard } from "@/lib/dashboards/model";
+import type { DetectedApp } from "@/lib/api/apps";
 import {
+  useAvailability,
   useCustomDashboards,
+  useDetectedApps,
   useRequirement,
   useVariableOptions,
 } from "@/lib/hooks/useDashboards";
 import { PanelView } from "@/components/dashboards/PanelView";
 import { DashboardEditor } from "@/components/dashboards/DashboardEditor";
+import { ExporterInstall } from "@/components/dashboards/ExporterInstall";
+import { MetricsHowTo } from "@/components/dashboards/MetricsHowTo";
 
 const ranges = [
   { sec: 900, label: "Last 15 minutes" },
@@ -57,14 +62,28 @@ function DashboardsInner() {
   const open = (d: Dashboard) =>
     router.replace(`/dashboards?d=${encodeURIComponent(key(d))}`);
 
+  // An application's dashboard is offered when the application runs in the cluster (found among the
+  // pods) or when its metrics are in Prometheus anyway — a database that lives outside the cluster.
+  // The cluster, node and workload dashboards are always there.
+  const detected = useDetectedApps();
+  const avail = useAvailability(builtinDashboards);
+  const detectedIds = new Set((detected.data?.apps ?? []).map((x) => x.id));
+  const visible = (d: Dashboard) =>
+    d.group === "Custom" ||
+    !d.app ||
+    detectedIds.has(d.app) ||
+    avail.data?.[d.id] === true ||
+    d.id === current.id;
+  const hiddenApps = builtinDashboards.some((d) => !visible(d));
+
   return (
     <div className="flex flex-col gap-[18px] px-8 py-7">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">Dashboards</h1>
           <p className="text-xs text-text-muted">
-            Live charts from the cluster&apos;s Prometheus, drawn by Vinaire — no
-            Grafana needed. Build your own, or add any of these to Grafana.
+            Live charts from the cluster&apos;s Prometheus, drawn by Vinaire —
+            no Grafana needed. Build your own, or add any of these to Grafana.
           </p>
         </div>
         <button
@@ -90,8 +109,8 @@ function DashboardsInner() {
       <div className="grid gap-4 md:grid-cols-[220px_1fr]">
         <nav className="flex flex-col gap-3" aria-label="Dashboards">
           {[...dashboardGroups, "Custom"].map((g) => {
-            const items = all.filter((d) => d.group === g);
-            if (g === "Custom" && items.length === 0) return null;
+            const items = all.filter((d) => d.group === g && visible(d));
+            if (items.length === 0) return null;
             return (
               <div key={g}>
                 <div className="mb-1 px-2 text-[10.5px] uppercase tracking-wide text-text-faint">
@@ -115,6 +134,12 @@ function DashboardsInner() {
               </div>
             );
           })}
+          {hiddenApps && (
+            <div className="px-2 text-[11px] text-text-faint">
+              Dashboards for PostgreSQL, Redis, MinIO and Keycloak appear here
+              once they run in this cluster.
+            </div>
+          )}
           {custom.error && (
             <div className="px-2 text-[11px] text-err">
               {friendlyErrorMessage(custom.error)}
@@ -125,6 +150,7 @@ function DashboardsInner() {
         <DashboardView
           key={key(current)}
           dashboard={current}
+          found={detected.data?.apps.find((x) => x.id === current.app)}
           storedIn={(current as { namespace?: string }).namespace}
           onCustomize={(d, ns, isEdit) =>
             setEditing({ dashboard: d, namespace: ns, isEdit })
@@ -140,9 +166,13 @@ function DashboardsInner() {
           onClose={() => setEditing(null)}
           onSaved={(id) => {
             setEditing(null);
-            void custom.mutate().then(() =>
-              router.replace(`/dashboards?d=${encodeURIComponent(`c:${id}`)}`),
-            );
+            void custom
+              .mutate()
+              .then(() =>
+                router.replace(
+                  `/dashboards?d=${encodeURIComponent(`c:${id}`)}`,
+                ),
+              );
           }}
         />
       )}
@@ -182,10 +212,12 @@ function Variable({
 
 function DashboardView({
   dashboard,
+  found,
   storedIn,
   onCustomize,
 }: {
   dashboard: Dashboard;
+  found?: DetectedApp;
   storedIn?: string;
   onCustomize: (d: Dashboard, namespace: string, isEdit: boolean) => void;
 }) {
@@ -323,7 +355,10 @@ function DashboardView({
             <span className="font-mono">grafana_dashboard=1</span> — what
             Grafana&apos;s dashboard sidecar watches for. Grafana&apos;s default
             data source has to be this Prometheus.{" "}
-            <Link href="/marketplace/install?repo=grafana&chart=grafana" className="text-accent-text underline">
+            <Link
+              href="/marketplace/install?repo=grafana&chart=grafana"
+              className="text-accent-text underline"
+            >
               Install Grafana →
             </Link>
           </div>
@@ -352,17 +387,37 @@ function DashboardView({
         </div>
       )}
 
-      {dashboard.requires && req.data === false && (
-        <div className="rounded-[10px] border border-warn/40 bg-surface p-3 text-xs text-warn">
-          {t("No series {metric} in this cluster's Prometheus.", {
-            metric: dashboard.requires.metric,
-          })}{" "}
-          {dashboard.requires.hint}{" "}
-          <Link href="/metrics-stack" className="underline">
-            Metrics stack →
-          </Link>
+      {found && (
+        <div className="text-xs text-text-muted">
+          Found in this cluster:{" "}
+          {found.instances.map((i, n) => (
+            <span key={`${i.namespace}/${i.name}`} className="font-mono">
+              {n > 0 ? ", " : ""}
+              {i.name} ({i.namespace}, {i.ready}/{i.pods} ready)
+            </span>
+          ))}
         </div>
       )}
+
+      {dashboard.requires &&
+        req.data === false &&
+        (found && dashboard.exporter ? (
+          // an exporter fixes it: the form that installs one
+          <ExporterInstall app={found} />
+        ) : found ? (
+          // the application serves its own metrics: say what to switch on
+          <MetricsHowTo app={found} />
+        ) : (
+          <div className="rounded-[10px] border border-warn/40 bg-surface p-3 text-xs text-warn">
+            {t("No series {metric} in this cluster's Prometheus.", {
+              metric: dashboard.requires.metric,
+            })}{" "}
+            {dashboard.requires.hint}{" "}
+            <Link href="/metrics-stack" className="underline">
+              Metrics stack →
+            </Link>
+          </div>
+        ))}
 
       <div className="grid gap-3 md:grid-cols-4">
         {dashboard.panels.map((p, i) => (

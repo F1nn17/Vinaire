@@ -95,31 +95,39 @@ type accessKey struct{ group, resource, namespace string }
 // renderObjects renders the chart client-side and returns the objects it would
 // create (manifest plus non-test hooks).
 func renderObjects(ctx context.Context, cfg *rest.Config, req InstallRequest, rl *Releases) ([]*unstructured.Unstructured, error) {
+	objs, _, err := renderObjectsAndCRDs(ctx, cfg, req, rl)
+	return objs, err
+}
+
+// renderObjectsAndCRDs is renderObjects that also names the custom kinds the chart defines itself
+// (its crds/ directory and any CustomResourceDefinition it renders) — a kind the cluster does not
+// know that is NOT among them is one an operator has to bring (Roadmap Phase 75b).
+func renderObjectsAndCRDs(ctx context.Context, cfg *rest.Config, req InstallRequest, rl *Releases) ([]*unstructured.Unstructured, map[string]bool, error) {
 	if !releaseNameRe.MatchString(req.Release) {
-		return nil, fmt.Errorf("%w: release name must be lowercase letters, digits and dashes (max 53 characters)", ErrInvalid)
+		return nil, nil, fmt.Errorf("%w: release name must be lowercase letters, digits and dashes (max 53 characters)", ErrInvalid)
 	}
 	if !dnsLabelRe.MatchString(req.Namespace) {
-		return nil, fmt.Errorf("%w: invalid namespace name", ErrInvalid)
+		return nil, nil, fmt.Errorf("%w: invalid namespace name", ErrInvalid)
 	}
 	vals, err := parseValues(req.ValuesYAML)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	ch, err := rl.Catalog.LoadChart(ctx, req.Repo, req.Chart, req.Version)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := refuseDeprecated(ch, req.AllowDeprecated); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if req.NodeName != "" {
 		if err := pinToNode(vals, ch, req.NodeName); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	ac, err := configuration(cfg, req.Namespace)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	in := action.NewInstall(ac)
 	in.ReleaseName = req.Release
@@ -146,7 +154,7 @@ func renderObjects(ctx context.Context, cfg *rest.Config, req InstallRequest, rl
 	rel, err := in.RunWithContext(ctx, ch, vals)
 	if err != nil {
 		// a missing value the chart asks for is described, so the UI can ask for it (problems.go)
-		return nil, classifyRenderError(err, ch.Values)
+		return nil, nil, classifyRenderError(err, ch.Values)
 	}
 	docs := rel.Manifest
 	for _, h := range rel.Hooks {
@@ -160,7 +168,28 @@ func renderObjects(ctx context.Context, cfg *rest.Config, req InstallRequest, rl
 			docs += "\n---\n" + h.Manifest
 		}
 	}
-	return decodeObjects(docs)
+	objs, err := decodeObjects(docs)
+	if err != nil {
+		return nil, nil, err
+	}
+	own := map[string]bool{}
+	for _, o := range objs {
+		if o.GetKind() == "CustomResourceDefinition" {
+			if k, _, _ := unstructured.NestedString(o.Object, "spec", "names", "kind"); k != "" {
+				own[k] = true
+			}
+		}
+	}
+	for _, f := range ch.CRDObjects() { // the chart's crds/ directory is not part of the render
+		if crds, err := decodeObjects(string(f.File.Data)); err == nil {
+			for _, o := range crds {
+				if k, _, _ := unstructured.NestedString(o.Object, "spec", "names", "kind"); k != "" {
+					own[k] = true
+				}
+			}
+		}
+	}
+	return objs, own, nil
 }
 
 func decodeObjects(docs string) ([]*unstructured.Unstructured, error) {
@@ -201,7 +230,7 @@ func decodeObjects(docs string) ([]*unstructured.Unstructured, error) {
 func (rl *Releases) Preflight(ctx context.Context, cfg *rest.Config, req InstallRequest) (*PreflightResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	objs, err := renderObjects(ctx, cfg, req, rl)
+	objs, ownKinds, err := renderObjectsAndCRDs(ctx, cfg, req, rl)
 	if err != nil {
 		return nil, err
 	}
@@ -212,6 +241,7 @@ func (rl *Releases) Preflight(ctx context.Context, cfg *rest.Config, req Install
 	mapper, mapErr := restGetter{cfg: cfg, namespace: req.Namespace}.ToRESTMapper()
 
 	plan := planOf(objs)
+	plan.databaseChart = rl.isDatabaseChart(req.Repo)
 	res := &PreflightResult{Objects: len(objs), Missing: []Needed{}, Created: plan.Created, Volumes: plan.Volumes,
 		Warnings: clusterWarnings(ctx, cs, plan)}
 	want := map[accessKey]map[string]bool{}
@@ -230,6 +260,7 @@ func (rl *Releases) Preflight(ctx context.Context, cfg *rest.Config, req Install
 	}
 
 	unchecked := map[string]bool{}
+	foreign := map[string]bool{} // kinds the cluster does not know and the chart does not bring
 	for _, o := range objs {
 		gvk := o.GroupVersionKind()
 		if mapErr != nil {
@@ -238,7 +269,11 @@ func (rl *Releases) Preflight(ctx context.Context, cfg *rest.Config, req Install
 		}
 		m, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 		if err != nil {
-			unchecked[gvk.Kind] = true
+			if meta.IsNoMatchError(err) && !ownKinds[gvk.Kind] {
+				foreign[gvk.Kind] = true // an operator's kind, and no operator is here
+			} else {
+				unchecked[gvk.Kind] = true
+			}
 			continue
 		}
 		ns := ""
@@ -256,6 +291,17 @@ func (rl *Releases) Preflight(ctx context.Context, cfg *rest.Config, req Install
 		res.Unchecked = append(res.Unchecked, k)
 	}
 	sort.Strings(res.Unchecked)
+	if len(foreign) > 0 {
+		kinds := make([]string, 0, len(foreign))
+		for k := range foreign {
+			kinds = append(kinds, k)
+		}
+		sort.Strings(kinds)
+		if len(kinds) > 6 {
+			kinds = kinds[:6]
+		}
+		res.Warnings = append([]Warning{{Code: "missing-crd", Detail: strings.Join(kinds, ", ")}}, res.Warnings...)
+	}
 
 	if len(want) > maxPreflightChecks {
 		return nil, fmt.Errorf("%w: the chart renders to too many kinds of object to check (%d)", ErrInvalid, len(want))
@@ -306,4 +352,17 @@ func canI(ctx context.Context, cs kubernetes.Interface, verb string, k accessKey
 		return false, err
 	}
 	return r.Status.Allowed, nil
+}
+
+// isDatabaseChart says whether the catalog files the repository under Databases.
+func (rl *Releases) isDatabaseChart(repo string) bool {
+	if rl == nil || rl.Catalog == nil {
+		return false
+	}
+	for _, r := range rl.Catalog.Repos() {
+		if r.Name == repo {
+			return strings.EqualFold(r.Category, "Databases")
+		}
+	}
+	return false
 }
