@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-22
+
 ### Added
 
 - **Keycloak sign-in on a home server without a certificate (Roadmap Phase 79).** Setting up sign-in through Keycloak refused an `http://` Keycloak, and refused the administrator's password over plain http, wherever Vinaire was not on loopback. The operator can now allow plain http for a private network only — `keycloak.allowHttpPrivateNetwork` in the chart (`OIDC_ALLOW_HTTP_PRIVATE_NETWORK`), off by default: Keycloak may be reached over http, and its administrator's password may arrive over http, only when the address is RFC 1918, `100.64.0.0/10` (NetBird/Tailscale) or IPv6 unique-local; the address is checked where the connection is made, so a name that resolves to a public address is still refused, and an https to http redirect is never followed. The Sign-in tab says whether it is allowed. The session cookie still needs `cookie.secure=false` over http.
