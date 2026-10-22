@@ -5016,3 +5016,15 @@ AGENTS.md; сторонний аудит — решение владельца.
 (RFC 1918, 100.64.0.0/10, IPv6 ULA), проверка в dialer по адресу, к которому идёт соединение; редирект https → http не выполняется. Пароль администратора Keycloak по http принимается только от клиента
 из частной сети (peer и вся цепочка `X-Forwarded-For`). Вкладка Sign-in показывает, разрешено ли это. Тесты: `netguard_test.go`, `keycloak_private_test.go`.
 **Оговорка:** по http cookie сессии не может быть `Secure` (`cookie.secure=false`); пароли в частной сети идут открытым текстом — записано в `docs/security.md` как остаточный риск.
+
+## Phase 80 — Вход через Keycloak без доверия API-сервера к Keycloak (P1) ✅ done
+
+**Проблема (2026-10-22, домашний K3s без HTTPS):** после настройки Keycloak по http Vinaire показывал флаги `--oidc-issuer-url=http://…` для kube-apiserver, а Kubernetes принимает issuer
+только по https (в `AuthenticationConfiguration` и `url`, и `discoveryURL` проверяются как https), так что вход «работал», а каждый запрос к API давал 401.
+**Решение владельца (3 пункта, «да»):** Vinaire сам проверяет вход и выдаёт человеку собственный ServiceAccount + короткий токен (TokenRequest) в выделенном пространстве имён;
+запись с собственной учёткой Vinaire (ServiceAccount create + token create) — только там; режим по умолчанию для http — только `serviceaccount`; группы Keycloak в первой версии не переносятся.
+**Сделано:** `internal/oidcbroker` (аккаунт на `sub`, имя `oidc-<username>`, не берёт чужие аккаунты, не создаёт привязок), `authn.IdentityBroker` + `Session.KubernetesUser`, режим `identityMode`
+в мастере (http + API-сервер отклоняется), `GET /api/v1/auth/me`, чарт (`<fullname>-users` + узкая Role), вкладка Sign-in и меню пользователя, README/security/threat-model.
+**Проверено вживую** (dev-кластер, настоящий Keycloak по http): вход по логину и паролю, 403 до выдачи прав, `view` читает и не удаляет, остановка Keycloak не ломает кластер и открытую сессию,
+токен-вход жив, удаление аккаунта завершает сессию за ≈6 с; интеграционный тест роли из чарта в CI. **Не сделано:** группы Keycloak; продление токена по refresh-токену Keycloak (сейчас
+жизнь сессии = `SESSION_MAX_TTL`); страница Access control не подсказывает аккаунты людей.

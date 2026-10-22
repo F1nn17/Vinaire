@@ -348,6 +348,27 @@ flow.
   It's unavailable (503) when the backend isn't running in-cluster, since
   there's nowhere to durably persist to otherwise.
 
+- Identity broker for Keycloak sign-in (Roadmap Phase 80, owner's decision of 2026-10-22; `internal/oidcbroker`, `internal/authn/broker.go`,
+  `internal/api/keycloak.go`, chart `templates/users-namespace.yaml`) — the one place where Vinaire acts **with its own identity at
+  sign-in**, because there is no caller yet. Kubernetes' API server accepts an OIDC issuer only over https (`url` and `discoveryURL` are
+  both validated as https), so with a Keycloak on http it can't be made to trust the ID token. Instead, after Vinaire has verified the
+  sign-in itself, `Broker.TokenFor` finds or creates **one ServiceAccount per person** (labelled `vinaire.io/oidc-sub=<sha256 of the
+  OIDC subject>` and `managed-by: vinaire`, named `oidc-<username>`) in **one dedicated namespace** (`<fullname>-users`,
+  `OIDC_USER_NAMESPACE`) and asks the TokenRequest API for a short-lived token for it (lifetime = `SESSION_MAX_TTL`, at least 10 min).
+  The session holds that token instead of the ID token; the cluster sees `system:serviceaccount:<ns>:oidc-<name>` and **RBAC decides
+  everything**. Rules to keep: the broker creates ServiceAccounts and tokens and **never a binding or a role** — a new account has no
+  rights; Vinaire's Role (`<fullname>-user-accounts`) is a namespaced Role on `serviceaccounts` get/list/create and
+  `serviceaccounts/token` create **in that namespace only** (tested against a real cluster: it can't create an account elsewhere, read a
+  Secret, list bindings or mint a token in `kube-system`); an account is used only if it carries both labels for this subject — a
+  same-named account that isn't ours is never taken over (`-<hash>` suffix instead), and two accounts claiming one subject are refused;
+  names are derived and validated (`FuzzAccountName`); **no other ServiceAccount may live in the users' namespace**, because Vinaire can
+  mint a token for any account in it. Deleting an account ends its tokens within seconds and a recreated account of the same name does
+  not revive them. The mode is chosen per setting (`identityMode`: `serviceaccount` | `apiserver`; settings saved before keep
+  `apiserver`): an **http Keycloak is refused in `apiserver` mode** (the wizard used to print `--oidc-*` flags Kubernetes would refuse,
+  and every call came back 401), and `serviceaccount` is refused where Vinaire doesn't run in a cluster or has no users' namespace.
+  `GET /api/v1/auth/me` (a read) says how the session is known (`kubernetesUser`, no token). Audited as `oidc-user-provisioned` and
+  `oidc-token-issued` (account, subject, expiry — never the token). Not done: Keycloak groups (a ServiceAccount token carries none —
+  roles are bound per account), refreshing a token while the Keycloak session lives.
 - Backups of an application installed from an image (Roadmap Phase 77b, owner's decision of 2026-10-21; `internal/backup`,
   `internal/k8s/backup_actions.go`, `internal/api/backups.go`) — all as the caller, so the cluster's RBAC decides:
   `POST /api/v1/instances/{namespace}/{name}/backups` creates a **dump** (a `Job`, or a `CronJob` with a `schedule`; one

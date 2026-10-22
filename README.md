@@ -369,6 +369,22 @@ because a browser does not keep a `Secure` cookie over HTTP (see above).
 > ⚠️ On a private network the traffic is still readable by anyone on that network. On the internet use HTTPS.
 > Off by default; only the operator can turn it on — no request can.
 
+Signing in then needs **nothing changed in the cluster**: Kubernetes' API server accepts an OIDC issuer over HTTPS
+only, so Vinaire does not ask it to trust Keycloak. It verifies the sign-in itself and gives each person a
+ServiceAccount of their own in the namespace `<release>-vinaire-users` (chart value `keycloak.userNamespace`; keep other
+ServiceAccounts out of it) and a short-lived token for it. Kubernetes RBAC then decides everything, exactly as with a
+pasted token — and a new account has **no rights** until you bind a role to it. For the first administrator, after they
+have signed in once:
+
+```bash
+kubectl create clusterrolebinding shiraku-admin --clusterrole=cluster-admin \
+  --serviceaccount=<release>-vinaire-users:oidc-shiraku
+```
+
+The name is `oidc-` plus the user name (the user menu shows it); later roles can be bound from Vinaire's Access control
+page. If Keycloak is down nothing in the cluster is affected — only new sign-ins wait, and pasting a token still works.
+Keycloak groups are not carried over (a ServiceAccount token has none): bind roles per account.
+
 #### Keeping the master key outside the cluster
 
 By default the key that seals Vinaire's store lives in a Secret next to the data. If you run HashiCorp Vault or

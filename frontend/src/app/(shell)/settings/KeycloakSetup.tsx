@@ -8,6 +8,8 @@ import {
   useSessions,
   setKeycloakTokenLogin,
   setupKeycloak,
+  accountNameFor,
+  type IdentityMode,
   useKeycloakStatus,
   type KeycloakSetupResult,
 } from "@/lib/api/keycloak";
@@ -23,7 +25,9 @@ const input =
 // the request returns.
 export function KeycloakSetup() {
   const { data: status, error, isLoading, mutate } = useKeycloakStatus();
-  const [result, setResult] = useState<KeycloakSetupResult | null>(null);
+  const [result, setResult] = useState<
+    (KeycloakSetupResult & { firstUser?: string }) | null
+  >(null);
   const [removing, setRemoving] = useState(false);
   // a Keycloak just installed from the card above: the form below is filled in from it
   const [installed, setInstalled] = useState<InstalledKeycloak | null>(null);
@@ -105,6 +109,11 @@ export function KeycloakSetup() {
                 <div>Client: {status.clientId}</div>
                 <div>Redirect: {status.redirectUrl}</div>
                 {status.setUpBy && <div>Set up by: {status.setUpBy}</div>}
+                <div>
+                  {status.identityMode === "serviceaccount"
+                    ? `People reach the cluster through their own ServiceAccount in the namespace ${status.userNamespace ?? ""}`
+                    : "People reach the cluster through the API server (it trusts Keycloak)"}
+                </div>
               </div>
             )}
             {status.pendingError && (
@@ -179,7 +188,13 @@ export function KeycloakSetup() {
   );
 }
 
-function Done({ result }: { result: KeycloakSetupResult }) {
+function Done({
+  result,
+}: {
+  result: KeycloakSetupResult & { firstUser?: string };
+}) {
+  const account = accountNameFor(result.firstUser || "your-user");
+  const subject = `${result.userNamespace ?? "<namespace>"}:${account}`;
   return (
     <div className="flex flex-col gap-3 rounded-[10px] border border-ok/40 bg-surface p-5 text-xs">
       <div className="text-[13px] font-semibold text-ok">
@@ -192,24 +207,46 @@ function Done({ result }: { result: KeycloakSetupResult }) {
           </li>
         ))}
       </ul>
-      <div className="rounded-lg border border-warn/40 bg-surface-2 p-3 text-text-muted">
-        <b className="text-warn">One more thing, outside Vinaire.</b> Vinaire
-        hands Keycloak&apos;s ID token to the Kubernetes API, so the
-        cluster&apos;s API server must trust this issuer — otherwise signing in
-        works, but every cluster call is a 401. Add to kube-apiserver (for k3s,
-        under <code className="font-mono">kube-apiserver-arg</code> in{" "}
-        <code className="font-mono">/etc/rancher/k3s/config.yaml</code>, then
-        restart it):
-        <pre className="mt-2 overflow-x-auto rounded bg-bg p-2 font-mono text-[11px]">
-          {result.apiServerFlags.join("\n")}
-        </pre>
-        Then give your Keycloak users rights, for example{" "}
-        <code className="font-mono">
-          kubectl create clusterrolebinding alice-view
-          --clusterrole=vinaire-viewer --user=oidc:alice
-        </code>{" "}
-        (or bind it from Vinaire&apos;s Access control page).
-      </div>
+      {result.identityMode === "serviceaccount" ? (
+        <div className="rounded-lg border border-border bg-surface-2 p-3 text-text-muted">
+          <b className="text-text">Nothing to change in the cluster.</b> Vinaire
+          checks the sign-in itself and gives each person a ServiceAccount of
+          their own in the namespace{" "}
+          <code className="font-mono">{result.userNamespace}</code>, with a
+          short-lived token for it. Kubernetes RBAC decides everything, and a
+          new account has <b>no rights</b> until you give it some. The first
+          time, from a machine with kubectl (for the first administrator, after
+          they have signed in once):
+          <pre className="mt-2 overflow-x-auto rounded bg-bg p-2 font-mono text-[11px]">
+            {`kubectl create clusterrolebinding ${account}-admin \\
+  --clusterrole=cluster-admin --serviceaccount=${subject}`}
+          </pre>
+          Later, bind roles from Vinaire&apos;s Access control page to{" "}
+          <code className="font-mono">system:serviceaccount:{subject}</code>. If
+          Keycloak is down, nothing in the cluster is affected — only new
+          sign-ins wait; pasting a token still works.
+        </div>
+      ) : (
+        <div className="rounded-lg border border-warn/40 bg-surface-2 p-3 text-text-muted">
+          <b className="text-warn">One more thing, outside Vinaire.</b> Vinaire
+          hands Keycloak&apos;s ID token to the Kubernetes API, so the
+          cluster&apos;s API server must trust this issuer — otherwise signing
+          in works, but every cluster call is a 401. Kubernetes accepts an https
+          issuer only. Add to kube-apiserver (for k3s, under{" "}
+          <code className="font-mono">kube-apiserver-arg</code> in{" "}
+          <code className="font-mono">/etc/rancher/k3s/config.yaml</code>, then
+          restart it):
+          <pre className="mt-2 overflow-x-auto rounded bg-bg p-2 font-mono text-[11px]">
+            {(result.apiServerFlags ?? []).join("\n")}
+          </pre>
+          Then give your Keycloak users rights, for example{" "}
+          <code className="font-mono">
+            kubectl create clusterrolebinding alice-view
+            --clusterrole=vinaire-viewer --user=oidc:alice
+          </code>{" "}
+          (or bind it from Vinaire&apos;s Access control page).
+        </div>
+      )}
     </div>
   );
 }
@@ -225,7 +262,7 @@ function SetupForm({
 }: {
   reconfigure: boolean;
   prefill: InstalledKeycloak | null;
-  onDone: (r: KeycloakSetupResult) => void;
+  onDone: (r: KeycloakSetupResult & { firstUser?: string }) => void;
 }) {
   const { data: kcStatus } = useKeycloakStatus();
   const [f, setF] = useState({
@@ -241,6 +278,8 @@ function SetupForm({
     userPassword: "",
     userChangePassword: true,
     allowTokenLogin: true,
+    // "" = automatic: ServiceAccounts for an http address, the API server for an https one
+    identityMode: "" as IdentityMode | "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -270,10 +309,11 @@ function SetupForm({
         userPassword: f.createUser ? f.userPassword : "",
         userChangePassword: f.userChangePassword,
         allowTokenLogin: f.allowTokenLogin,
+        ...(f.identityMode ? { identityMode: f.identityMode } : {}),
       });
       // the passwords leave this form's state as soon as they were sent
       setF({ ...f, adminPassword: "", userPassword: "" });
-      onDone(r);
+      onDone({ ...r, firstUser: f.createUser ? f.user.trim() : "" });
     } catch (err) {
       setError(friendlyErrorMessage(err));
     } finally {
@@ -307,6 +347,37 @@ function SetupForm({
           {prefill
             ? "Filled in from the Keycloak installed above."
             : `The address Keycloak is reached on — one your browser and Vinaire can both open. ${kcStatus?.allowHttpPrivateNetwork ? "Use https; http is accepted only for an address on a private network (home server, NetBird)." : "Vinaire only talks to a Keycloak over https."}`}
+        </Hint>
+      </label>
+      <label className="flex flex-col gap-1.5 text-xs text-text-muted">
+        How people reach the cluster
+        <select
+          aria-label="How people reach the cluster"
+          value={f.identityMode}
+          onChange={(e) =>
+            set({ identityMode: e.target.value as IdentityMode | "" })
+          }
+          className={input}
+        >
+          <option value="">
+            Automatic — a ServiceAccount per person for an http address, the API
+            server for https
+          </option>
+          <option
+            value="serviceaccount"
+            disabled={kcStatus?.brokerAvailable === false}
+          >
+            A ServiceAccount per person — nothing to change in the cluster,
+            works with http
+          </option>
+          <option value="apiserver">
+            Through the API server — it must trust Keycloak (https only)
+          </option>
+        </select>
+        <Hint>
+          {kcStatus?.brokerAvailable === false
+            ? `ServiceAccounts aren't available here: ${kcStatus.brokerReason ?? ""}`
+            : "With ServiceAccounts Vinaire verifies the sign-in and gives each person an account of their own (no rights until you bind a role); Kubernetes' RBAC still decides everything. With the API server, Kubernetes itself must be set up to trust Keycloak, which it does over https only."}
         </Hint>
       </label>
       <div className="grid grid-cols-3 gap-3">

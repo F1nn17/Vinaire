@@ -129,6 +129,10 @@ spec:
             - name: TRUST_FORWARDED_FOR
               value: "true"
             {{- end }}
+            {{- if .Values.keycloak.serviceAccountSignIn.enabled }}
+            - name: OIDC_USER_NAMESPACE
+              value: {{ include "vinaire.userNamespace" . | quote }}
+            {{- end }}
             {{- if .Values.keycloak.allowHttpPrivateNetwork }}
             - name: OIDC_ALLOW_HTTP_PRIVATE_NETWORK
               value: "true"

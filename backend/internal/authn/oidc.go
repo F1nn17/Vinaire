@@ -110,12 +110,14 @@ func (m *Manager) HandleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 // redirects the browser here with `code`/`state` after a successful
 // login. Exchanges the code for tokens, verifies the ID token, and starts
 // a session exactly like token mode's, just sourced from Keycloak instead
-// of a pasted token — the K8s bearer for this session is the ID token
-// itself; the target cluster's API server needs its own
+// of a pasted token. By default the K8s bearer for this session is the ID
+// token itself; the target cluster's API server then needs its own
 // --oidc-issuer-url/--oidc-client-id configured (and a ClusterRoleBinding
-// for the resulting user/group) for RBAC to actually recognize it — see
-// AGENTS.md's example. Vinaire itself never evaluates permissions; the K8s
-// API does, on every call, same as token mode.
+// for the resulting user/group) for RBAC to actually recognize it — and
+// Kubernetes accepts only an https issuer. With an IdentityBroker (broker.go,
+// Roadmap Phase 80) the bearer is a ServiceAccount token of the person's own
+// instead, which needs nothing from the API server. Either way Vinaire itself
+// never evaluates permissions; the K8s API does, on every call, same as token mode.
 func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	oc := m.getOIDC()
 	if m.Mode == ModeDisabled || oc == nil {
