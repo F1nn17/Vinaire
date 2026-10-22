@@ -6,6 +6,7 @@ import { applyErrorMessage } from "@/components/editor/useYamlApply";
 import { useResourceTable } from "@/lib/api/allResources";
 import { createResource } from "@/lib/api/resources";
 import { getImageTags } from "@/lib/api/imageTags";
+import { useKeycloakStatus } from "@/lib/api/keycloak";
 import { applyInstance, readyReplicas, withBackoff } from "@/lib/images/apply";
 import {
   DB_NAME,
@@ -49,6 +50,9 @@ export function KeycloakInstall({
 }: {
   onReady: (k: InstalledKeycloak) => void;
 }) {
+  // the operator may have allowed plain http on a private network (a home server without a certificate)
+  const { data: kcStatus } = useKeycloakStatus();
+  const httpOk = !!kcStatus?.allowHttpPrivateNetwork;
   const [f, setF] = useState({
     namespace: "keycloak",
     host: "",
@@ -172,8 +176,10 @@ export function KeycloakInstall({
         <span className="font-mono">
           {DB_NAME}, {KC_NAME}
         </span>
-        . For real use give Keycloak an address with https: Vinaire only talks
-        to a Keycloak over https.
+        .{" "}
+        {httpOk
+          ? "On the internet give Keycloak an address with https. On a private network (home server, NetBird) http works: this Vinaire is set up to allow it."
+          : "For real use give Keycloak an address with https: Vinaire only talks to a Keycloak over https."}
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -293,8 +299,9 @@ export function KeycloakInstall({
 
       {f.tls === "none" && (
         <div className="mt-3 text-xs text-warn">
-          Without https Keycloak will run, but Vinaire will refuse to use it for
-          sign-in (and passwords would cross the network in the clear).
+          {httpOk
+            ? "Without https the passwords cross the network in the clear. Vinaire accepts that only for an address on a private network (192.168.x, 10.x, 172.16-31.x, 100.64-127.x); never use it across the internet."
+            : "Without https Keycloak will run, but Vinaire will refuse to use it for sign-in (and passwords would cross the network in the clear). On a home server without a certificate the operator can allow http on a private network: chart value keycloak.allowHttpPrivateNetwork=true."}
         </div>
       )}
 

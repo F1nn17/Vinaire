@@ -49,9 +49,13 @@ The phase list and its order live only in [ROADMAP.md](../ROADMAP.md).
 - Where backups go is configurable and optional: a PVC in the cluster or external S3.
 - Restore goes into a **new** instance, never over a running one.
 
+## Home server without TLS (decided 2026-10-21)
+
+- Keycloak sign-in may run over plain http, but only as an operator opt-in (`keycloak.allowHttpPrivateNetwork`) and only on a private network (RFC 1918, 100.64/10, IPv6 ULA) — not a checkbox in the UI, not for public addresses.
+
 ## Working with agents
 
 - Work through phases one after another in a session until the context fills, then continue in a new one. Each phase ends with a commit, a CHANGELOG.md entry and a short summary (done / checked / left).
 - ROADMAP.md is large: find a phase with `grep -n "^## Phase" ROADMAP.md` and read only that section.
-- Do not push; pushing is the owner's job.
+- Push feature branches (never `main`); the owner merges the PR, then refresh local `main` and branch the next task from it.
 - A phase marked "discuss first" (e.g. Phase 77) needs the owner's decision before any code.

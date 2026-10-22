@@ -81,6 +81,12 @@ type Handler struct {
 	Provisions             *provision.Registry
 	ProvisionAllowInsecure bool
 
+	// OIDCAllowHTTPPrivate (OIDC_ALLOW_HTTP_PRIVATE_NETWORK, a deliberate operator opt-in for a home
+	// server without a certificate): Keycloak may be reached over plain http and its administrator's
+	// password may arrive over plain http — but only on a private network (netguard.IsPrivate), never
+	// across the internet.
+	OIDCAllowHTTPPrivate bool
+
 	// Roadmap Phase 28: the Helm application catalog and release operations.
 	// nil means "not configured" and the endpoints answer 503.
 	Catalog  *helm.Catalog

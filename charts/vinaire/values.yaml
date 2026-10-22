@@ -126,6 +126,17 @@ oidc:
   existingSecretKey: clientSecret
   redirectURL: ""
 
+# Signing in through Keycloak set up from Vinaire's Settings -> Sign-in tab normally needs https:
+# Vinaire talks to a Keycloak, and accepts its administrator's password, over TLS only. A home
+# server on a private network often has no certificate. Set this to true to allow plain http for
+# exactly that case: Keycloak may be reached over http, and the administrator's password may arrive
+# over http, ONLY when the address is on a private network (10.x, 172.16-31.x, 192.168.x, 100.64-127.x
+# - NetBird/Tailscale). An http address anywhere else is still refused. Never a substitute for TLS
+# across the internet. Also needs cookie.secure=false, because a browser does not keep a Secure
+# cookie over http.
+keycloak:
+  allowHttpPrivateNetwork: false
+
 # The public URL this Vinaire install is reachable at (e.g.
 # "https://vinaire.example.com"), used only to send the browser back to
 # the right place after an OIDC login. Leave empty for token/disabled

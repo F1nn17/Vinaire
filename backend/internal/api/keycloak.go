@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -66,7 +67,7 @@ func (h *Handler) authDocsAvailable(w http.ResponseWriter) bool {
 }
 
 func (h *Handler) oidcHTTPClient() *http.Client {
-	return netguard.Client(netguard.Options{AllowLoopback: h.OIDCAllowInsecure, Timeout: 30 * time.Second})
+	return netguard.Client(netguard.Options{AllowLoopback: h.OIDCAllowInsecure, AllowHTTPOnPrivate: h.OIDCAllowHTTPPrivate, Timeout: 30 * time.Second})
 }
 
 func (h *Handler) loadStoredOIDC(ctx context.Context) (*storedOIDC, error) {
@@ -156,6 +157,8 @@ type KeycloakStatus struct {
 	PendingErr  string `json:"pendingError,omitempty"`
 	// OperatorManaged: AUTH_MODE=oidc, set by the deployment, not by this wizard.
 	OperatorManaged bool `json:"operatorManaged,omitempty"`
+	// AllowHTTPPrivate: the operator allowed plain http to a Keycloak on a private network.
+	AllowHTTPPrivate bool `json:"allowHttpPrivateNetwork"`
 }
 
 // KeycloakStatus handles GET /api/v1/auth/keycloak.
@@ -163,7 +166,7 @@ func (h *Handler) KeycloakStatus(w http.ResponseWriter, r *http.Request) {
 	if !h.requireVinaireRight(w, r, "auth", "get") {
 		return
 	}
-	st := KeycloakStatus{Available: true}
+	st := KeycloakStatus{Available: true, AllowHTTPPrivate: h.OIDCAllowHTTPPrivate}
 	oidcOn, tokenOn := h.Auth.SignInMethods()
 	st.Active, st.TokenLogin = oidcOn, tokenOn
 	switch {
@@ -233,7 +236,7 @@ func (h *Handler) KeycloakSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	if !h.authDocsAvailable(w) || !h.requireSecureTransport(w, r) {
+	if !h.authDocsAvailable(w) || !h.requireSecureTransportOrPrivate(w, r) {
 		return
 	}
 	if !h.AuthDocs.Encrypted() {
@@ -272,8 +275,16 @@ func (h *Handler) KeycloakSetup(w http.ResponseWriter, r *http.Request) {
 	// other server-side fetch: https, no loopback/link-local — unless the operator
 	// opted into local development.
 	if u, _ := url.Parse(p.BaseURL); u != nil && u.Scheme != "https" && !h.OIDCAllowInsecure {
-		respondError(w, http.StatusBadRequest, "the Keycloak URL must be https (OIDC_ALLOW_INSECURE=true allows http on loopback for local development)")
-		return
+		if !h.OIDCAllowHTTPPrivate {
+			respondError(w, http.StatusBadRequest, "the Keycloak URL must be https — for a home server on a private network the operator can allow http (OIDC_ALLOW_HTTP_PRIVATE_NETWORK=true, chart value auth.allowHttpPrivateNetwork)")
+			return
+		}
+		// an address typed as a literal is checked here for a clear message; a name is checked on the
+		// address the connection actually goes to
+		if ip := net.ParseIP(u.Hostname()); ip != nil && !netguard.IsPrivate(ip) {
+			respondError(w, http.StatusBadRequest, "plain http is only allowed to an address on a private network (10.x, 172.16-31.x, 192.168.x, 100.64-127.x); use https for this Keycloak")
+			return
+		}
 	}
 
 	hc := h.oidcHTTPClient()
@@ -407,4 +418,33 @@ func (h *Handler) KeycloakDisable(w http.ResponseWriter, r *http.Request) {
 	h.keycloak.mu.Unlock()
 	h.auditLog(r, "keycloak-disable", "", realm)
 	respondJSON(w, map[string]string{"status": "ok"})
+}
+
+// clientOnPrivateNetwork reports whether the browser that sent the request is on a private network:
+// the connection's peer and, when a proxy says who it forwarded for, every address it lists. A proxy
+// that does not set X-Forwarded-For shows only itself, so the setting is meant for a deployment whose
+// proxy does (Traefik and nginx do); it guards an administrator's mistake, not an attacker.
+func clientOnPrivateNetwork(r *http.Request) bool {
+	remote, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || !netguard.IsPrivate(net.ParseIP(remote)) {
+		return false
+	}
+	for _, v := range r.Header.Values("X-Forwarded-For") {
+		for _, part := range strings.Split(v, ",") {
+			if !netguard.IsPrivate(net.ParseIP(strings.TrimSpace(part))) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// requireSecureTransportOrPrivate is requireSecureTransport, except that when the operator allowed http on a
+// private network (OIDC_ALLOW_HTTP_PRIVATE_NETWORK) the Keycloak administrator's password may also
+// arrive over plain http from a client on a private network.
+func (h *Handler) requireSecureTransportOrPrivate(w http.ResponseWriter, r *http.Request) bool {
+	if h.OIDCAllowHTTPPrivate && clientOnPrivateNetwork(r) {
+		return true
+	}
+	return h.requireSecureTransport(w, r)
 }

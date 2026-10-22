@@ -60,6 +60,7 @@ The rules a change must keep are the checklist in [AGENTS.md](../AGENTS.md).
 | Reading the audit log to learn others' activity | Right `get` on `audit.vinaire.io`, asked of the cluster as the caller | `audit_view.go` | `audit_view_test.go` |
 | Changing Vinaire's own configuration without being allowed | `requireVinaireRight` first, as the caller; a test lists every gated handler | `vinaire_authz.go` | `codebase_rules_test.go` |
 | Lockout by turning off sign-in | Token login cannot be disabled while OIDC is off | `keycloak.go` | `keycloak_test.go` |
+| Plain http used where it should not be (Keycloak, administrator's password) | https by default; http only when the operator sets `OIDC_ALLOW_HTTP_PRIVATE_NETWORK`, and then only to/from private-network addresses, decided on the connected address and the forwarding chain | `internal/netguard`, `internal/api/keycloak.go` | `netguard_test.go`, `keycloak_private_test.go` |
 | Compromised Vinaire pod | No Secrets access and no write verbs for its own ServiceAccount in token/OIDC mode; read-only root filesystem; registry sealed at rest; key optionally in Vault | chart `clusterrole.yaml`, `internal/clusters/crypto.go` | `security.md` #3, #11, I1 |
 
 ## Where authorisation is decided
