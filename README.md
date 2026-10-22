@@ -347,6 +347,28 @@ helm upgrade --install vinaire ./charts/vinaire … --set cookie.secure=false
 > ⚠️ With `cookie.secure=false` the session cookie also travels unencrypted — anyone on the
 > network path can read it. Never do this on a shared or real cluster.
 
+#### Keycloak sign-in on a home server without HTTPS (`keycloak.allowHttpPrivateNetwork`)
+
+Setting up sign-in through Keycloak (Settings → Sign-in) needs HTTPS by default: Vinaire talks to a Keycloak, and
+accepts its administrator's password, over TLS only. A home server on a private network usually has no
+certificate. For exactly that case the operator can allow plain HTTP — **only on a private network**:
+
+```bash
+helm upgrade vinaire oci://ghcr.io/f1nn17/charts/vinaire --namespace vinaire --reuse-values \
+  --set keycloak.allowHttpPrivateNetwork=true \
+  --set cookie.secure=false
+```
+
+(or the same two keys in your values file; without Helm set the environment variables
+`OIDC_ALLOW_HTTP_PRIVATE_NETWORK=true` and `COOKIE_SECURE=false`). Then Keycloak may be an `http://` address, and
+the administrator's password may be sent over HTTP, but only when the address is RFC 1918 (`10.x`, `172.16–31.x`,
+`192.168.x`), `100.64.0.0/10` (NetBird, Tailscale) or IPv6 unique-local — checked on the address the connection
+really goes to, so an `http://` name that resolves to a public address is still refused. `cookie.secure=false` is needed
+because a browser does not keep a `Secure` cookie over HTTP (see above).
+
+> ⚠️ On a private network the traffic is still readable by anyone on that network. On the internet use HTTPS.
+> Off by default; only the operator can turn it on — no request can.
+
 #### Keeping the master key outside the cluster
 
 By default the key that seals Vinaire's store lives in a Secret next to the data. If you run HashiCorp Vault or
@@ -381,6 +403,7 @@ has (Custom Resources; see Vinaire's Settings → Справка once logged in)
 | `ImagePullBackOff` on the Vinaire pod | The node doesn't have `vinaire:latest`. Import it (see scenario 1) and check `sudo k3s ctr images list \| grep vinaire`; make sure `image.pullPolicy` is `IfNotPresent`/`Never`, and the tag in `kubectl describe pod` is the one you imported. |
 | `clusterrole "vinaire-viewer" not found` when binding | Vinaire was deployed without the chart (a hand-written Deployment), so the roles were never created. Install it with `helm upgrade --install` — the chart creates them. |
 | After entering a token you're sent back to the login screen | (1) `cookie.secure` is `true` but you're on plain HTTP — use HTTPS, or `--set cookie.secure=false` for a local trial; (2) `authMode` isn't `token`; (3) the token expired (`--duration`). |
+| Setting up Keycloak sign-in says the URL must be https / the password may only be sent over HTTPS | You are on a home server without a certificate: allow plain HTTP **on a private network** — see [Keycloak sign-in on a home server without HTTPS](#keycloak-sign-in-on-a-home-server-without-https-keycloakallowhttpprivatenetwork). |
 | `pods is forbidden` / `403` everywhere | The account whose token you pasted has no rights. Check with `kubectl auth can-i … --as=system:serviceaccount:<ns>:<name>` and make sure the **viewer** role is bound to *your* ServiceAccount, not to Vinaire's own. |
 | Marketplace install: "you don't have the permissions this chart needs" | Bind `-installer` (in addition to `-viewer`). Note `-admin` grants no cluster rights. |
 | The Ingress answers 404 / doesn't resolve | `ingress.className` must match your controller (`kubectl get ingressclass`); the host must resolve to it (hosts file / DNS). |
