@@ -162,6 +162,7 @@ func newRouter(d routerDeps) *chi.Mux {
 		protected.Get("/crds/{crdName}/instances/{name}", workloadsHandler.CRDInstanceDetail)
 		protected.Get("/auth/sessions", workloadsHandler.Sessions)
 		protected.Get("/auth/keycloak", workloadsHandler.KeycloakStatus)
+		protected.Get("/auth/me", workloadsHandler.WhoAmI)
 		protected.Get("/metrics/status", workloadsHandler.MetricsStatus)
 		protected.Get("/metrics/plan", workloadsHandler.MetricsPlan)
 		protected.Get("/metrics/query", workloadsHandler.MetricsQuery)

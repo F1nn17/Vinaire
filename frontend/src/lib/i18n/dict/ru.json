@@ -2060,5 +2060,16 @@
  "For real use give Keycloak an address with https: Vinaire only talks to a Keycloak over https.": "Для настоящего использования дайте Keycloak адрес с https: Vinaire общается с Keycloak только по https.",
  "Without https the passwords cross the network in the clear. Vinaire accepts that only for an address on a private network (192.168.x, 10.x, 172.16-31.x, 100.64-127.x); never use it across the internet.": "Без https пароли ходят по сети открытым текстом. Vinaire допускает это только для адреса в частной сети (192.168.x, 10.x, 172.16-31.x, 100.64-127.x); никогда не используйте это через интернет.",
  "Without https Keycloak will run, but Vinaire will refuse to use it for sign-in (and passwords would cross the network in the clear). On a home server without a certificate the operator can allow http on a private network: chart value keycloak.allowHttpPrivateNetwork=true.": "Без https Keycloak запустится, но Vinaire откажется использовать его для входа (и пароли ходили бы по сети открытым текстом). На домашнем сервере без сертификата оператор может разрешить http в частной сети: значение чарта keycloak.allowHttpPrivateNetwork=true.",
- "Use https; http is accepted only for an address on a private network (home server, NetBird).": "Используйте https; http принимается только для адреса в частной сети (домашний сервер, NetBird)."
+ "Use https; http is accepted only for an address on a private network (home server, NetBird).": "Используйте https; http принимается только для адреса в частной сети (домашний сервер, NetBird).",
+ "People reach the cluster through the API server (it trusts Keycloak)": "Люди попадают в кластер через API-сервер (он доверяет Keycloak)",
+ "Nothing to change in the cluster.": "В кластере ничего менять не нужно.",
+ "How people reach the cluster": "Как люди попадают в кластер",
+ "Automatic — a ServiceAccount per person for an http address, the API server for https": "Автоматически — ServiceAccount на человека для http-адреса, API-сервер для https",
+ "A ServiceAccount per person — nothing to change in the cluster, works with http": "ServiceAccount на человека — в кластере менять ничего не нужно, работает с http",
+ "Through the API server — it must trust Keycloak (https only)": "Через API-сервер — он должен доверять Keycloak (только https)",
+ "With ServiceAccounts Vinaire verifies the sign-in and gives each person an account of their own (no rights until you bind a role); Kubernetes' RBAC still decides everything. With the API server, Kubernetes itself must be set up to trust Keycloak, which it does over https only.": "С ServiceAccount Vinaire сам проверяет вход и даёт каждому человеку собственную учётную запись (прав нет, пока вы не привяжете роль); всё решает RBAC Kubernetes. С API-сервером сам Kubernetes должен доверять Keycloak, а это возможно только по https.",
+ "Later, bind roles from Vinaire's Access control page to": "Позже привязывайте роли на странице Access control к",
+ "The cluster knows you as": "Кластер знает вас как",
+ "If something is forbidden, an administrator has to bind a role to that name.": "Если что-то запрещено, администратору нужно привязать роль к этому имени.",
+ "Kubernetes accepts an https issuer only. Add to kube-apiserver (for k3s, under": "Kubernetes принимает только https-issuer. Добавьте в kube-apiserver (для k3s — в"
 }

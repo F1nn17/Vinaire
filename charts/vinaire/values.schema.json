@@ -97,7 +97,14 @@
     },
     "keycloak": {
       "type": "object",
-      "properties": { "allowHttpPrivateNetwork": { "type": "boolean" } }
+      "properties": {
+        "allowHttpPrivateNetwork": { "type": "boolean" },
+        "userNamespace": { "type": "string" },
+        "serviceAccountSignIn": {
+          "type": "object",
+          "properties": { "enabled": { "type": "boolean" } }
+        }
+      }
     },
     "oidc": {
       "type": "object",

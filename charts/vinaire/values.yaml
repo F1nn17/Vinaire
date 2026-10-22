@@ -136,6 +136,16 @@ oidc:
 # cookie over http.
 keycloak:
   allowHttpPrivateNetwork: false
+  # How a person who signed in through Keycloak reaches the cluster. Kubernetes' API server accepts an OIDC
+  # issuer only over https, so with an http Keycloak (a home server) it can't be told to trust it. With this on
+  # (the default) Vinaire verifies the sign-in itself and gives each person a ServiceAccount of their own in
+  # userNamespace plus a short-lived token for it: the cluster's RBAC still decides everything, a new account has
+  # no rights until you bind a role to it, and nothing about the API server or K3s needs to change. The chart
+  # creates that namespace and a Role letting Vinaire create accounts and request tokens THERE and nowhere else.
+  serviceAccountSignIn:
+    enabled: true
+  # empty: <release>-vinaire-users, i.e. "<fullname>-users"
+  userNamespace: ""
 
 # The public URL this Vinaire install is reachable at (e.g.
 # "https://vinaire.example.com"), used only to send the browser back to

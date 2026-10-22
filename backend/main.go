@@ -167,6 +167,13 @@ func main() {
 	}
 	gitops.InstallTransport(netguard.Client(netguard.Options{Timeout: 2 * time.Minute}), devGit)
 	workloadsHandler.AuthDocs = gitopsDocs
+	// Roadmap Phase 80: people who sign in through Keycloak can be given a ServiceAccount of their own, in one
+	// namespace, using Vinaire's own in-cluster identity (the chart grants a Role there and nowhere else).
+	if ss, ok := clusterStore.(*clusters.SecretStore); ok && clusterStoreOK {
+		workloadsHandler.BrokerClientset = ss.Clientset()
+		workloadsHandler.BrokerNamespace = os.Getenv("OIDC_USER_NAMESPACE")
+		workloadsHandler.BrokerTTL = cfg.SessionMaxTTL
+	}
 	if os.Getenv("OIDC_ALLOW_HTTP_PRIVATE_NETWORK") == "true" {
 		workloadsHandler.OIDCAllowHTTPPrivate = true
 		slog.Warn("OIDC_ALLOW_HTTP_PRIVATE_NETWORK is set: Keycloak may be reached over plain http, and its administrator's password may be sent over plain http, on a private network. Use it for a home server without a certificate; never across the internet.")

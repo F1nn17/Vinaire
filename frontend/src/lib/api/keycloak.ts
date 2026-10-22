@@ -19,7 +19,15 @@ export type KeycloakStatus = {
   operatorManaged?: boolean;
   // the operator allowed plain http to a Keycloak on a private network (home server without TLS)
   allowHttpPrivateNetwork?: boolean;
+  // how a person who signed in reaches the cluster (Phase 80): "serviceaccount" (an account of their own
+  // in userNamespace) or "apiserver" (the ID token; the API server must trust the issuer, https only)
+  identityMode?: IdentityMode;
+  userNamespace?: string;
+  brokerAvailable?: boolean;
+  brokerReason?: string;
 };
+
+export type IdentityMode = "serviceaccount" | "apiserver";
 
 export type KeycloakSetupRequest = {
   keycloakUrl: string;
@@ -33,13 +41,18 @@ export type KeycloakSetupRequest = {
   userPassword: string;
   userChangePassword: boolean;
   allowTokenLogin: boolean;
+  // empty: ServiceAccounts for an http address, the API server for an https one
+  identityMode?: IdentityMode;
 };
 
 export type KeycloakSetupResult = {
   steps: { what: string; status: string }[];
   issuer: string;
   redirectUrl: string;
-  apiServerFlags: string[];
+  // only for the API-server mode
+  apiServerFlags?: string[];
+  identityMode: IdentityMode;
+  userNamespace?: string;
 };
 
 const json = { "Content-Type": "application/json" };
@@ -95,5 +108,31 @@ export function useSessions() {
 export function revokeSession(ref: string): Promise<void> {
   return apiFetch(`/api/v1/auth/sessions/${encodeURIComponent(ref)}`, {
     method: "DELETE",
+  });
+}
+
+// The name a person's account gets: "oidc-" plus the user name, lower-cased with anything but letters and
+// digits turned into single dashes (the same rule as the backend's oidcbroker.AccountName).
+export function accountNameFor(username: string): string {
+  const core = username
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+  return `oidc-${core || "user"}`;
+}
+
+// How this session is known to the cluster (GET /api/v1/auth/me). kubernetesUser is set for a person who
+// signed in through Keycloak by ServiceAccount: it is what an administrator binds a role to.
+export type WhoAmI = {
+  username: string;
+  kubernetesUser: string;
+  mode: string;
+};
+
+export function useWhoAmI() {
+  return useSWR("auth-me", () => apiFetch<WhoAmI>("/api/v1/auth/me"), {
+    revalidateOnFocus: false,
   });
 }

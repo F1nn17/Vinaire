@@ -1,0 +1,51 @@
+{{- if .Values.keycloak.serviceAccountSignIn.enabled }}
+{{- $ns := include "vinaire.userNamespace" . }}
+# A home for the people who sign in through Keycloak (Roadmap Phase 80). Kubernetes accepts an OIDC
+# issuer only over https, so on a home server without a certificate the API server can't be pointed at
+# Keycloak. Instead Vinaire verifies the sign-in itself and gives each person a ServiceAccount of their
+# own here, plus a short-lived token for it. The cluster then sees system:serviceaccount:{{ $ns }}:oidc-<name>
+# and RBAC decides everything: a new account has NO rights until an administrator binds a role to it.
+#
+# This namespace holds those accounts and nothing else, and the Role below lets Vinaire work in it and
+# nowhere else. Don't put other ServiceAccounts here: Vinaire can mint a token for any account in it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "vinaire.fullname" . }}-user-accounts
+  namespace: {{ $ns }}
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+rules:
+  # find the account of a person who signed in, make one the first time
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "list", "create"]
+  # and ask for a short-lived token for it (the TokenRequest API)
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "vinaire.fullname" . }}-user-accounts
+  namespace: {{ $ns }}
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "vinaire.fullname" . }}-user-accounts
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vinaire.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

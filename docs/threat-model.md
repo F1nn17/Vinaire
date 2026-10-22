@@ -61,6 +61,8 @@ The rules a change must keep are the checklist in [AGENTS.md](../AGENTS.md).
 | Changing Vinaire's own configuration without being allowed | `requireVinaireRight` first, as the caller; a test lists every gated handler | `vinaire_authz.go` | `codebase_rules_test.go` |
 | Lockout by turning off sign-in | Token login cannot be disabled while OIDC is off | `keycloak.go` | `keycloak_test.go` |
 | Plain http used where it should not be (Keycloak, administrator's password) | https by default; http only when the operator sets `OIDC_ALLOW_HTTP_PRIVATE_NETWORK`, and then only to/from private-network addresses, decided on the connected address and the forwarding chain | `internal/netguard`, `internal/api/keycloak.go` | `netguard_test.go`, `keycloak_private_test.go` |
+| An OIDC sign-in used to obtain more than the person has | The credential is a ServiceAccount of the person's own in one namespace; Vinaire never creates a binding, so rights come only from RBAC an administrator set; an account not made by Vinaire for this subject is never reused | `internal/oidcbroker`, chart Role | `broker_test.go`, `integration/broker_test.go` |
+| An http Keycloak that Kubernetes would refuse, silently leaving every call a 401 | The wizard refuses the API-server mode for an http Keycloak and does not print `--oidc-*` flags for it | `chooseIdentityMode` | `TestAnHTTPKeycloakIsNeverPaired…` |
 | Compromised Vinaire pod | No Secrets access and no write verbs for its own ServiceAccount in token/OIDC mode; read-only root filesystem; registry sealed at rest; key optionally in Vault | chart `clusterrole.yaml`, `internal/clusters/crypto.go` | `security.md` #3, #11, I1 |
 
 ## Where authorisation is decided
