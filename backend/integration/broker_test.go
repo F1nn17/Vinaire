@@ -16,6 +16,7 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -24,6 +25,8 @@ import (
 )
 
 var authenticationSelfReview = authenticationv1.SelfSubjectReview{}
+
+const brokerIssuer = "http://keycloak.home/realms/vinaire"
 
 const (
 	brokerRelease = "bk"
@@ -71,7 +74,7 @@ func TestBrokerWorksWithTheChartsRoleAndNothingMore(t *testing.T) {
 	b := &oidcbroker.Broker{Clientset: vinaire, Namespace: brokerUsersNS, TTL: time.Hour}
 
 	t.Run("a first sign-in gets an account and a token that works", func(t *testing.T) {
-		tok, err := b.TokenFor(ctx, authn.Identity{Subject: "11111111-aaaa", Username: "Shiraku"})
+		tok, err := b.TokenFor(ctx, authn.Identity{Issuer: brokerIssuer, Subject: "11111111-aaaa", Username: "Shiraku"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -97,7 +100,7 @@ func TestBrokerWorksWithTheChartsRoleAndNothingMore(t *testing.T) {
 	})
 
 	t.Run("the same person gets the same account again", func(t *testing.T) {
-		tok, err := b.TokenFor(ctx, authn.Identity{Subject: "11111111-aaaa", Username: "renamed"})
+		tok, err := b.TokenFor(ctx, authn.Identity{Issuer: brokerIssuer, Subject: "11111111-aaaa", Username: "renamed"})
 		if err != nil || !strings.HasSuffix(tok.KubernetesUser, ":oidc-shiraku") {
 			t.Fatalf("%+v %v", tok, err)
 		}
@@ -119,8 +122,44 @@ func TestBrokerWorksWithTheChartsRoleAndNothingMore(t *testing.T) {
 		}
 	})
 
+	t.Run("an account made before the issuer counted is claimed, not duplicated, with the chart's Role", func(t *testing.T) {
+		// as an older Vinaire made it: labelled with the subject alone, no issuer annotation
+		kubectl(t, "", "-n", brokerUsersNS, "create", "serviceaccount", "oidc-legacy")
+		kubectl(t, "", "-n", brokerUsersNS, "label", "serviceaccount", "oidc-legacy",
+			oidcbroker.LabelSubject+"="+oidcbroker.SubjectLabel("33333333-cccc"), oidcbroker.LabelManagedBy+"=vinaire")
+		adopting := &oidcbroker.Broker{Clientset: vinaire, Namespace: brokerUsersNS, TTL: time.Hour, AdoptLegacyIssuer: brokerIssuer}
+		tok, err := adopting.TokenFor(ctx, authn.Identity{Issuer: brokerIssuer, Subject: "33333333-cccc", Username: "legacy"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "system:serviceaccount:" + brokerUsersNS + ":oidc-legacy"; tok.KubernetesUser != want {
+			t.Fatalf("got %s, want the old account %s", tok.KubernetesUser, want)
+		}
+		sa, err := vinaire.CoreV1().ServiceAccounts(brokerUsersNS).Get(ctx, "oidc-legacy", metav1.GetOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sa.Labels[oidcbroker.LabelSubject] != oidcbroker.IdentityLabel(brokerIssuer, "33333333-cccc") || sa.Annotations[oidcbroker.AnnotationIssuer] != brokerIssuer {
+			t.Errorf("not relabelled: %v %v", sa.Labels, sa.Annotations)
+		}
+		// the right to patch stops at the users' namespace
+		if _, err := vinaire.CoreV1().ServiceAccounts("default").Patch(ctx, "default", types.MergePatchType, []byte(`{"metadata":{"labels":{"x":"y"}}}`), metav1.PatchOptions{}); err == nil {
+			t.Error("it could patch an account outside its namespace")
+		}
+	})
+
+	t.Run("the same subject under another issuer is another account", func(t *testing.T) {
+		other, err := b.TokenFor(ctx, authn.Identity{Issuer: "http://other-keycloak.home/realms/vinaire", Subject: "11111111-aaaa", Username: "Shiraku"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasSuffix(other.KubernetesUser, ":oidc-shiraku") {
+			t.Fatalf("another issuer reached the first issuer's account: %s", other.KubernetesUser)
+		}
+	})
+
 	t.Run("deleting the account ends its token within seconds", func(t *testing.T) {
-		tok, err := b.TokenFor(ctx, authn.Identity{Subject: "22222222-bbbb", Username: "temp"})
+		tok, err := b.TokenFor(ctx, authn.Identity{Issuer: brokerIssuer, Subject: "22222222-bbbb", Username: "temp"})
 		if err != nil {
 			t.Fatal(err)
 		}

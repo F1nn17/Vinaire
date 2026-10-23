@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/f1nn17/vinaire/backend/internal/oidcbroker"
 )
 
 func brokerReady() *Handler {
@@ -43,14 +45,14 @@ func TestServiceAccountModeNeedsAClusterAndANamespace(t *testing.T) {
 		if ok, why := h.brokerAvailable(); ok || why == "" {
 			t.Errorf("%s: brokerAvailable = %v %q", name, ok, why)
 		}
-		if h.brokerFor(IdentityServiceAccount) != nil {
+		if h.brokerFor(IdentityServiceAccount, "") != nil {
 			t.Errorf("%s: a broker was built without somewhere to work", name)
 		}
 	}
-	if brokerReady().brokerFor(IdentityAPIServer) != nil {
+	if brokerReady().brokerFor(IdentityAPIServer, "") != nil {
 		t.Error("the API-server mode has no broker")
 	}
-	if brokerReady().brokerFor(IdentityServiceAccount) == nil {
+	if brokerReady().brokerFor(IdentityServiceAccount, "") == nil {
 		t.Error("the service-account mode needs its broker")
 	}
 }
@@ -58,5 +60,12 @@ func TestServiceAccountModeNeedsAClusterAndANamespace(t *testing.T) {
 func TestSettingsSavedBeforePhase80KeepTheirMode(t *testing.T) {
 	if (&storedOIDC{}).mode() != IdentityAPIServer || (&storedOIDC{IdentityMode: IdentityServiceAccount}).mode() != IdentityServiceAccount {
 		t.Fatal("an old setting must keep using the ID token")
+	}
+}
+
+func TestTheBrokerCarriesThePinnedIssuerForLegacyAccounts(t *testing.T) {
+	b, ok := brokerReady().brokerFor(IdentityServiceAccount, "http://keycloak.home/realms/vinaire").(*oidcbroker.Broker)
+	if !ok || b.AdoptLegacyIssuer != "http://keycloak.home/realms/vinaire" {
+		t.Fatalf("the pinned issuer didn't reach the broker: %+v", b)
 	}
 }

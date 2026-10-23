@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/f1nn17/vinaire/backend/internal/clusters"
+	"github.com/f1nn17/vinaire/backend/internal/oidcbroker"
 )
 
 type fakeDocs struct {
@@ -230,5 +231,45 @@ func TestKeycloakSetupRefusesWhatItShould(t *testing.T) {
 	hd := newHarness(t, "disabled")
 	if w := hd.post(hd.h.KeycloakSetup, "POST", "admin", body); w.Code != http.StatusConflict {
 		t.Errorf("AUTH_MODE=disabled: %d %s", w.Code, w.Body)
+	}
+}
+
+// Phase 82: settings saved before the issuer was part of a person's identity get the issuer pinned, once, at
+// the first start — that is what lets the accounts made before be claimed, for that issuer and no other.
+func TestRestoreOIDCPinsTheIssuerOfSettingsSavedBeforeAndKeepsItAcrossStarts(t *testing.T) {
+	hs := newHarness(t, "token")
+	kc := fakeKeycloakServer(t)
+	docs := newFakeDocs(true)
+	hs.h.AuthDocs, hs.h.OIDCAllowInsecure = docs, true
+	hs.h.BrokerClientset, hs.h.BrokerNamespace = fake.NewSimpleClientset(), "vinaire-users"
+	issuer := kc.URL + "/realms/vinaire"
+	old, _ := json.Marshal(storedOIDC{Issuer: issuer, Realm: "vinaire", ClientID: "vinaire", ClientSecret: "s",
+		RedirectURL: "https://vinaire.example.com/api/v1/auth/oidc/callback", IdentityMode: IdentityServiceAccount})
+	docs.docs["auth-oidc"] = old
+
+	hs.h.RestoreOIDC(context.Background())
+
+	var saved storedOIDC
+	if err := json.Unmarshal(docs.docs["auth-oidc"], &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.KeyedBy != keyedByIssuerSubject || saved.LegacyAdoptIssuer != issuer {
+		t.Fatalf("the issuer was not pinned: %+v", saved)
+	}
+	b, ok := hs.mgr.IdentityBroker().(*oidcbroker.Broker)
+	if !ok || b.AdoptLegacyIssuer != issuer {
+		t.Fatalf("the running broker doesn't know the pinned issuer: %+v", hs.mgr.IdentityBroker())
+	}
+
+	// a later start keeps what was pinned, even if the setting now names another issuer
+	saved.Issuer = "http://another-keycloak.example/realms/x"
+	again, _ := json.Marshal(saved)
+	docs.docs["auth-oidc"] = again
+	hs.mgr.DisableOIDC()
+	hs.h.RestoreOIDC(context.Background())
+	var after storedOIDC
+	_ = json.Unmarshal(docs.docs["auth-oidc"], &after)
+	if after.LegacyAdoptIssuer != issuer {
+		t.Fatalf("the pinned issuer moved to %q", after.LegacyAdoptIssuer)
 	}
 }

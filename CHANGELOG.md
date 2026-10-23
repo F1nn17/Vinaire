@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **A person who signs in through Keycloak is now identified by issuer *and* subject.** Until now the account Vinaire gave a person (Phase 80) was found by the subject alone, so the same subject under another Keycloak or realm — for example after moving to a different server with an imported realm, or with a user created with a chosen id — would have reached the first one's account and its rights. The account now carries a label made from both, plus the issuer as an annotation.
+  **Upgrading from 1.2.0–1.2.2:** nothing to do. On its first start Vinaire pins the issuer it is set up with; the accounts made before are *claimed* — relabelled in place, keeping their name and therefore their RoleBindings — when their person next signs in under that issuer, audited as `oidc-account-adopted`, and under no other. The chart's Role for Vinaire in the users' namespace gains `patch` on ServiceAccounts for this (still only there). If you point Vinaire at a different Keycloak, people are new accounts with no rights, as they should be.
+
 ### Fixed
 
 - **After signing in through Keycloak the browser no longer lands on `http://localhost:3100`.** The backend's development default for `FRONTEND_URL` was used by every Helm install that didn't set `frontendURL`. The chart now always passes `FRONTEND_URL` (`/` — Vinaire serves its own UI), and the backend itself defaults to `/` whenever it serves the UI (`STATIC_DIR`, as in the image), keeping the `:3100` default only for `npm run dev`.

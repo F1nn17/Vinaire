@@ -8,6 +8,9 @@ import (
 // Identity is who Keycloak (or another OIDC provider) says has just signed in. Subject is the provider's
 // stable id for the person; Username is only a label and may change.
 type Identity struct {
+	// Issuer is the provider that vouched for the person — together with Subject it IS the identity: the same
+	// subject under another issuer (another Keycloak, another realm) is someone else.
+	Issuer   string
 	Subject  string
 	Username string
 }
