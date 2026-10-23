@@ -51,6 +51,12 @@ type storedSession struct {
 	Username string `json:"u,omitempty"`
 	K8sUser  string `json:"k,omitempty"`
 	Expires  int64  `json:"e"`
+	// renewal (Phase 84); the whole blob is sealed
+	RefreshToken string `json:"r,omitempty"`
+	Subject      string `json:"s,omitempty"`
+	Issuer       string `json:"i,omitempty"`
+	TokenExpires int64  `json:"te,omitempty"`
+	Validated    int64  `json:"va,omitempty"`
 }
 
 // SharedStore implements Store on top of KV.
@@ -92,7 +98,15 @@ func (s *SharedStore) decode(sealed []byte, now time.Time) (*Session, bool) {
 	if !exp.After(now) {
 		return nil, false
 	}
-	return &Session{K8sToken: st.Token, Username: st.Username, KubernetesUser: st.K8sUser, ExpiresAt: exp}, true
+	out := &Session{K8sToken: st.Token, Username: st.Username, KubernetesUser: st.K8sUser, ExpiresAt: exp,
+		RefreshToken: st.RefreshToken, Subject: st.Subject, Issuer: st.Issuer}
+	if st.TokenExpires > 0 {
+		out.TokenExpiresAt = time.Unix(st.TokenExpires, 0)
+	}
+	if st.Validated > 0 {
+		out.ValidatedAt = time.Unix(st.Validated, 0)
+	}
+	return out, true
 }
 
 // refresh reloads the shared view if it is older than max (a failed reload keeps the
@@ -166,6 +180,46 @@ func (s *SharedStore) lookup(key, id string) (*Session, bool) {
 	return &out, true
 }
 
+func encodeSession(sess *Session) ([]byte, error) {
+	st := storedSession{Token: sess.K8sToken, Username: sess.Username, K8sUser: sess.KubernetesUser, Expires: sess.ExpiresAt.Unix(),
+		RefreshToken: sess.RefreshToken, Subject: sess.Subject, Issuer: sess.Issuer}
+	if !sess.TokenExpiresAt.IsZero() {
+		st.TokenExpires = sess.TokenExpiresAt.Unix()
+	}
+	if !sess.ValidatedAt.IsZero() {
+		st.Validated = sess.ValidatedAt.Unix()
+	}
+	return json.Marshal(st) // #nosec G117 -- the blob is sealed by the caller (Sealer) before it reaches the Secret; it is never returned or logged
+}
+
+// Update writes a renewed session over the old one — the same key, so every replica finds it on its next
+// look at the store.
+func (s *SharedStore) Update(sess *Session) error {
+	key := storeKey(sess.ID)
+	s.mu.Lock()
+	_, known := s.snap[key]
+	s.mu.Unlock()
+	if !known {
+		return ErrNoSession
+	}
+	blob, err := encodeSession(sess)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if err := s.kv.Put(ctx, key, s.sealer.Seal(blob)); err != nil {
+		slog.Warn("shared session store: couldn't save a renewed session", "error", err)
+		return ErrStoreUnavailable
+	}
+	stored := *sess
+	stored.ID = ""
+	s.mu.Lock()
+	s.snap[key] = &stored
+	s.mu.Unlock()
+	return nil
+}
+
 func (s *SharedStore) Create(sess *Session) error {
 	s.refresh(snapshotTTL)
 	s.mu.Lock()
@@ -180,7 +234,7 @@ func (s *SharedStore) Create(sess *Session) error {
 	if live >= maxSharedSessions {
 		return ErrTooManySessions
 	}
-	blob, err := json.Marshal(storedSession{Token: sess.K8sToken, Username: sess.Username, K8sUser: sess.KubernetesUser, Expires: sess.ExpiresAt.Unix()})
+	blob, err := encodeSession(sess)
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package oidcbroker
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"strings"
 	"testing"
@@ -300,5 +301,82 @@ func TestAnIssuerIsRequired(t *testing.T) {
 		if _, err := b.TokenFor(context.Background(), authn.Identity{Issuer: bad, Subject: "s", Username: "u"}); err == nil {
 			t.Errorf("issuer %q should be refused", bad)
 		}
+	}
+}
+
+// ---- Phase 84: renewing a credential
+
+func TestRenewalMintsForAnExistingAccountAndNeverCreatesOne(t *testing.T) {
+	b, cs, events := newBroker(t)
+	ctx := context.Background()
+	id := authn.Identity{Issuer: testIssuer, Subject: "sub-r", Username: "renewer"}
+
+	// nobody has signed in: there is no account to renew for, and none may appear
+	if _, err := b.RenewToken(ctx, id); !errors.Is(err, authn.ErrAccountGone) {
+		t.Fatalf("renewing for a person with no account: %v", err)
+	}
+	list, _ := cs.CoreV1().ServiceAccounts(ns).List(ctx, metav1.ListOptions{})
+	if len(list.Items) != 0 {
+		t.Fatalf("a renewal created an account: %d", len(list.Items))
+	}
+
+	// after sign-in the renewal works, for the same account, with the lifetime asked for
+	first, err := b.TokenFor(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id.TokenTTL = 30 * time.Minute
+	again, err := b.RenewToken(ctx, id)
+	if err != nil || again.KubernetesUser != first.KubernetesUser {
+		t.Fatalf("renewal: %+v %v", again, err)
+	}
+	if d := time.Until(again.Expiry); d < 29*time.Minute || d > 30*time.Minute {
+		t.Errorf("asked for 30 minutes, got %s", d)
+	}
+	if !strings.Contains(strings.Join(*events, ","), "oidc-token-renewed:oidc-renewer") {
+		t.Errorf("a renewal must be audited: %v", *events)
+	}
+
+	// the account is deleted (the way to cut a person off): renewal must not bring it back
+	if err := cs.CoreV1().ServiceAccounts(ns).Delete(ctx, "oidc-renewer", metav1.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.RenewToken(ctx, id); !errors.Is(err, authn.ErrAccountGone) {
+		t.Fatalf("renewing after the account was deleted: %v", err)
+	}
+	list, _ = cs.CoreV1().ServiceAccounts(ns).List(ctx, metav1.ListOptions{})
+	if len(list.Items) != 0 {
+		t.Fatal("a renewal recreated a deleted account, which would give a person their RoleBindings back")
+	}
+}
+
+func TestRenewalIsForTheSameIssuerAndSubjectOnly(t *testing.T) {
+	b, _, _ := newBroker(t)
+	ctx := context.Background()
+	if _, err := b.TokenFor(ctx, authn.Identity{Issuer: testIssuer, Subject: "sub-x", Username: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []authn.Identity{
+		{Issuer: "http://other.home/realms/vinaire", Subject: "sub-x", Username: "x"},
+		{Issuer: testIssuer, Subject: "sub-y", Username: "x"},
+		{Issuer: "", Subject: "sub-x"},
+	} {
+		if _, err := b.RenewToken(ctx, id); err == nil {
+			t.Errorf("renewed for %+v", id)
+		}
+	}
+}
+
+func TestRequestedLifetimeIsClampedToWhatKubernetesAccepts(t *testing.T) {
+	b, _, _ := newBroker(t)
+	if got := b.ttlFor(authn.Identity{TokenTTL: time.Minute}); got != MinTTL {
+		t.Errorf("a minute was passed through: %s", got)
+	}
+	if got := b.ttlFor(authn.Identity{TokenTTL: 30 * time.Minute}); got != 30*time.Minute {
+		t.Errorf("30 minutes became %s", got)
+	}
+	b.TTL = 5 * time.Hour
+	if got := b.ttlFor(authn.Identity{}); got != 5*time.Hour {
+		t.Errorf("no request should mean the broker's own lifetime, got %s", got)
 	}
 }

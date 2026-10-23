@@ -90,6 +90,7 @@
       }
     },
     "clusterName": { "type": "string" },
+    "sessionTokenTTL": { "type": "string", "pattern": "^[0-9]+(s|m|h)$" },
     "authMode": {
       "type": "string",
       "enum": ["token", "oidc", "disabled"],

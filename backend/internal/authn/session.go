@@ -30,6 +30,9 @@ func NewSessionID() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
+// ErrNoSession is returned when a session to update no longer exists.
+var ErrNoSession = errors.New("the session has ended")
+
 // ErrTooManySessions is returned when the store is full.
 var ErrTooManySessions = errors.New("too many active sessions")
 
@@ -46,6 +49,16 @@ type Session struct {
 	// OIDC login: system:serviceaccount:<ns>:<name>); empty otherwise. Not a secret.
 	KubernetesUser string
 	ExpiresAt      time.Time
+
+	// What renewal needs (Roadmap Phase 84) — empty for a pasted token. RefreshToken is a secret like K8sToken:
+	// kept in memory, or sealed in the shared store; never listed, logged or sent to the browser.
+	RefreshToken string
+	// Subject and Issuer are who the session was made for; a renewal that comes back for someone else ends it.
+	Subject, Issuer string
+	// TokenExpiresAt is when K8sToken stops working — earlier than ExpiresAt for a renewable session.
+	TokenExpiresAt time.Time
+	// ValidatedAt is when the identity provider last confirmed the person (at sign-in or at a renewal).
+	ValidatedAt time.Time
 }
 
 // OwnerKey is a stable identifier for "who is this" that is safe to compare and
@@ -65,6 +78,9 @@ func (s *Session) OwnerKey() string {
 type Store interface {
 	Create(sess *Session) error
 	Get(id string) (*Session, bool)
+	// Update replaces an existing session (same ID) — a renewal. A *Session returned by Get is never changed
+	// in place: readers may still hold it. Updating a session that has ended is an error.
+	Update(sess *Session) error
 	Delete(id string)
 }
 
@@ -89,6 +105,17 @@ func (s *MemoryStore) Create(sess *Session) error {
 		}
 	}
 	s.sessions[sess.ID] = sess
+	return nil
+}
+
+func (s *MemoryStore) Update(sess *Session) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.sessions[sess.ID]; !ok {
+		return ErrNoSession
+	}
+	cp := *sess
+	s.sessions[sess.ID] = &cp
 	return nil
 }
 

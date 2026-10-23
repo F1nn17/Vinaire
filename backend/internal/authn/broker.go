@@ -13,6 +13,9 @@ type Identity struct {
 	Issuer   string
 	Subject  string
 	Username string
+	// TokenTTL asks for a credential of this lifetime (0: the broker's own default). A session that can be
+	// renewed asks for a short one (RenewableTokenTTL).
+	TokenTTL time.Duration
 }
 
 // BrokeredToken is the Kubernetes credential an IdentityBroker hands out in place of the ID token.

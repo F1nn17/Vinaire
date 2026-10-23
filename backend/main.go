@@ -77,6 +77,7 @@ func main() {
 		OIDCRedirectURL:  cfg.OIDCRedirectURL,
 
 		SessionMaxTTL:     cfg.SessionMaxTTL,
+		SessionTokenTTL:   cfg.SessionTokenTTL,
 		TrustForwardedFor: cfg.TrustForwardedFor,
 	})
 	if err != nil {

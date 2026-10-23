@@ -1,0 +1,177 @@
+package authn
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"strings"
+	"time"
+
+	"golang.org/x/oauth2"
+	"golang.org/x/sync/singleflight"
+)
+
+// Renewing a session (Roadmap Phase 84).
+//
+// A Kubernetes credential obtained at sign-in is short-lived on purpose. Without renewal that made a session
+// as short as the credential (a person working was thrown back to the login screen), or — to avoid that —
+// made the credential long, so that someone disabled in Keycloak kept working until it ran out. Now the
+// credential is short (RenewableTokenTTL) and the session is long (the configured maximum); while the person
+// is active, shortly before the credential would run out, Vinaire asks the identity provider whether the
+// person still has a session there (the refresh token) and, if so, obtains a new credential:
+//
+//   - the provider says no (the user was disabled, the SSO session ended, the refresh token was revoked or
+//     expired): the Vinaire session ends at once;
+//   - the provider can't be reached: nothing is known, so the session goes on — for RenewGrace since the
+//     provider last said yes, no longer;
+//   - the person's Kubernetes account is gone (an administrator deleted it): the session ends — a renewal
+//     never creates an account, so deleting one is a way to cut a person off;
+//   - the provider answers with a different subject than the session was made for: the session ends.
+//
+// The refresh token stays on the server (in memory, or sealed in the shared store) like the credential
+// itself; it is never sent to the browser, listed or logged.
+const (
+	// RenewableTokenTTL is the lifetime of the Kubernetes credential of a session that can be renewed.
+	RenewableTokenTTL = 30 * time.Minute
+	// RenewGrace is how long a session may go on without the provider having confirmed the person.
+	RenewGrace = time.Hour
+	// renewTimeout bounds one renewal; a stuck provider must not hang the request that triggered it.
+	renewTimeout = 15 * time.Second
+)
+
+// ErrAccountGone is what a TokenRenewer returns when the person's Kubernetes account no longer exists.
+var ErrAccountGone = errors.New("the person's Kubernetes account no longer exists")
+
+// TokenRenewer is implemented by a broker that can mint a new credential for a person who already has an
+// account — and must never create one.
+type TokenRenewer interface {
+	RenewToken(ctx context.Context, id Identity) (BrokeredToken, error)
+}
+
+var renewals singleflight.Group
+
+// needsRenewal says whether a session should be renewed now.
+func needsRenewal(s *Session, now time.Time, lead time.Duration) bool {
+	return s.RefreshToken != "" && !s.TokenExpiresAt.IsZero() && s.TokenExpiresAt.Sub(now) < lead
+}
+
+// renewLead: a credential with less than a third of its life left is renewed on the next request — so one that
+// is used regularly never runs out, and one that is not isn't renewed for nothing.
+func (m *Manager) renewLead() time.Duration { return m.tokenTTL() / 3 }
+
+// renewIfDue returns the session to use for this request: the same one, a renewed one, or false when the
+// session has ended. Concurrent requests for one session share a single renewal.
+func (m *Manager) renewIfDue(ctx context.Context, sess *Session) (*Session, bool) {
+	if !needsRenewal(sess, time.Now(), m.renewLead()) {
+		return sess, true
+	}
+	v, _, _ := renewals.Do(sess.ID, func() (any, error) {
+		// another request may have renewed it while this one waited its turn
+		if cur, ok := m.Sessions.Get(sess.ID); ok {
+			if !needsRenewal(cur, time.Now(), m.renewLead()) {
+				return cur, nil
+			}
+			sess = cur
+		} else {
+			return (*Session)(nil), nil
+		}
+		return m.renew(ctx, sess), nil
+	})
+	out, _ := v.(*Session)
+	if out == nil {
+		return nil, false
+	}
+	return out, true
+}
+
+// renew does the work; nil means the session has been ended.
+func (m *Manager) renew(ctx context.Context, sess *Session) *Session {
+	oc := m.getOIDC()
+	if oc == nil {
+		return sess // the sign-in was switched off: nothing to ask; the credential just runs out
+	}
+	ctx, cancel := context.WithTimeout(ctx, renewTimeout)
+	defer cancel()
+
+	next := *sess
+	validated := false
+	tok, err := oc.oauth2Config.TokenSource(oc.ctx(ctx), &oauth2.Token{RefreshToken: sess.RefreshToken}).Token()
+	switch {
+	case err == nil:
+		validated = true
+		if tok.RefreshToken != "" {
+			next.RefreshToken = tok.RefreshToken
+		}
+		raw, _ := tok.Extra("id_token").(string)
+		if raw != "" {
+			idToken, verr := oc.verifier.Verify(oc.ctx(ctx), raw)
+			if verr != nil || idToken.Subject != sess.Subject || idToken.Issuer != sess.Issuer {
+				m.end(sess, "the identity provider answered for someone else, or with a token that doesn't verify")
+				return nil
+			}
+			if broker := m.IdentityBroker(); broker == nil {
+				next.K8sToken, next.TokenExpiresAt = raw, idToken.Expiry
+			}
+		} else if m.IdentityBroker() == nil {
+			// the ID token itself is the credential and the provider didn't send a new one
+			m.end(sess, "the identity provider sent no new ID token")
+			return nil
+		}
+		next.ValidatedAt = time.Now()
+	case isRefusal(err):
+		m.end(sess, "the identity provider no longer accepts this person's session")
+		return nil
+	default:
+		// can't reach the provider: carry on for a while, but only on a credential Vinaire can renew by itself
+		if time.Since(sess.ValidatedAt) > RenewGrace {
+			m.end(sess, "the identity provider has been unreachable for longer than the grace period")
+			return nil
+		}
+		slog.Warn("session renewal: the identity provider didn't answer — continuing within the grace period", "error", err)
+	}
+
+	if broker := m.IdentityBroker(); broker != nil {
+		renewer, ok := broker.(TokenRenewer)
+		if !ok {
+			return &next
+		}
+		bt, rerr := renewer.RenewToken(ctx, Identity{Issuer: sess.Issuer, Subject: sess.Subject, Username: sess.Username, TokenTTL: m.tokenTTL()})
+		if rerr != nil {
+			if errors.Is(rerr, ErrAccountGone) {
+				m.end(sess, "the person's Kubernetes account was deleted")
+				return nil
+			}
+			slog.Warn("session renewal: couldn't get a new Kubernetes credential — the current one stays until it runs out", "error", rerr)
+			return &next
+		}
+		next.K8sToken, next.TokenExpiresAt, next.KubernetesUser = bt.Token, bt.Expiry, bt.KubernetesUser
+	} else if !validated {
+		// the ID token is the credential and the provider can't be reached: nothing new to hold
+		return &next
+	}
+	if err := m.Sessions.Update(&next); err != nil {
+		slog.Warn("session renewal: couldn't save the renewed session", "error", err)
+		return sess
+	}
+	return &next
+}
+
+// end removes a session whose renewal failed for good. The reason goes to the log without anything that
+// identifies a credential.
+func (m *Manager) end(sess *Session, reason string) {
+	m.Sessions.Delete(sess.ID)
+	slog.Warn("session ended at renewal", "reason", reason, "user", sess.Username)
+}
+
+// isRefusal tells the provider's "no" (the refresh token is no longer good) from "couldn't ask".
+func isRefusal(err error) bool {
+	var re *oauth2.RetrieveError
+	if !errors.As(err, &re) {
+		return false
+	}
+	if re.ErrorCode == "invalid_grant" || re.ErrorCode == "unauthorized_client" || re.ErrorCode == "invalid_client" {
+		return true
+	}
+	// a 4xx without an OAuth error code is still the provider answering "no", not a failure to ask
+	return re.Response != nil && re.Response.StatusCode >= 400 && re.Response.StatusCode < 500 && !strings.Contains(string(re.Body), "temporarily")
+}
