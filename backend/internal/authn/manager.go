@@ -64,6 +64,8 @@ type Manager struct {
 	// MaxSessionTTL caps a session's life however long the token it holds lives
 	// (a ServiceAccount token can be valid for a year).
 	MaxSessionTTL time.Duration
+	// TokenTTL is the lifetime of the Kubernetes credential of a renewable session (0: RenewableTokenTTL); see tokenTTL.
+	TokenTTL time.Duration
 	// TrustForwardedFor makes the login throttle count X-Forwarded-For's first
 	// address instead of the connection's peer — only for a deployment where a
 	// trusted proxy sets it.
@@ -93,6 +95,29 @@ func (m *Manager) capExpiry(exp time.Time) time.Time {
 	return exp
 }
 
+// tokenTTL is the lifetime of the credential of a renewable session: the configured one, kept between what
+// Kubernetes accepts (10 minutes) and two hours (a credential that long defeats the point of renewing).
+func (m *Manager) tokenTTL() time.Duration {
+	ttl := m.TokenTTL
+	switch {
+	case ttl <= 0:
+		return RenewableTokenTTL
+	case ttl < 10*time.Minute:
+		return 10 * time.Minute
+	case ttl > 2*time.Hour:
+		return 2 * time.Hour
+	}
+	return ttl
+}
+
+// maxSessionTTL is the longest a session may live (the configured maximum, or the default).
+func (m *Manager) maxSessionTTL() time.Duration {
+	if m.MaxSessionTTL > 0 {
+		return m.MaxSessionTTL
+	}
+	return defaultMaxSessionTTL
+}
+
 // ManagerConfig is the subset of internal/config.Config NewManager needs —
 // kept as its own small struct so this package doesn't import
 // internal/config (avoiding a needless dependency edge).
@@ -107,6 +132,7 @@ type ManagerConfig struct {
 	OIDCRedirectURL  string
 	// SessionMaxTTL and TrustForwardedFor: see Manager.
 	SessionMaxTTL     time.Duration
+	SessionTokenTTL   time.Duration
 	TrustForwardedFor bool
 }
 
@@ -137,6 +163,7 @@ func NewManager(ctx context.Context, cfg ManagerConfig) (*Manager, error) {
 		FrontendURL:    cfg.FrontendURL,
 
 		MaxSessionTTL:     cfg.SessionMaxTTL,
+		TokenTTL:          cfg.SessionTokenTTL,
 		TrustForwardedFor: cfg.TrustForwardedFor,
 		limiter:           newLoginLimiter(),
 	}
@@ -179,7 +206,13 @@ func (m *Manager) Authenticate(r *http.Request) (*Session, bool) {
 	if err != nil {
 		return nil, false
 	}
-	return m.Sessions.Get(cookie.Value)
+	sess, ok := m.Sessions.Get(cookie.Value)
+	if !ok {
+		return nil, false
+	}
+	// shortly before its Kubernetes credential runs out, a session of a person signed in through the
+	// identity provider is renewed (renew.go) — or ended, if the provider no longer vouches for them
+	return m.renewIfDue(r.Context(), sess)
 }
 
 // Middleware resolves the caller's session via Authenticate and stores it

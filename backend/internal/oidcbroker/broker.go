@@ -142,6 +142,18 @@ func (b *Broker) ttl() time.Duration {
 	return b.TTL
 }
 
+// ttlFor is the lifetime of the credential for this sign-in: the one it asked for (a renewable session asks for a
+// short one), else the broker's own — never below what Kubernetes accepts.
+func (b *Broker) ttlFor(id authn.Identity) time.Duration {
+	if id.TokenTTL > 0 {
+		if id.TokenTTL < MinTTL {
+			return MinTTL
+		}
+		return id.TokenTTL
+	}
+	return b.ttl()
+}
+
 func (b *Broker) audit(action, name, identity string, detail map[string]any) {
 	if b.Audit != nil {
 		b.Audit(action, name, identity, detail)
@@ -166,7 +178,7 @@ func (b *Broker) TokenFor(ctx context.Context, id authn.Identity) (authn.Brokere
 	if err != nil {
 		return authn.BrokeredToken{}, err
 	}
-	secs := int64(b.ttl().Seconds())
+	secs := int64(b.ttlFor(id).Seconds())
 	tr, err := b.Clientset.CoreV1().ServiceAccounts(b.Namespace).CreateToken(ctx, account, &authenticationv1.TokenRequest{
 		Spec: authenticationv1.TokenRequestSpec{ExpirationSeconds: &secs},
 	}, metav1.CreateOptions{})
@@ -268,4 +280,44 @@ func clip(s string, n int) string {
 		return s[:n]
 	}
 	return s
+}
+
+var _ authn.TokenRenewer = (*Broker)(nil)
+
+// RenewToken gives a new credential to a person who already has an account — and only then. It never creates
+// an account: an administrator who deletes one cuts the person off, and a renewal must not undo that (the
+// RoleBindings to the account's name would apply again to a fresh account of the same name). The account is
+// found exactly as at sign-in: by the label of issuer and subject.
+func (b *Broker) RenewToken(ctx context.Context, id authn.Identity) (authn.BrokeredToken, error) {
+	if b.Clientset == nil || b.Namespace == "" {
+		return authn.BrokeredToken{}, ErrNotConfigured
+	}
+	if !subjectRe.MatchString(id.Subject) || !issuerRe.MatchString(id.Issuer) {
+		return authn.BrokeredToken{}, errors.New("no usable identity to renew")
+	}
+	list, err := b.Clientset.CoreV1().ServiceAccounts(b.Namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: LabelSubject + "=" + IdentityLabel(id.Issuer, id.Subject) + "," + LabelManagedBy + "=vinaire"})
+	if err != nil {
+		return authn.BrokeredToken{}, fmt.Errorf("look up the account in %s: %w", b.Namespace, err)
+	}
+	if len(list.Items) == 0 {
+		return authn.BrokeredToken{}, authn.ErrAccountGone
+	}
+	if len(list.Items) > 1 {
+		return authn.BrokeredToken{}, fmt.Errorf("%d accounts in %s claim the same identity", len(list.Items), b.Namespace)
+	}
+	account := list.Items[0].Name
+	secs := int64(b.ttlFor(id).Seconds())
+	tr, err := b.Clientset.CoreV1().ServiceAccounts(b.Namespace).CreateToken(ctx, account, &authenticationv1.TokenRequest{
+		Spec: authenticationv1.TokenRequestSpec{ExpirationSeconds: &secs},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return authn.BrokeredToken{}, fmt.Errorf("request a token for %s/%s: %w", b.Namespace, account, err)
+	}
+	b.audit("oidc-token-renewed", account, id.Username, map[string]any{
+		"serviceAccount": b.Namespace + "/" + account, "subject": id.Subject,
+		"expires": tr.Status.ExpirationTimestamp.UTC().Format(time.RFC3339),
+	})
+	return authn.BrokeredToken{Token: tr.Status.Token, Expiry: tr.Status.ExpirationTimestamp.Time,
+		KubernetesUser: fmt.Sprintf("system:serviceaccount:%s:%s", b.Namespace, account)}, nil
 }

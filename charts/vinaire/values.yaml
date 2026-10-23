@@ -167,6 +167,11 @@ cookie:
 # How long a login lasts at most, whatever the token's own lifetime (a
 # ServiceAccount token can be valid for a year). A Go duration.
 sessionMaxTTL: 12h
+# How long the Kubernetes credential of a person signed in through Keycloak lives before Vinaire renews it
+# (Roadmap Phase 84; 10m to 2h). Shorter means a person disabled in Keycloak loses access sooner (at the next
+# renewal); a renewal asks Keycloak whether the person still has a session, so it needs Keycloak to be reachable
+# — up to an hour of its being down is tolerated.
+sessionTokenTTL: 30m
 
 # Set true ONLY when a proxy you control (the ingress) sets X-Forwarded-For: the
 # login throttle then counts the real client address instead of the proxy's.

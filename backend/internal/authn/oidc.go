@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/google/uuid"
@@ -171,14 +172,27 @@ func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// By default the ID token itself is the bearer for the cluster. With a broker (Roadmap Phase 80) Vinaire
 	// has verified the sign-in and the cluster is given an ordinary credential of the person's own instead,
 	// so the cluster doesn't have to trust the issuer — which Kubernetes only does over https.
-	bearer, kubeUser, expiry := rawIDToken, "", m.capExpiry(idToken.Expiry)
+	//
+	// When the provider also gave a refresh token (Phase 84) the credential is short and the session long:
+	// the session lasts as long as the configured maximum and the credential is renewed while the provider
+	// still vouches for the person. Without one the session is as short as the credential, as before.
+	renewable := token.RefreshToken != ""
+	bearer, kubeUser, tokenExpiry := rawIDToken, "", idToken.Expiry
 	if broker := m.IdentityBroker(); broker != nil {
-		bt, err := broker.TokenFor(oc.ctx(r.Context()), Identity{Issuer: idToken.Issuer, Subject: idToken.Subject, Username: claims.PreferredUsername})
+		id := Identity{Issuer: idToken.Issuer, Subject: idToken.Subject, Username: claims.PreferredUsername}
+		if renewable {
+			id.TokenTTL = m.tokenTTL()
+		}
+		bt, err := broker.TokenFor(oc.ctx(r.Context()), id)
 		if err != nil {
 			respondError(w, http.StatusBadGateway, "signed in with the identity provider, but Vinaire couldn't get a Kubernetes credential for you: "+err.Error())
 			return
 		}
-		bearer, kubeUser, expiry = bt.Token, bt.KubernetesUser, m.capExpiry(bt.Expiry)
+		bearer, kubeUser, tokenExpiry = bt.Token, bt.KubernetesUser, bt.Expiry
+	}
+	expiry := m.capExpiry(tokenExpiry)
+	if renewable {
+		expiry = m.capExpiry(time.Now().Add(m.maxSessionTTL()))
 	}
 	if old, err := r.Cookie(sessionCookie); err == nil {
 		m.Sessions.Delete(old.Value) // a new login never inherits an existing session
@@ -189,6 +203,13 @@ func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		Username:       claims.PreferredUsername,
 		KubernetesUser: kubeUser,
 		ExpiresAt:      expiry,
+		Subject:        idToken.Subject,
+		Issuer:         idToken.Issuer,
+		TokenExpiresAt: tokenExpiry,
+		ValidatedAt:    time.Now(),
+	}
+	if renewable {
+		sess.RefreshToken = token.RefreshToken
 	}
 	if err := m.Sessions.Create(sess); err != nil {
 		respondError(w, http.StatusServiceUnavailable, "the server can't take more logins right now")
