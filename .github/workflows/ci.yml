@@ -205,6 +205,112 @@ jobs:
         if: always()
         run: k3d cluster delete vinaire-ci
 
+  # Roadmap Phase 83: the whole Keycloak sign-in in a real browser — set up from Settings, a person signs in
+  # (changing a temporary password on the way), lands back on THIS Vinaire, is a ServiceAccount of their own
+  # with no rights until a role is bound, and signing in again finds the same account. Vinaire runs INSIDE the
+  # cluster (the identity broker needs the pod's own identity), built from this checkout; Keycloak runs as a
+  # container on the runner at the docker network's gateway address — a private address both the browser and
+  # the pod can reach, so plain http is exactly the home-server case the feature exists for. PR-only, like the
+  # integration job: building the image and starting Keycloak take minutes.
+  keycloak-e2e:
+    name: Keycloak sign-in (real browser, real cluster)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      KC_ADMIN_PASSWORD: ci-keycloak-admin-pw
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k3d
+        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Build the image from this checkout
+        run: docker build -t vinaire:ci .
+
+      - name: Create the cluster and load the image
+        run: |
+          k3d cluster create vinaire-e2e --agents 0 --wait --timeout 180s
+          k3d image import vinaire:ci -c vinaire-e2e
+
+      - name: Start Keycloak on the cluster network's gateway address
+        run: |
+          gw=$(docker network inspect k3d-vinaire-e2e -f '{{(index .IPAM.Config 0).Gateway}}')
+          echo "gateway: $gw"
+          docker run -d --name keycloak -p 8180:8080 \
+            -e KEYCLOAK_ADMIN=admin -e KEYCLOAK_ADMIN_PASSWORD="$KC_ADMIN_PASSWORD" \
+            quay.io/keycloak/keycloak:26.0 start-dev
+          for i in $(seq 1 90); do
+            curl -sf "http://$gw:8180/realms/master" > /dev/null && break
+            sleep 3
+          done
+          curl -sf "http://$gw:8180/realms/master" > /dev/null || { docker logs keycloak | tail -40; exit 1; }
+          echo "E2E_KEYCLOAK_URL=http://$gw:8180" >> "$GITHUB_ENV"
+
+      - name: Install Vinaire from the chart (token mode, http Keycloak on a private network)
+        run: |
+          helm install vinaire charts/vinaire --namespace vinaire --create-namespace \
+            --set image.repository=vinaire --set image.tag=ci --set image.pullPolicy=Never \
+            --set authMode=token --set cookie.secure=false \
+            --set keycloak.allowHttpPrivateNetwork=true \
+            --wait --timeout 180s
+
+      - name: Reach Vinaire and provision the administrator's token
+        run: |
+          kubectl -n vinaire port-forward svc/vinaire 18080:8080 > port-forward.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:18080/healthz > /dev/null && break; sleep 1; done
+          kubectl create serviceaccount e2e-admin -n default
+          kubectl create clusterrolebinding e2e-admin --clusterrole=cluster-admin --serviceaccount=default:e2e-admin
+          echo "E2E_ADMIN_TOKEN=$(kubectl create token e2e-admin -n default --duration=40m)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm ci and Playwright's browser
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run the Keycloak sign-in test
+        working-directory: frontend
+        env:
+          E2E_VINAIRE_URL: http://localhost:18080
+          E2E_KC_ADMIN_USER: admin
+          E2E_KC_ADMIN_PASSWORD: ${{ env.KC_ADMIN_PASSWORD }}
+        run: npx playwright test keycloak.spec.ts
+
+      - name: Dump what happened on failure
+        if: failure()
+        run: |
+          kubectl get pods -A
+          kubectl -n vinaire logs deploy/vinaire --tail=200 || true
+          kubectl get serviceaccount -A -l app.kubernetes.io/managed-by=vinaire || true
+          docker logs keycloak --tail=80 || true
+          cat port-forward.log || true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keycloak-e2e-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7
+
+      - name: Delete the cluster and Keycloak
+        if: always()
+        run: |
+          docker rm -f keycloak || true
+          k3d cluster delete vinaire-e2e || true
+
   chart:
     name: Helm chart (lint + render)
     runs-on: ubuntu-latest

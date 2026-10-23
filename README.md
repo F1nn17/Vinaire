@@ -279,7 +279,12 @@ it. Read [docs/security.md](./docs/security.md) before exposing this anywhere re
 ```bash
 kubectl create serviceaccount me -n vinaire
 
-# browse + the fixed actions (restart, scale, logs, terminal, port-forward)
+# look, don't touch: every page that only reads — no Secrets, no terminal, no port-forward, no changes
+kubectl create clusterrolebinding me-vinaire-reader \
+  --clusterrole=vinaire-reader --serviceaccount=vinaire:me
+
+# OR use Vinaire fully — NOT read-only: browse + the fixed actions (restart, scale, logs, terminal,
+# port-forward), reads Secrets, deletes pods and namespaces
 kubectl create clusterrolebinding me-vinaire-viewer \
   --clusterrole=vinaire-viewer --serviceaccount=vinaire:me
 

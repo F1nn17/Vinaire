@@ -372,8 +372,10 @@ flow.
   and every call came back 401), and `serviceaccount` is refused where Vinaire doesn't run in a cluster or has no users' namespace.
   `GET /api/v1/auth/me` (a read) says how the session is known (`kubernetesUser`, no token). Audited as `oidc-user-provisioned` and
   `oidc-token-issued` (account, subject, expiry — never the token). After sign-in the browser is sent to `FRONTEND_URL`, which is `/` whenever this process serves the UI (`STATIC_DIR`; the chart always
-  sets it) — never the `localhost:3100` development default. The wizard offers the first person **sets of the chart's roles** (viewer, admin,
-  rbac-admin…; `cluster-admin` only behind a warning), not `cluster-admin`. Not done: Keycloak groups (a ServiceAccount token carries none —
+  sets it) — never the `localhost:3100` development default. The wizard offers the first person **sets of the chart's roles** (reader, admin,
+  rbac-admin…; `cluster-admin` only behind a warning), not `cluster-admin`. **`-viewer` is not read-only** — it reads Secrets, opens a shell in
+  any pod and carries the fixed audited actions; the chart's `-reader` role (Roadmap Phase 83) is the one that only looks (no Secrets, no exec,
+  no port-forward, no verb but get/list/watch) and is what "Read only" binds. Not done: Keycloak groups (a ServiceAccount token carries none —
   roles are bound per account), refreshing a token while the Keycloak session lives (Roadmap Phase 84).
 - Backups of an application installed from an image (Roadmap Phase 77b, owner's decision of 2026-10-21; `internal/backup`,
   `internal/k8s/backup_actions.go`, `internal/api/backups.go`) — all as the caller, so the cluster's RBAC decides:

@@ -38,8 +38,24 @@ rules:
   {{- toYaml . | nindent 2 }}
   {{- end }}
 ---
+{{- if .Values.rbac.reader.create }}
+# Look, don't touch (Roadmap Phase 83): every page of Vinaire that only reads, and nothing that changes anything —
+# no Secrets, no shell in a pod, no port-forward, no delete. "-viewer" below is NOT this: it is "use Vinaire
+# fully" and includes reading Secrets, pods/exec and the fixed audited actions. Created unbound.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "vinaire.fullname" . }}-reader
+  labels:
+    {{- include "vinaire.labels" . | nindent 4 }}
+  annotations:
+    description: "Read-only: browse everything Vinaire shows (without Secrets); change nothing."
+rules:
+  {{- include "vinaire.readOnlyRules" . | nindent 2 }}
+---
+{{- end }}
 {{- if .Values.rbac.viewer.create }}
-# What a person needs to use Vinaire fully: bind this to the ServiceAccount or
+# What a person needs to use Vinaire fully (NOT read-only: it reads Secrets, opens a shell in pods and carries the fixed audited actions — see -reader): bind this to the ServiceAccount or
 # user that logs in (see NOTES). Not bound to anyone by default.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -188,6 +204,7 @@ rules:
     resources: [clusterroles]
     verbs: ["bind"]
     resourceNames:
+      - {{ include "vinaire.fullname" . }}-reader
       - {{ include "vinaire.fullname" . }}-viewer
       - {{ include "vinaire.fullname" . }}-installer
       - {{ include "vinaire.fullname" . }}-node-admin

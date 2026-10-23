@@ -6,7 +6,7 @@ Vinaire {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installing.
   Namespace:  {{ $ns }}
   Service:    {{ $fullname }}  (port {{ .Values.service.port }})
   Sign-in:    authMode = {{ .Values.authMode }}
-  Roles:      {{ $fullname }}-viewer   {{ $fullname }}-installer   {{ $fullname }}-node-admin   {{ $fullname }}-lifecycle-admin   {{ $fullname }}-rbac-admin   {{ $fullname }}-admin
+  Roles:      {{ $fullname }}-reader   {{ $fullname }}-viewer   {{ $fullname }}-installer   {{ $fullname }}-node-admin   {{ $fullname }}-lifecycle-admin   {{ $fullname }}-rbac-admin   {{ $fullname }}-admin
 
 1. Wait for the pod to come up:
 
