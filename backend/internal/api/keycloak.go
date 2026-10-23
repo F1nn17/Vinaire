@@ -44,10 +44,18 @@ type storedOIDC struct {
 	// IdentityMode: how a signed-in person reaches the cluster (Phase 80) — IdentityServiceAccount (Vinaire
 	// verifies the sign-in and hands out a ServiceAccount token) or IdentityAPIServer (the ID token itself;
 	// the cluster's API server must trust the issuer, which Kubernetes does over https only). Empty = the latter.
-	IdentityMode string    `json:"identityMode,omitempty"`
-	SetUpBy      string    `json:"setUpBy"`
-	SetUpAt      time.Time `json:"setUpAt"`
+	IdentityMode string `json:"identityMode,omitempty"`
+	// KeyedBy says how the people's accounts are keyed: keyedByIssuerSubject since Roadmap Phase 82 (the issuer and the
+	// subject make an identity); empty on settings saved before, until the first start with this code pins them.
+	KeyedBy string `json:"keyedBy,omitempty"`
+	// LegacyAdoptIssuer is the one issuer whose people may claim the accounts made before the issuer counted — the
+	// issuer Vinaire had configured when it first started with this code (see oidcbroker.Broker.AdoptLegacyIssuer).
+	LegacyAdoptIssuer string    `json:"legacyAdoptIssuer,omitempty"`
+	SetUpBy           string    `json:"setUpBy"`
+	SetUpAt           time.Time `json:"setUpAt"`
 }
+
+const keyedByIssuerSubject = "issuer+subject"
 
 // keycloakState is what the Keycloak endpoints share on the Handler.
 type keycloakState struct {
@@ -109,10 +117,22 @@ func (h *Handler) RestoreOIDC(ctx context.Context) {
 	if s == nil {
 		return
 	}
+	// Settings saved before the issuer was part of a person's identity: the accounts they made are claimed for
+	// this issuer and no other — pin it, once, now (a failure to save leaves it pinned for this run only).
+	if s.KeyedBy == "" {
+		s.KeyedBy, s.LegacyAdoptIssuer = keyedByIssuerSubject, s.Issuer
+		if doc, merr := json.Marshal(s); merr == nil { // #nosec G117 -- handed to the sealed store, never to a response
+			if serr := h.AuthDocs.SaveDoc(ctx, authDocName, doc); serr != nil {
+				slog.Warn("keycloak sign-in: couldn't record which issuer may claim the accounts made before; it is kept for this run only", "error", serr)
+			} else {
+				slog.Info("keycloak sign-in: accounts made before the issuer counted can be claimed by people signing in under this issuer", "issuer", s.Issuer)
+			}
+		}
+	}
 	try := func() error {
 		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
-		h.Auth.SetIdentityBroker(h.brokerFor(s.mode()))
+		h.Auth.SetIdentityBroker(h.brokerFor(s.mode(), s.LegacyAdoptIssuer))
 		return h.Auth.ConfigureOIDC(cctx, h.oidcHTTPClient(), s.Issuer, s.ClientID, s.ClientSecret, s.RedirectURL, s.AllowToken)
 	}
 	if err := try(); err == nil {
@@ -336,7 +356,15 @@ func (h *Handler) KeycloakSetup(w http.ResponseWriter, r *http.Request) {
 
 	// switch it on — discovery proves the realm and the secret work before anything is saved
 	previousBroker := h.Auth.IdentityBroker()
-	h.Auth.SetIdentityBroker(h.brokerFor(mode))
+	// Reconfiguring keeps the pinned issuer of the accounts made before the issuer counted.
+	adopt := ""
+	if prev, _ := h.loadStoredOIDC(r.Context()); prev != nil {
+		adopt = prev.LegacyAdoptIssuer
+		if adopt == "" && prev.KeyedBy == "" {
+			adopt = prev.Issuer
+		}
+	}
+	h.Auth.SetIdentityBroker(h.brokerFor(mode, adopt))
 	if err := h.Auth.ConfigureOIDC(ctx, hc, res.IssuerURL, res.ClientID, res.ClientSecret.Reveal(), redirect, b.AllowTokenLogin); err != nil {
 		h.Auth.SetIdentityBroker(previousBroker)
 		h.auditLog(r, "keycloak-setup-failed", "", p.Realm, "keycloak", hostOf(p.BaseURL), "error", "keycloak answered but Vinaire can't use it: "+truncate(err.Error(), 250))
@@ -345,7 +373,7 @@ func (h *Handler) KeycloakSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	doc, _ := json.Marshal(storedOIDC{ // #nosec G117 -- sealed by the store, see above
 		KeycloakURL: strings.TrimRight(p.BaseURL, "/"), Realm: p.Realm, Issuer: res.IssuerURL, ClientID: res.ClientID,
-		ClientSecret: res.ClientSecret.Reveal(), RedirectURL: redirect, AllowToken: b.AllowTokenLogin, IdentityMode: mode,
+		ClientSecret: res.ClientSecret.Reveal(), RedirectURL: redirect, AllowToken: b.AllowTokenLogin, IdentityMode: mode, KeyedBy: keyedByIssuerSubject, LegacyAdoptIssuer: adopt,
 		SetUpBy: callerName(r), SetUpAt: time.Now().UTC(),
 	})
 	if err := h.AuthDocs.SaveDoc(r.Context(), authDocName, doc); err != nil {
@@ -403,14 +431,14 @@ func (h *Handler) brokerAvailable() (bool, string) {
 }
 
 // brokerFor builds the broker for a mode: nil for the API-server mode.
-func (h *Handler) brokerFor(mode string) authn.IdentityBroker {
+func (h *Handler) brokerFor(mode, adoptLegacyIssuer string) authn.IdentityBroker {
 	if mode != IdentityServiceAccount {
 		return nil
 	}
 	if ok, _ := h.brokerAvailable(); !ok {
 		return nil
 	}
-	return &oidcbroker.Broker{Clientset: h.BrokerClientset, Namespace: h.BrokerNamespace, TTL: h.BrokerTTL, Audit: h.AuditBackground}
+	return &oidcbroker.Broker{Clientset: h.BrokerClientset, Namespace: h.BrokerNamespace, TTL: h.BrokerTTL, Audit: h.AuditBackground, AdoptLegacyIssuer: adoptLegacyIssuer}
 }
 
 // chooseIdentityMode picks and checks the mode before anything is created in Keycloak. A Keycloak on plain

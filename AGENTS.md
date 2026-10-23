@@ -353,16 +353,20 @@ flow.
   sign-in**, because there is no caller yet. Kubernetes' API server accepts an OIDC issuer only over https (`url` and `discoveryURL` are
   both validated as https), so with a Keycloak on http it can't be made to trust the ID token. Instead, after Vinaire has verified the
   sign-in itself, `Broker.TokenFor` finds or creates **one ServiceAccount per person** (labelled `vinaire.io/oidc-sub=<sha256 of the
-  OIDC subject>` and `managed-by: vinaire`, named `oidc-<username>`) in **one dedicated namespace** (`<fullname>-users`,
+  OIDC issuer and subject>` and `managed-by: vinaire`, annotated with the issuer, named `oidc-<username>`) in **one dedicated namespace** (`<fullname>-users`,
   `OIDC_USER_NAMESPACE`) and asks the TokenRequest API for a short-lived token for it (lifetime = `SESSION_MAX_TTL` when set — the chart always sets it, `sessionMaxTTL`, 12h by default — otherwise 4 hours, `oidcbroker.DefaultTTL`; at least 10 min).
   The session holds that token instead of the ID token; the cluster sees `system:serviceaccount:<ns>:oidc-<name>` and **RBAC decides
   everything**. Rules to keep: the broker creates ServiceAccounts and tokens and **never a binding or a role** — a new account has no
-  rights; Vinaire's Role (`<fullname>-user-accounts`) is a namespaced Role on `serviceaccounts` get/list/create and
+  rights; Vinaire's Role (`<fullname>-user-accounts`) is a namespaced Role on `serviceaccounts` get/list/create/**patch** and
   `serviceaccounts/token` create **in that namespace only** (tested against a real cluster: it can't create an account elsewhere, read a
   Secret, list bindings or mint a token in `kube-system`); an account is used only if it carries both labels for this subject — a
   same-named account that isn't ours is never taken over (`-<hash>` suffix instead), and two accounts claiming one subject are refused;
   names are derived and validated (`FuzzAccountName`); **no other ServiceAccount may live in the users' namespace**, because Vinaire can
-  mint a token for any account in it. Deleting an account ends its tokens within seconds and a recreated account of the same name does
+  mint a token for any account in it. **The identity is issuer + subject** (Roadmap Phase 82): the same subject under another Keycloak or realm is another person and gets
+  another account (`TestTheSameSubjectUnderTwoIssuersIsTwoPeople`). Accounts made by 1.2.0–1.2.2, keyed by the subject alone, are **claimed
+  once, by relabelling** (the `patch` above — name and RoleBindings stay), and only for the issuer Vinaire had configured when it first
+  started with this code (`LegacyAdoptIssuer`, pinned in the sealed settings by `RestoreOIDC`); any other issuer never touches them, and
+  claiming is audited as `oidc-account-adopted`. Deleting an account ends its tokens within seconds and a recreated account of the same name does
   not revive them. The mode is chosen per setting (`identityMode`: `serviceaccount` | `apiserver`; settings saved before keep
   `apiserver`): an **http Keycloak is refused in `apiserver` mode** (the wizard used to print `--oidc-*` flags Kubernetes would refuse,
   and every call came back 401), and `serviceaccount` is refused where Vinaire doesn't run in a cluster or has no users' namespace.

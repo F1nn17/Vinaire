@@ -24,10 +24,12 @@ metadata:
   labels:
     {{- include "vinaire.labels" . | nindent 4 }}
 rules:
-  # find the account of a person who signed in, make one the first time
+  # find the account of a person who signed in, make one the first time, and — once, after an upgrade from a
+  # version that keyed accounts by the OIDC subject alone — relabel such an account for the issuer so the
+  # person keeps the rights already bound to it (patch, not update: only labels and annotations are sent)
   - apiGroups: [""]
     resources: ["serviceaccounts"]
-    verbs: ["get", "list", "create"]
+    verbs: ["get", "list", "create", "patch"]
   # and ask for a short-lived token for it (the TokenRequest API)
   - apiGroups: [""]
     resources: ["serviceaccounts/token"]

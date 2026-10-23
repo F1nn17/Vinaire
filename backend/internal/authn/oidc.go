@@ -173,7 +173,7 @@ func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// so the cluster doesn't have to trust the issuer — which Kubernetes only does over https.
 	bearer, kubeUser, expiry := rawIDToken, "", m.capExpiry(idToken.Expiry)
 	if broker := m.IdentityBroker(); broker != nil {
-		bt, err := broker.TokenFor(oc.ctx(r.Context()), Identity{Subject: idToken.Subject, Username: claims.PreferredUsername})
+		bt, err := broker.TokenFor(oc.ctx(r.Context()), Identity{Issuer: idToken.Issuer, Subject: idToken.Subject, Username: claims.PreferredUsername})
 		if err != nil {
 			respondError(w, http.StatusBadGateway, "signed in with the identity provider, but Vinaire couldn't get a Kubernetes credential for you: "+err.Error())
 			return

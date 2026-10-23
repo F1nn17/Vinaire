@@ -133,7 +133,7 @@ func TestWithABrokerTheSessionHoldsTheBrokeredCredentialNotTheIDToken(t *testing
 	if s == nil || s.K8sToken != "sa-token" || s.KubernetesUser != "system:serviceaccount:vinaire-users:oidc-shiraku" || s.Username != "shiraku" {
 		t.Fatalf("unexpected session: %+v", s)
 	}
-	if b.seen.Subject != "sub-123" || b.seen.Username != "shiraku" {
+	if b.seen.Subject != "sub-123" || b.seen.Username != "shiraku" || b.seen.Issuer != p.URL+"/realms/vinaire" {
 		t.Errorf("the broker was told %+v", b.seen)
 	}
 	if time.Until(s.ExpiresAt) < 30*time.Minute {
