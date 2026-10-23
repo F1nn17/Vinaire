@@ -273,3 +273,74 @@ func TestRestoreOIDCPinsTheIssuerOfSettingsSavedBeforeAndKeepsItAcrossStarts(t *
 		t.Fatalf("the pinned issuer moved to %q", after.LegacyAdoptIssuer)
 	}
 }
+
+// Roadmap Phase 85: the sign-in form is part of the Keycloak setting and can be hidden or shown again.
+func TestKeycloakSetupCanTurnOnTheFormAndItCanBeToggled(t *testing.T) {
+	hs := newHarness(t, "token")
+	kc := fakeKeycloakServer(t)
+	docs := newFakeDocs(true)
+	hs.h.AuthDocs, hs.h.OIDCAllowInsecure, hs.h.ProvisionAllowInsecure = docs, true, true
+	hs.h.BrokerClientset, hs.h.BrokerNamespace = fake.NewSimpleClientset(), "vinaire-users"
+	hs.api.grant("admin", "vinaire.io/auth/create", "vinaire.io/auth/get", "vinaire.io/auth/update", "vinaire.io/auth/delete")
+
+	body := map[string]any{"keycloakUrl": kc.URL, "adminUser": "admin", "adminPassword": "kc-admin-pass", "allowTokenLogin": true, "directLogin": true}
+	if w := hs.post(hs.h.KeycloakSetup, "POST", "admin", body); w.Code != 200 {
+		t.Fatalf("setup: %d %s", w.Code, w.Body)
+	}
+	if !hs.mgr.DirectLoginOn() {
+		t.Fatal("the form is not on after a setup that asked for it")
+	}
+	var saved storedOIDC
+	_ = json.Unmarshal(docs.docs["auth-oidc"], &saved)
+	if !saved.DirectLogin {
+		t.Fatalf("the choice was not saved: %+v", saved)
+	}
+	if w := hs.post(hs.h.KeycloakStatus, "GET", "admin", nil); !strings.Contains(w.Body.String(), `"directLogin":true`) {
+		t.Errorf("status: %s", w.Body)
+	}
+
+	if w := hs.post(hs.h.KeycloakDirectLogin, "PUT", "admin", map[string]bool{"allow": false}); w.Code != 200 {
+		t.Fatalf("hide: %d %s", w.Code, w.Body)
+	}
+	if hs.mgr.DirectLoginOn() {
+		t.Error("the form is still on")
+	}
+	var hidden storedOIDC // a fresh value: a false field is left out of the document, so reusing one would keep the old true
+	_ = json.Unmarshal(docs.docs["auth-oidc"], &hidden)
+	if hidden.DirectLogin {
+		t.Error("hiding the form was not saved")
+	}
+	if w := hs.post(hs.h.KeycloakDirectLogin, "PUT", "admin", map[string]bool{"allow": true}); w.Code != 200 || !hs.mgr.DirectLoginOn() {
+		t.Fatalf("show: %d %s", w.Code, w.Body)
+	}
+
+	// a setup that does not ask for the form turns it off (and closes the grant at Keycloak)
+	body["directLogin"] = false
+	if w := hs.post(hs.h.KeycloakSetup, "POST", "admin", body); w.Code != 200 {
+		t.Fatalf("setup again: %d %s", w.Code, w.Body)
+	}
+	if hs.mgr.DirectLoginOn() {
+		t.Error("the form stayed on after a setup that did not ask for it")
+	}
+}
+
+// The form takes a password only where any credential may travel.
+func TestPasswordTransportFollowsTheSameRulesAsOtherCredentials(t *testing.T) {
+	h := &Handler{}
+	plain := reqFrom("192.168.1.20:5000")
+	if h.PasswordTransportOK(plain) {
+		t.Error("a password over plain http from the LAN was accepted without the operator's opt-in")
+	}
+	tls := reqFrom("203.0.113.9:5000")
+	tls.Header.Set("X-Forwarded-Proto", "https")
+	if !h.PasswordTransportOK(tls) {
+		t.Error("https via a proxy must be accepted")
+	}
+	h.OIDCAllowHTTPPrivate = true
+	if !h.PasswordTransportOK(plain) {
+		t.Error("with the operator's opt-in a LAN client may send it over http")
+	}
+	if h.PasswordTransportOK(reqFrom("203.0.113.9:5000")) {
+		t.Error("a public client over plain http must still be refused")
+	}
+}

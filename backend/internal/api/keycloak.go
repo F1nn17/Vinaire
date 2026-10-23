@@ -48,6 +48,8 @@ type storedOIDC struct {
 	// KeyedBy says how the people's accounts are keyed: keyedByIssuerSubject since Roadmap Phase 82 (the issuer and the
 	// subject make an identity); empty on settings saved before, until the first start with this code pins them.
 	KeyedBy string `json:"keyedBy,omitempty"`
+	// DirectLogin: Vinaire shows its own sign-in form and passes the password to Keycloak (Roadmap Phase 85).
+	DirectLogin bool `json:"directLogin,omitempty"`
 	// LegacyAdoptIssuer is the one issuer whose people may claim the accounts made before the issuer counted — the
 	// issuer Vinaire had configured when it first started with this code (see oidcbroker.Broker.AdoptLegacyIssuer).
 	LegacyAdoptIssuer string    `json:"legacyAdoptIssuer,omitempty"`
@@ -133,6 +135,7 @@ func (h *Handler) RestoreOIDC(ctx context.Context) {
 		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
 		h.Auth.SetIdentityBroker(h.brokerFor(s.mode(), s.LegacyAdoptIssuer))
+		h.Auth.SetDirectLogin(s.DirectLogin)
 		return h.Auth.ConfigureOIDC(cctx, h.oidcHTTPClient(), s.Issuer, s.ClientID, s.ClientSecret, s.RedirectURL, s.AllowToken)
 	}
 	if err := try(); err == nil {
@@ -193,6 +196,8 @@ type KeycloakStatus struct {
 	// RolePrefix: the chart's roles are <rolePrefix>-viewer, -admin… (empty when Vinaire wasn't installed by the chart).
 	RolePrefix   string `json:"rolePrefix,omitempty"`
 	BrokerReason string `json:"brokerReason,omitempty"`
+	// DirectLogin: Vinaire's own sign-in form is on.
+	DirectLogin bool `json:"directLogin"`
 }
 
 // KeycloakStatus handles GET /api/v1/auth/keycloak.
@@ -218,7 +223,7 @@ func (h *Handler) KeycloakStatus(w http.ResponseWriter, r *http.Request) {
 	if s, err := h.loadStoredOIDC(r.Context()); err == nil && s != nil {
 		st.Configured, st.Issuer, st.Realm, st.ClientID, st.RedirectURL, st.SetUpBy =
 			true, s.Issuer, s.Realm, s.ClientID, s.RedirectURL, s.SetUpBy
-		st.IdentityMode = s.mode()
+		st.IdentityMode, st.DirectLogin = s.mode(), s.DirectLogin
 	}
 	h.keycloak.mu.Lock()
 	st.PendingErr = h.keycloak.pendingErr
@@ -243,6 +248,9 @@ type keycloakSetupBody struct {
 	// IdentityMode: "serviceaccount" or "apiserver"; empty picks serviceaccount for an http Keycloak and
 	// apiserver for an https one.
 	IdentityMode string `json:"identityMode"`
+	// DirectLogin turns on Vinaire's own sign-in form: the password is typed into Vinaire and passed to Keycloak
+	// (the password grant, which is then enabled on the Vinaire client). Off by default.
+	DirectLogin bool `json:"directLogin"`
 }
 
 // KeycloakSetupResult is the answer to a setup.
@@ -308,7 +316,8 @@ func (h *Handler) KeycloakSetup(w http.ResponseWriter, r *http.Request) {
 	p := keycloak.Params{
 		BaseURL: b.KeycloakURL, AdminRealm: b.AdminRealm, AdminUser: b.AdminUser, AdminPass: keycloak.NewSecret(b.AdminPassword),
 		Realm: b.Realm, ClientID: b.ClientID, RedirectURL: redirect, Origin: origin,
-		User: b.User, UserEmail: b.UserEmail, UserPass: keycloak.NewSecret(b.UserPassword), UserMustChangePassword: b.UserChangePassword,
+		DirectAccess: b.DirectLogin,
+		User:         b.User, UserEmail: b.UserEmail, UserPass: keycloak.NewSecret(b.UserPassword), UserMustChangePassword: b.UserChangePassword,
 	}
 	b.AdminPassword, b.UserPassword = "", "" // out of the plain struct as soon as they're wrapped
 	if err := p.Validate(); err != nil {
@@ -364,16 +373,19 @@ func (h *Handler) KeycloakSetup(w http.ResponseWriter, r *http.Request) {
 			adopt = prev.Issuer
 		}
 	}
+	previousDirect := h.Auth.DirectLoginOn()
 	h.Auth.SetIdentityBroker(h.brokerFor(mode, adopt))
+	h.Auth.SetDirectLogin(b.DirectLogin)
 	if err := h.Auth.ConfigureOIDC(ctx, hc, res.IssuerURL, res.ClientID, res.ClientSecret.Reveal(), redirect, b.AllowTokenLogin); err != nil {
 		h.Auth.SetIdentityBroker(previousBroker)
+		h.Auth.SetDirectLogin(previousDirect)
 		h.auditLog(r, "keycloak-setup-failed", "", p.Realm, "keycloak", hostOf(p.BaseURL), "error", "keycloak answered but Vinaire can't use it: "+truncate(err.Error(), 250))
 		respondError(w, http.StatusBadGateway, "Keycloak was set up, but Vinaire couldn't start using it: "+err.Error()+" — the URL Vinaire reaches Keycloak on must be the one the realm's issuer reports")
 		return
 	}
 	doc, _ := json.Marshal(storedOIDC{ // #nosec G117 -- sealed by the store, see above
 		KeycloakURL: strings.TrimRight(p.BaseURL, "/"), Realm: p.Realm, Issuer: res.IssuerURL, ClientID: res.ClientID,
-		ClientSecret: res.ClientSecret.Reveal(), RedirectURL: redirect, AllowToken: b.AllowTokenLogin, IdentityMode: mode, KeyedBy: keyedByIssuerSubject, LegacyAdoptIssuer: adopt,
+		ClientSecret: res.ClientSecret.Reveal(), RedirectURL: redirect, AllowToken: b.AllowTokenLogin, IdentityMode: mode, KeyedBy: keyedByIssuerSubject, LegacyAdoptIssuer: adopt, DirectLogin: b.DirectLogin,
 		SetUpBy: callerName(r), SetUpAt: time.Now().UTC(),
 	})
 	if err := h.AuthDocs.SaveDoc(r.Context(), authDocName, doc); err != nil {
@@ -592,4 +604,42 @@ func (h *Handler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, map[string]string{"username": sess.Username, "kubernetesUser": sess.KubernetesUser, "mode": string(h.Auth.Mode)})
+}
+
+// KeycloakDirectLogin handles PUT /api/v1/auth/keycloak/direct-login {"allow": bool}: shows or hides Vinaire's
+// own sign-in form (Roadmap Phase 85). It changes Vinaire's side only. Turning it ON works only if the Keycloak
+// client already allows the password grant (set up with the form on, or by hand); otherwise signing in with the
+// form answers that it isn't enabled and the redirect to Keycloak stays available. Turning it OFF leaves the
+// client's setting alone — set Keycloak up again with the form off to close the grant there too.
+func (h *Handler) KeycloakDirectLogin(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "auth", "update") {
+		return
+	}
+	if !h.authDocsAvailable(w) {
+		return
+	}
+	var b struct {
+		Allow bool `json:"allow"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&b); err != nil {
+		respondError(w, http.StatusBadRequest, `request body must be {"allow": true|false}`)
+		return
+	}
+	s, err := h.loadStoredOIDC(r.Context())
+	if err != nil || s == nil {
+		respondError(w, http.StatusConflict, "Keycloak sign-in isn't set up")
+		return
+	}
+	prev := s.DirectLogin
+	s.DirectLogin = b.Allow
+	doc, _ := json.Marshal(s) // #nosec G117 -- the document is handed to the sealed store (it refuses an unencrypted one); it never reaches a response
+	if err := h.AuthDocs.SaveDoc(r.Context(), authDocName, doc); err != nil {
+		respondError(w, http.StatusInternalServerError, "couldn't save the setting: "+err.Error())
+		return
+	}
+	h.Auth.SetDirectLogin(b.Allow)
+	if prev != b.Allow {
+		h.auditLog(r, "keycloak-direct-login", "", s.Realm, "allow", b.Allow)
+	}
+	respondJSON(w, map[string]bool{"directLogin": b.Allow})
 }

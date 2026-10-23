@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,6 +27,8 @@ type providerControl struct {
 	refresh        string // "" ok, "invalid_grant", "down"
 	refreshSubject string // the subject the refreshed ID token names ("" = the same person)
 	noRefreshToken bool   // the code exchange gives no refresh token
+	passwordMode   string // "" ok, "needs_setup", "not_enabled", "down" (the password grant)
+	lastPassword   url.Values
 	refreshCalls   atomic.Int32
 	rotations      atomic.Int32
 }
@@ -68,6 +71,33 @@ func renewalProvider(t *testing.T) (*httptest.Server, *providerControl) {
 			ctl.mu.Lock()
 			mode, otherSub, noRT := ctl.refresh, ctl.refreshSubject, ctl.noRefreshToken
 			ctl.mu.Unlock()
+			if r.Form.Get("grant_type") == "password" {
+				ctl.mu.Lock()
+				ctl.lastPassword = r.Form
+				pm := ctl.passwordMode
+				ctl.mu.Unlock()
+				switch {
+				case pm == "down":
+					w.WriteHeader(http.StatusServiceUnavailable)
+					_, _ = w.Write([]byte("unavailable"))
+				case pm == "not_enabled":
+					w.WriteHeader(http.StatusUnauthorized)
+					_, _ = w.Write([]byte(`{"error":"unauthorized_client","error_description":"Client not allowed for direct access grants"}`))
+				case r.Form.Get("username") != "shiraku" || r.Form.Get("password") != "right-password":
+					w.WriteHeader(http.StatusUnauthorized)
+					_, _ = w.Write([]byte(`{"error":"invalid_grant","error_description":"Invalid user credentials"}`))
+				case pm == "needs_setup":
+					w.WriteHeader(http.StatusBadRequest)
+					_, _ = w.Write([]byte(`{"error":"invalid_grant","error_description":"Account is not fully set up"}`))
+				default:
+					out := map[string]any{"access_token": "a", "token_type": "Bearer", "id_token": idToken("sub-123")}
+					if !noRT {
+						out["refresh_token"] = "rt-1"
+					}
+					_ = json.NewEncoder(w).Encode(out)
+				}
+				return
+			}
 			if r.Form.Get("grant_type") == "refresh_token" {
 				ctl.refreshCalls.Add(1)
 				switch mode {

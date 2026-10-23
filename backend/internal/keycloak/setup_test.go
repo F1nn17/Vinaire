@@ -197,3 +197,41 @@ func TestSecretNeverPrints(t *testing.T) {
 		t.Errorf("a credential leaked into JSON: %s", j)
 	}
 }
+
+// Roadmap Phase 85: the password grant exists on the client only while Vinaire's own sign-in form is meant to be on.
+func TestDirectAccessIsOffByDefaultOnWhenAskedAndOffAgain(t *testing.T) {
+	f, srv := newFake(t)
+	ctx := context.Background()
+	if _, err := Setup(ctx, srv.Client(), params(srv.URL)); err != nil {
+		t.Fatal(err)
+	}
+	if f.clients["vinaire"]["directAccessGrantsEnabled"] != false {
+		t.Fatal("a new client must not allow the password grant unless asked")
+	}
+	on := params(srv.URL)
+	on.DirectAccess = true
+	res, err := Setup(ctx, srv.Client(), on)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.clients["vinaire"]["directAccessGrantsEnabled"] != true || !strings.Contains(fmt.Sprint(res.Steps), "updated") {
+		t.Fatalf("not switched on: %v %v", f.clients["vinaire"]["directAccessGrantsEnabled"], res.Steps)
+	}
+	// setting up again with the form off closes the grant again — it must not stay open by accident
+	if _, err := Setup(ctx, srv.Client(), params(srv.URL)); err != nil {
+		t.Fatal(err)
+	}
+	if f.clients["vinaire"]["directAccessGrantsEnabled"] != false {
+		t.Fatal("the password grant stayed on after the form was turned off")
+	}
+	// a fresh client made with the option on has it from the start
+	f2, srv2 := newFake(t)
+	on2 := params(srv2.URL)
+	on2.DirectAccess = true
+	if _, err := Setup(ctx, srv2.Client(), on2); err != nil {
+		t.Fatal(err)
+	}
+	if f2.clients["vinaire"]["directAccessGrantsEnabled"] != true {
+		t.Fatal("a new client made with the form on lacks the grant")
+	}
+}

@@ -27,6 +27,8 @@ export type KeycloakStatus = {
   brokerReason?: string;
   // the prefix of the chart's roles (<prefix>-viewer, -admin…); empty outside the chart
   rolePrefix?: string;
+  // Vinaire's own sign-in form is on (Phase 85)
+  directLogin?: boolean;
 };
 
 export type IdentityMode = "serviceaccount" | "apiserver";
@@ -45,6 +47,8 @@ export type KeycloakSetupRequest = {
   allowTokenLogin: boolean;
   // empty: ServiceAccounts for an http address, the API server for an https one
   identityMode?: IdentityMode;
+  // show Vinaire's own sign-in form: the password is typed into Vinaire and passed to Keycloak
+  directLogin?: boolean;
 };
 
 export type KeycloakSetupResult = {
@@ -77,6 +81,15 @@ export function setupKeycloak(
 
 export function setKeycloakTokenLogin(allow: boolean): Promise<void> {
   return apiFetch("/api/v1/auth/keycloak/token-login", {
+    method: "PUT",
+    headers: json,
+    body: JSON.stringify({ allow }),
+  });
+}
+
+// Shows or hides Vinaire's own sign-in form (only Vinaire's side; the Keycloak client keeps its setting).
+export function setKeycloakDirectLogin(allow: boolean): Promise<void> {
+  return apiFetch("/api/v1/auth/keycloak/direct-login", {
     method: "PUT",
     headers: json,
     body: JSON.stringify({ allow }),

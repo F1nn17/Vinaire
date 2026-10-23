@@ -2092,5 +2092,12 @@
  "Use Vinaire fully, and install applications": "Пользоваться Vinaire полностью и устанавливать приложения",
  "The viewer role (see above), plus install from the Marketplace and apply YAML in the namespaces the cluster allows.": "Роль viewer (см. выше), плюс установка из Маркетплейса и применение YAML в пространствах имён, где это разрешает кластер.",
  "Use Vinaire fully, and operate nodes": "Пользоваться Vinaire полностью и управлять узлами",
- "The viewer role (see above), plus cordon, drain, label, taint and remove nodes.": "Роль viewer (см. выше), плюс cordon, drain, метки, taints и удаление узлов."
+ "The viewer role (see above), plus cordon, drain, label, taint and remove nodes.": "Роль viewer (см. выше), плюс cordon, drain, метки, taints и удаление узлов.",
+ "One-time code": "Одноразовый код",
+ "I have a one-time code": "У меня есть одноразовый код",
+ "Continue on Keycloak's page": "Продолжить на странице Keycloak",
+ "Sign in on Keycloak's page instead": "Войти на странице Keycloak",
+ "Show Vinaire's own sign-in form (username and password)": "Показывать собственную форму входа Vinaire (логин и пароль)",
+ "Sign in on Vinaire's own form (no jump to Keycloak's page)": "Входить через собственную форму Vinaire (без перехода на страницу Keycloak)",
+ "People type their username and password into Vinaire, which passes them to Keycloak (the password grant, which Vinaire then turns on for its client). The password passes through Vinaire — it is never stored or logged, and only accepted over HTTPS (or, if the operator allowed it, on a private network). Two-step codes still work (an optional field), but an account with a temporary password or a required step has to sign in once on Keycloak's page, which stays available. Off: people are sent to Keycloak's page.": "Люди вводят логин и пароль в Vinaire, а он передаёт их Keycloak (это password grant, который Vinaire включает для своего клиента). Пароль проходит через Vinaire — он нигде не хранится и не пишется в лог и принимается только по HTTPS (или, если оператор разрешил, в частной сети). Коды двухфакторной защиты работают (необязательное поле), но учётной записи с временным паролем или обязательным шагом нужно один раз войти на странице Keycloak, она остаётся доступной. Выключено: людей отправляют на страницу Keycloak."
 }

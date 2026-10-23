@@ -282,7 +282,7 @@ flow.
   credentials (in the POST body, over a secure transport only, wrapped in
   `keycloak.Secret`, used for **one token request** and never stored, logged, audited or
   returned) and creates — idempotently — a realm, a **confidential** OIDC client for
-  Vinaire (authorization-code flow with PKCE only; no password grant, no service account,
+  Vinaire (authorization-code flow with PKCE; the password grant (Direct Access Grants) is **off unless the administrator chose Vinaire's own sign-in form** — see Phase 85 below; no service account,
   redirect URI and web origin exactly Vinaire's own, never a wildcard; an existing
   *public* client is refused) and, optionally, a first user. The new client's secret is
   the one thing kept: sealed in the same store as the cluster registry
@@ -385,6 +385,24 @@ flow.
   within seconds anyway). Concurrent requests share one renewal (`singleflight`) — a rotated refresh token must not be used twice. Exposure after a person
   is disabled in Keycloak is at most one credential lifetime. Not done: Keycloak groups (a ServiceAccount token carries none — roles are bound per
   account) and back-channel logout (Keycloak telling Vinaire at once).
+- Vinaire's own sign-in form (Roadmap Phase 85, owner's decision of 2026-10-23: no hop to Keycloak's page;
+  `internal/authn/direct.go`, `PUT /api/v1/auth/keycloak/direct-login`) — an **explicit exception to the authorization-code-only rule**,
+  an option an administrator switches on (setup wizard checkbox or the Sign-in tab; off in the API by default). `POST
+  /api/v1/auth/oidc/password` takes `{username, password, code?}` and Vinaire makes **one password-grant request** to the
+  Keycloak token endpoint as the confidential client, then runs the same `finishSignIn` as the redirect flow (verification,
+  broker token, refresh token sealed server-side). Rules to keep: the password is in memory for that request only — never
+  stored, logged, audited or returned (the audit keeps a 4-byte hash of the lowercase username, its length and the address);
+  the request is refused unless the transport is TLS (or, only with `OIDC_ALLOW_HTTP_PRIVATE_NETWORK`, a client on a private
+  network); bodies are capped (4 KiB) and fields bounded; failures are throttled per address **and** per username
+  (`Retry-After`), a right password that needs a setup step (`needs_provider_page`) is not counted as a failure; every error
+  text is fixed — the provider's wording is classified, never passed on, so the form can't be used to tell which users
+  exist; the Keycloak page stays available as a fallback (temporary passwords, required actions, accounts Direct Access
+  can't serve) and 2-step codes are passed as `totp`. The setup wizard sets `directAccessGrantsEnabled` on the client to
+  match the choice (and turns it back off when the form is off); turning the form off in the Sign-in tab changes Vinaire's
+  side only. Needs `requireVinaireRight` (`auth.vinaire.io` `update`). Audited `oidc-login` (method `password`),
+  `oidc-password-login-failed`, `oidc-password-login-refused`, `keycloak-direct-login`. Known trade-off (documented in
+  `docs/security.md`): Vinaire sees the password, there is no Keycloak SSO cookie, and the password grant is deprecated in
+  OAuth 2.1 — hence an option, not the default.
 - Backups of an application installed from an image (Roadmap Phase 77b, owner's decision of 2026-10-21; `internal/backup`,
   `internal/k8s/backup_actions.go`, `internal/api/backups.go`) — all as the caller, so the cluster's RBAC decides:
   `POST /api/v1/instances/{namespace}/{name}/backups` creates a **dump** (a `Job`, or a `CronJob` with a `schedule`; one
