@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **"Read only" in Settings → Sign-in bound a role that is not read-only.** The first-person presets added in 1.2.3 labelled the chart's `-viewer` role "Read only" (and built "Administrator of Vinaire" on it), but `-viewer` means *use Vinaire fully*: it reads Secrets, opens a shell in any pod, restarts and deletes workloads and pods and deletes namespaces. The chart now has a role that really only looks, `<fullname>-reader` (get/list/watch of what the pages show — no Secrets, no `pods/exec`, no port-forward, no change of any kind; `rbac.reader.create`, on by default, unbound), the presets bind it, "Administrator of Vinaire" is now reader + admin + rbac-admin, and the `-viewer` presets say plainly what the role includes. **If you bound `-viewer` from the 1.2.3 wizard believing it was read-only, replace that binding with `-reader`** (the rbac-admin role may hand out the new role too).
+
+### Added
+
+- **A browser test of the whole Keycloak sign-in runs in CI (Roadmap Phase 83).** A new `keycloak-e2e` job builds the image, installs the chart into a throwaway cluster, starts a real Keycloak and drives Chromium through: setting Keycloak up from Settings, a person signing in (replacing a temporary password), landing back on the same Vinaire, being a ServiceAccount of their own with no rights, getting the read-only role (reads, cannot delete, cannot list Secrets), and signing in again to the same account. It runs on pull requests.
+
 ## [1.2.3] - 2026-10-23
 
 ### Security

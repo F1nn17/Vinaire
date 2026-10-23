@@ -198,9 +198,15 @@ rbac:
   # needs the little the informers read (and nothing that writes, no Secrets).
   # AUTH_MODE=disabled turns it on automatically — every request then runs as it.
   broad: false
-  # A role for PEOPLE: everything Vinaire's UI browses and its fixed audited
-  # actions. Created unbound — bind it to the ServiceAccount or user that logs in
-  # (see NOTES.txt). It still can't change Vinaire itself; that needs adminRole.
+  # Look, don't touch: every page that only reads, with no Secrets, no shell in a pod, no
+  # delete. Created unbound. Not the same as viewer below.
+  reader:
+    create: true
+  # A role for PEOPLE who USE Vinaire: everything its UI browses AND its fixed audited
+  # actions — including reading Secrets, a shell in any pod (pods/exec), deleting pods and
+  # deployments and namespaces. NOT read-only (that is reader). Created unbound — bind it
+  # to the ServiceAccount or user that logs in (see NOTES.txt). It still can't change
+  # Vinaire itself; that needs adminRole.
   viewer:
     create: true
   # A role for installing Helm charts and applying YAML: create/update/delete on the

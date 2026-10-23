@@ -96,7 +96,9 @@ cluster; they are only names for the permission), on its default cluster. The ch
 the roles, unbound:
 
 ```bash
-# browse and act (the people who use Vinaire)
+# look, don't touch (no Secrets, no shell in pods, nothing that changes)
+kubectl create clusterrolebinding alice-reader --clusterrole=<fullname>-reader --user=alice
+# use Vinaire fully — NOT read-only: reads Secrets, opens a shell in pods, deletes workloads and namespaces
 kubectl create clusterrolebinding alice-viewer --clusterrole=<fullname>-viewer --user=alice
 # change Vinaire itself (whoever administers it)
 kubectl create clusterrolebinding alice-admin  --clusterrole=<fullname>-admin  --user=alice

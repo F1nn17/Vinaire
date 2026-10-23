@@ -168,6 +168,70 @@ ClusterRole a person is bound to, and — only when rbac.broad or authMode
   verbs: ["delete"]
 {{- end -}}
 
+{{/*
+What a person who may only LOOK needs (Roadmap Phase 83): the pages Vinaire shows, with get/list/watch and nothing
+else — no Secrets (the "-viewer" role reads them), no pods/exec or pods/portforward, no delete, patch, scale or
+create of any kind. Compare "vinaire.broadRules" ("-viewer"), which is everything the UI browses AND its fixed
+audited actions. Keep the two lists in step when a page gains a resource to read.
+*/}}
+{{- define "vinaire.readOnlyRules" -}}
+- apiGroups: ["", "apps", "batch", "networking.k8s.io"]
+  resources:
+    - pods
+    - deployments
+    - statefulsets
+    - daemonsets
+    - jobs
+    - configmaps
+    - services
+    - endpoints
+    - ingresses
+    - ingressclasses
+    - networkpolicies
+    - cronjobs
+    - events
+    - replicasets
+    - serviceaccounts
+    - persistentvolumeclaims
+    - persistentvolumes
+    - nodes
+    - namespaces
+    - resourcequotas
+    - limitranges
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+- apiGroups: ["policy", "autoscaling"]
+  resources: ["poddisruptionbudgets", "horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gateways", "httproutes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["get", "list", "watch"]
+# history search and metrics reach Loki and Prometheus through the API server's service proxy, for their own
+# Services only (see "vinaire.broadRules" for why the names look like scheme:service:port)
+- apiGroups: [""]
+  resources: ["services/proxy"]
+  resourceNames: ["http:loki:3100", "http:loki-gateway:80", "http:loki-read:3100", "http:loki-query-frontend:3100"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["services/proxy"]
+  resourceNames: ["http:prometheus-server:80", "http:prometheus:9090", "http:prometheus-operated:9090", "http:kube-prometheus-stack-prometheus:9090", "http:vmsingle:8429", "http:prometheus-alertmanager:9093", "http:alertmanager:9093", "http:kube-prometheus-stack-alertmanager:9093"]
+  verbs: ["get"]
+{{- end -}}
+
 {{/* The namespace of the people who sign in through Keycloak (Phase 80). */}}
 {{- define "vinaire.userNamespace" -}}
 {{- default (printf "%s-users" (include "vinaire.fullname" .)) .Values.keycloak.userNamespace -}}

@@ -5,7 +5,12 @@
 // of them is cluster-admin. Pure functions, so the commands are easy to read and to test.
 
 export type RolePresetId =
-  "vinaire-admin" | "viewer" | "installer" | "nodes" | "cluster-admin";
+  | "vinaire-admin"
+  | "reader"
+  | "viewer"
+  | "installer"
+  | "nodes"
+  | "cluster-admin";
 
 export type RolePreset = {
   id: RolePresetId;
@@ -23,27 +28,35 @@ export const rolePresets: RolePreset[] = [
     id: "vinaire-admin",
     title: "Administrator of Vinaire (recommended for the first person)",
     detail:
-      "Browse everything, manage Vinaire itself (clusters, sign-in, audit) and hand out the chart's roles to other people from the Access control page — without being a cluster administrator.",
-    roles: ["viewer", "admin", "rbac-admin"],
+      "Browse everything except Secrets, manage Vinaire itself (clusters, sign-in, audit) and hand out the chart's roles to other people from the Access control page. Cannot read Secrets, open a shell in a pod or change workloads — and is not a cluster administrator (but can give itself the roles below).",
+    roles: ["reader", "admin", "rbac-admin"],
+  },
+  {
+    id: "reader",
+    title: "Read only",
+    detail:
+      "Browse workloads, nodes, network, storage and logs. No Secrets, no shell in pods; changes nothing.",
+    roles: ["reader"],
   },
   {
     id: "viewer",
-    title: "Read only",
+    title: "Use Vinaire fully (the viewer role — not read-only)",
     detail:
-      "Browse workloads, nodes, network, storage and logs; change nothing.",
+      "Everything the UI browses plus its fixed actions: reads Secrets, opens a shell in any pod, restarts and deletes workloads and pods, deletes namespaces.",
     roles: ["viewer"],
   },
   {
     id: "installer",
-    title: "Read and install applications",
+    title: "Use Vinaire fully, and install applications",
     detail:
-      "Read only, plus install from the Marketplace and apply YAML in the namespaces the cluster allows.",
+      "The viewer role (see above), plus install from the Marketplace and apply YAML in the namespaces the cluster allows.",
     roles: ["viewer", "installer"],
   },
   {
     id: "nodes",
-    title: "Read and operate nodes",
-    detail: "Read only, plus cordon, drain, label, taint and remove nodes.",
+    title: "Use Vinaire fully, and operate nodes",
+    detail:
+      "The viewer role (see above), plus cordon, drain, label, taint and remove nodes.",
     roles: ["viewer", "node-admin"],
   },
   {

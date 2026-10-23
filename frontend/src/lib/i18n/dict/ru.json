@@ -2084,5 +2084,13 @@
  "Full cluster administrator (cluster-admin)": "Полный администратор кластера (cluster-admin)",
  "Everything in the cluster, including reading every Secret and changing any role. Only for a cluster that is yours alone.": "Всё в кластере, включая чтение любого Secret и изменение любых ролей. Только для кластера, который принадлежит только вам.",
  "new account has": "у нового аккаунта",
- "For the first person, after they have signed in once, run on a machine with kubectl:": "Для первого человека, после его первого входа, выполните на машине с kubectl:"
+ "For the first person, after they have signed in once, run on a machine with kubectl:": "Для первого человека, после его первого входа, выполните на машине с kubectl:",
+ "Browse everything except Secrets, manage Vinaire itself (clusters, sign-in, audit) and hand out the chart's roles to other people from the Access control page. Cannot read Secrets, open a shell in a pod or change workloads — and is not a cluster administrator (but can give itself the roles below).": "Видеть всё, кроме Secret, управлять самим Vinaire (кластеры, вход, аудит) и выдавать роли чарта другим людям на странице Access control. Не может читать Secret, открывать оболочку в поде и менять нагрузки — и не администратор кластера (но может выдать себе роли ниже).",
+ "Browse workloads, nodes, network, storage and logs. No Secrets, no shell in pods; changes nothing.": "Смотреть нагрузки, узлы, сеть, хранилище и логи. Без Secret и без оболочки в подах; ничего не меняет.",
+ "Use Vinaire fully (the viewer role — not read-only)": "Пользоваться Vinaire полностью (роль viewer — не только чтение)",
+ "Everything the UI browses plus its fixed actions: reads Secrets, opens a shell in any pod, restarts and deletes workloads and pods, deletes namespaces.": "Всё, что показывает интерфейс, плюс его фиксированные действия: читает Secret, открывает оболочку в любом поде, перезапускает и удаляет нагрузки и поды, удаляет пространства имён.",
+ "Use Vinaire fully, and install applications": "Пользоваться Vinaire полностью и устанавливать приложения",
+ "The viewer role (see above), plus install from the Marketplace and apply YAML in the namespaces the cluster allows.": "Роль viewer (см. выше), плюс установка из Маркетплейса и применение YAML в пространствах имён, где это разрешает кластер.",
+ "Use Vinaire fully, and operate nodes": "Пользоваться Vinaire полностью и управлять узлами",
+ "The viewer role (see above), plus cordon, drain, label, taint and remove nodes.": "Роль viewer (см. выше), плюс cordon, drain, метки, taints и удаление узлов."
 }
