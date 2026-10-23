@@ -159,12 +159,6 @@ The two are not exclusive: persist the file for the Audit log page and ship stdo
 
 ## Known residual risks
 
-- **Vinaire's own sign-in form sees the password (Phase 85, optional).** When an administrator turns it on, people
-  type their password into Vinaire, which passes it to Keycloak with the password grant; Vinaire never stores or logs
-  it and accepts it only over HTTPS (or a private network if the operator allowed http), but a compromised Vinaire
-  could capture passwords as they are typed, Keycloak's own protections (SSO cookie, its brute-force screens that
-  depend on the browser) do not apply, accounts with a temporary password or required action must use Keycloak's page,
-  and the password grant is deprecated in OAuth 2.1. Leave it off if you prefer the redirect flow.
 - **One credential store.** Compromising Vinaire exposes every registered cluster. This is inherent to a
   multi-cluster console; mitigate with the points above, keep the master key in Vault (`keyProvider.type: vault`),
   give clusters short-lived tokens and replace them before they run out.

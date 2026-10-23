@@ -176,10 +176,6 @@ func main() {
 		workloadsHandler.BrokerTTL = cfg.SessionMaxTTL
 	}
 	workloadsHandler.RolePrefix = os.Getenv("ROLE_PREFIX")
-	// Roadmap Phase 85: Vinaire's own sign-in form takes a password only where any credential may travel, and
-	// sign-ins are audited like every other action.
-	auth.PasswordTransportOK = workloadsHandler.PasswordTransportOK
-	auth.Audit = workloadsHandler.AuditBackground
 	if os.Getenv("OIDC_ALLOW_HTTP_PRIVATE_NETWORK") == "true" {
 		workloadsHandler.OIDCAllowHTTPPrivate = true
 		slog.Warn("OIDC_ALLOW_HTTP_PRIVATE_NETWORK is set: Keycloak may be reached over plain http, and its administrator's password may be sent over plain http, on a private network. Use it for a home server without a certificate; never across the internet.")

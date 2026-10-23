@@ -85,13 +85,12 @@ func walk(t *testing.T) []route {
 // The only routes that answer without a session: they ARE the sign-in flow, plus the
 // liveness probe. Anything else must sit behind the session middleware.
 var publicRoutes = map[string]string{
-	"GET /healthz":                    "liveness probe",
-	"GET /api/v1/auth/config":         "tells the login screen which methods are open",
-	"POST /api/v1/auth/login":         "pasted-token sign-in",
-	"POST /api/v1/auth/logout":        "ends the caller's own session",
-	"GET /api/v1/auth/oidc/login":     "starts Keycloak sign-in",
-	"GET /api/v1/auth/oidc/callback":  "Keycloak sign-in return",
-	"POST /api/v1/auth/oidc/password": "Vinaire's own Keycloak sign-in form (an option an administrator switches on)",
+	"GET /healthz":                   "liveness probe",
+	"GET /api/v1/auth/config":        "tells the login screen which methods are open",
+	"POST /api/v1/auth/login":        "pasted-token sign-in",
+	"POST /api/v1/auth/logout":       "ends the caller's own session",
+	"GET /api/v1/auth/oidc/login":    "starts Keycloak sign-in",
+	"GET /api/v1/auth/oidc/callback": "Keycloak sign-in return",
 }
 
 func TestEveryRouteNeedsASessionExceptTheSignInFlow(t *testing.T) {
@@ -135,7 +134,6 @@ func TestEveryRouteNeedsASessionExceptTheSignInFlow(t *testing.T) {
 // ones that deliberately are not, each with the reason.
 var unlimitedWrites = map[string]string{
 	"POST /api/v1/auth/login":                         "sign-in has its own throttle (per address and per token)",
-	"POST /api/v1/auth/oidc/password":                 "sign-in has its own throttle (per address and per username)",
 	"POST /api/v1/auth/logout":                        "ends the caller's own session",
 	"POST /api/v1/resources/dry-run":                  "persists nothing; iterating on a manifest must not burn the write budget",
 	"POST /api/v1/rbac/check":                         "a read (SubjectAccessReview), POST only for the body",

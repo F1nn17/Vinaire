@@ -43,10 +43,7 @@ type Params struct {
 	ClientID    string // the OIDC client for Vinaire
 	RedirectURL string // Vinaire's /api/v1/auth/oidc/callback
 	Origin      string // Vinaire's own origin (a CORS/web-origin entry)
-	// DirectAccess turns on the client's "direct access grants" (the password grant) so that Vinaire's own sign-in
-	// form can pass a username and password to Keycloak (Roadmap Phase 85, the owner's decision of 2026-10-23).
-	// Off by default and turned OFF again on a client where it was on if a later setup leaves it off.
-	DirectAccess bool
+
 	// LoginTheme asks for the realm to use the "vinaire" login theme (Roadmap Phase 85b): Keycloak's own sign-in page in
 	// Vinaire's look, with English and Russian. The theme itself has to be installed on the Keycloak (the wizard hands
 	// it out); if Keycloak doesn't list it, the step is skipped — never an error — and the realm is left alone.
@@ -157,7 +154,7 @@ func Setup(ctx context.Context, hc *http.Client, p Params) (Result, error) {
 	if !existed {
 		status, hdr, err := c.do(ctx, http.MethodPost, realmPath+"/clients", map[string]any{
 			"clientId": p.ClientID, "name": "Vinaire", "enabled": true, "protocol": "openid-connect",
-			"publicClient": false, "standardFlowEnabled": true, "directAccessGrantsEnabled": p.DirectAccess,
+			"publicClient": false, "standardFlowEnabled": true, "directAccessGrantsEnabled": false,
 			"serviceAccountsEnabled": false, "implicitFlowEnabled": false,
 			"redirectUris": []string{p.RedirectURL}, "webOrigins": []string{p.Origin},
 			"attributes": map[string]string{"pkce.code.challenge.method": "S256"},
@@ -174,7 +171,7 @@ func Setup(ctx context.Context, hc *http.Client, p Params) (Result, error) {
 		}
 		res.Steps = append(res.Steps, Step{"Client " + p.ClientID, "created"})
 	} else {
-		updated, err := c.ensureRedirect(ctx, realmPath, id, p.RedirectURL, p.Origin, p.DirectAccess)
+		updated, err := c.ensureRedirect(ctx, realmPath, id, p.RedirectURL, p.Origin)
 		if err != nil {
 			return res, fmt.Errorf("update the client: %w", err)
 		}
@@ -335,9 +332,8 @@ func (c *client) findClient(ctx context.Context, realmPath, clientID string) (id
 }
 
 // ensureRedirect adds Vinaire's redirect URI and origin to an existing client, if
-// they aren't there, and sets whether direct access grants (the password grant) are on — the one thing
-// about the client that Vinaire decides. Everything else is left as the administrator set it.
-func (c *client) ensureRedirect(ctx context.Context, realmPath, id, redirect, origin string, directAccess bool) (bool, error) {
+// they aren't there. Everything else on the client is left as the administrator set it.
+func (c *client) ensureRedirect(ctx context.Context, realmPath, id, redirect, origin string) (bool, error) {
 	path := realmPath + "/clients/" + url.PathEscape(id)
 	status, _, body, err := c.doBody(ctx, http.MethodGet, path, nil)
 	if err != nil || status != http.StatusOK {
@@ -360,10 +356,6 @@ func (c *client) ensureRedirect(ctx context.Context, realmPath, id, redirect, or
 	}
 	add("redirectUris", redirect)
 	add("webOrigins", origin)
-	if cur, _ := rep["directAccessGrantsEnabled"].(bool); cur != directAccess {
-		rep["directAccessGrantsEnabled"] = directAccess
-		changed = true
-	}
 	if rep["publicClient"] == true {
 		return false, errors.New("the existing client is a public client; Vinaire needs a confidential one (pick another client id, or change it in Keycloak)")
 	}

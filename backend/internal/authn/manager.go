@@ -70,11 +70,6 @@ type Manager struct {
 	// address instead of the connection's peer — only for a deployment where a
 	// trusted proxy sets it.
 	TrustForwardedFor bool
-	// PasswordTransportOK says whether a password may arrive on this request (TLS, or a private network if the
-	// operator allowed it). Nil allows every request — tests only; main sets it.
-	PasswordTransportOK func(r *http.Request) bool
-	// Audit receives sign-in events (Handler.AuditBackground). Nil: none.
-	Audit func(action, name, identity string, detail map[string]any)
 
 	limiter *loginLimiter
 	// oidc is the OIDC client: set at startup when Mode == ModeOIDC, or switched on
@@ -84,8 +79,6 @@ type Manager struct {
 	// broker, when set, gives OIDC sessions a ServiceAccount token instead of the ID token (broker.go)
 	broker        IdentityBroker
 	tokenLoginOff bool // token sign-in turned off while OIDC is active
-	// directLogin: Vinaire's own sign-in form is offered (direct.go); set with the Keycloak settings.
-	directLogin bool
 }
 
 // defaultMaxSessionTTL is how long a login lasts at most unless configured.
@@ -240,7 +233,7 @@ func (m *Manager) Middleware(next http.Handler) http.Handler {
 // login screen to show.
 func (m *Manager) HandleConfig(w http.ResponseWriter, r *http.Request) {
 	oidcOn, tokenOn := m.SignInMethods()
-	respondJSON(w, map[string]any{"mode": string(m.Mode), "oidc": oidcOn, "tokenLogin": tokenOn, "oidcDirect": m.DirectLoginOn()})
+	respondJSON(w, map[string]any{"mode": string(m.Mode), "oidc": oidcOn, "tokenLogin": tokenOn})
 }
 
 // UseStore replaces the (in-memory) session store — done once at start, before any
@@ -292,7 +285,7 @@ func (m *Manager) DisableOIDC() {
 		return
 	}
 	m.oidcMu.Lock()
-	m.oidc, m.tokenLoginOff, m.broker, m.directLogin = nil, false, nil, false
+	m.oidc, m.tokenLoginOff, m.broker = nil, false, nil
 	m.oidcMu.Unlock()
 }
 
@@ -417,11 +410,4 @@ func respondError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
-}
-
-// respondErrorCode is respondError with a machine-readable code the sign-in form acts on.
-func respondErrorCode(w http.ResponseWriter, status int, code, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": message, "code": code})
 }

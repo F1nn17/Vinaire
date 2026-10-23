@@ -56,8 +56,6 @@ func newRouter(d routerDeps) *chi.Mux {
 	r.Post("/api/v1/auth/logout", auth.HandleLogout)
 	r.Get("/api/v1/auth/oidc/login", auth.HandleOIDCLogin)
 	r.Get("/api/v1/auth/oidc/callback", auth.HandleOIDCCallback)
-	// Roadmap Phase 85: Vinaire's own sign-in form (an option an administrator switches on); it has its own throttle
-	r.Post("/api/v1/auth/oidc/password", auth.HandleOIDCPassword)
 
 	// Every other /api/v1 route requires a session (Roadmap Phase 10) — see
 	// internal/authn.Manager.Middleware. Authorization itself is whatever
@@ -242,7 +240,6 @@ func newRouter(d routerDeps) *chi.Mux {
 			w.Delete("/auth/sessions/{ref}", workloadsHandler.RevokeSession)
 			w.Post("/auth/keycloak/setup", workloadsHandler.KeycloakSetup)
 			w.Put("/auth/keycloak/token-login", workloadsHandler.KeycloakTokenLogin)
-			w.Put("/auth/keycloak/direct-login", workloadsHandler.KeycloakDirectLogin)
 			w.Delete("/auth/keycloak", workloadsHandler.KeycloakDisable)
 			w.Post("/clusters/ssh/hostkey", workloadsHandler.ProvisionHostKey)
 			w.Post("/clusters/import-ssh", workloadsHandler.ClusterSSHStart(provision.ModeImport))

@@ -159,24 +159,10 @@ func (m *Manager) HandleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadGateway, "oidc provider did not return an id_token")
 		return
 	}
-	if !m.finishSignIn(w, r, oc, rawIDToken, token.RefreshToken, "redirect") {
-		return
-	}
-	redirectTo := m.FrontendURL
-	if redirectTo == "" {
-		redirectTo = "/"
-	}
-	http.Redirect(w, r, redirectTo, http.StatusFound)
-}
-
-// finishSignIn is what follows once the identity provider has said yes — whether Vinaire got the tokens by the
-// authorization-code redirect or by the person's password (direct.go): verify the ID token, obtain the Kubernetes
-// credential, start the session and set the cookie. On failure it has already answered and returns false.
-func (m *Manager) finishSignIn(w http.ResponseWriter, r *http.Request, oc *oidcClient, rawIDToken, refreshToken, method string) bool {
 	idToken, err := oc.verifier.Verify(oc.ctx(r.Context()), rawIDToken)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "id_token verification failed: "+err.Error())
-		return false
+		return
 	}
 	var claims struct {
 		PreferredUsername string `json:"preferred_username"`
@@ -190,7 +176,7 @@ func (m *Manager) finishSignIn(w http.ResponseWriter, r *http.Request, oc *oidcC
 	// When the provider also gave a refresh token (Phase 84) the credential is short and the session long:
 	// the session lasts as long as the configured maximum and the credential is renewed while the provider
 	// still vouches for the person. Without one the session is as short as the credential, as before.
-	renewable := refreshToken != ""
+	renewable := token.RefreshToken != ""
 	bearer, kubeUser, tokenExpiry := rawIDToken, "", idToken.Expiry
 	if broker := m.IdentityBroker(); broker != nil {
 		id := Identity{Issuer: idToken.Issuer, Subject: idToken.Subject, Username: claims.PreferredUsername}
@@ -200,7 +186,7 @@ func (m *Manager) finishSignIn(w http.ResponseWriter, r *http.Request, oc *oidcC
 		bt, err := broker.TokenFor(oc.ctx(r.Context()), id)
 		if err != nil {
 			respondError(w, http.StatusBadGateway, "signed in with the identity provider, but Vinaire couldn't get a Kubernetes credential for you: "+err.Error())
-			return false
+			return
 		}
 		bearer, kubeUser, tokenExpiry = bt.Token, bt.KubernetesUser, bt.Expiry
 	}
@@ -223,17 +209,19 @@ func (m *Manager) finishSignIn(w http.ResponseWriter, r *http.Request, oc *oidcC
 		ValidatedAt:    time.Now(),
 	}
 	if renewable {
-		sess.RefreshToken = refreshToken
+		sess.RefreshToken = token.RefreshToken
 	}
 	if err := m.Sessions.Create(sess); err != nil {
 		respondError(w, http.StatusServiceUnavailable, "the server can't take more logins right now")
-		return false
+		return
 	}
 	m.setSessionCookie(w, sess.ID, expiry)
-	if m.Audit != nil {
-		m.Audit("oidc-login", claims.PreferredUsername, claims.PreferredUsername, map[string]any{"method": method, "subject": idToken.Subject})
+
+	redirectTo := m.FrontendURL
+	if redirectTo == "" {
+		redirectTo = "/"
 	}
-	return true
+	http.Redirect(w, r, redirectTo, http.StatusFound)
 }
 
 func clearOIDCPendingCookie(w http.ResponseWriter, secure bool) {

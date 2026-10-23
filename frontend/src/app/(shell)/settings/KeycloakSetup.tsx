@@ -8,7 +8,6 @@ import {
   useSessions,
   setKeycloakTokenLogin,
   setupKeycloak,
-  setKeycloakDirectLogin,
   type IdentityMode,
   useKeycloakStatus,
   type KeycloakSetupResult,
@@ -44,21 +43,6 @@ export function KeycloakSetup() {
       // show the choice at once; the server's answer follows
       if (status) await mutate({ ...status, tokenLogin: allow }, false);
       await setKeycloakTokenLogin(allow);
-      await mutate();
-    } catch (err) {
-      await mutate();
-      setActionError(friendlyErrorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function toggleDirect(allow: boolean) {
-    setBusy(true);
-    setActionError(null);
-    try {
-      if (status) await mutate({ ...status, directLogin: allow }, false);
-      await setKeycloakDirectLogin(allow);
       await mutate();
     } catch (err) {
       await mutate();
@@ -150,15 +134,6 @@ export function KeycloakSetup() {
                     onChange={(e) => void toggleToken(e.target.checked)}
                   />
                   Also allow signing in with a pasted token
-                </label>
-                <label className="flex items-center gap-2 text-xs text-text-muted">
-                  <input
-                    type="checkbox"
-                    checked={status.directLogin === true}
-                    disabled={busy}
-                    onChange={(e) => void toggleDirect(e.target.checked)}
-                  />
-                  Show Vinaire&apos;s own sign-in form (username and password)
                 </label>
                 <button
                   type="button"
@@ -329,8 +304,6 @@ function SetupForm({
     userPassword: "",
     userChangePassword: true,
     allowTokenLogin: true,
-    // Vinaire's own sign-in form: off by default, the themed Keycloak page below is the recommended way
-    directLogin: false,
     // Keycloak's page in Vinaire's look
     loginTheme: true,
     // "" = automatic: ServiceAccounts for an http address, the API server for an https one
@@ -364,7 +337,6 @@ function SetupForm({
         userPassword: f.createUser ? f.userPassword : "",
         userChangePassword: f.userChangePassword,
         allowTokenLogin: f.allowTokenLogin,
-        directLogin: f.directLogin,
         loginTheme: f.loginTheme,
         ...(f.identityMode ? { identityMode: f.identityMode } : {}),
       });
@@ -594,26 +566,6 @@ function SetupForm({
           ), then run this setup again.
         </Hint>
       </div>
-      <label className="flex flex-col gap-1 text-xs text-text-muted">
-        <span className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={f.directLogin}
-            onChange={(e) => set({ directLogin: e.target.checked })}
-          />
-          Sign in on Vinaire&apos;s own form (no jump to Keycloak&apos;s page)
-        </span>
-        <Hint>
-          People type their username and password into Vinaire, which passes
-          them to Keycloak (the password grant, which Vinaire then turns on for
-          its client). The password passes through Vinaire — it is never stored
-          or logged, and only accepted over HTTPS (or, if the operator allowed
-          it, on a private network). Two-step codes still work (an optional
-          field), but an account with a temporary password or a required step
-          has to sign in once on Keycloak&apos;s page, which stays available.
-          Off: people are sent to Keycloak&apos;s page.
-        </Hint>
-      </label>
       <label className="flex items-center gap-2 text-xs text-text-muted">
         <input
           type="checkbox"

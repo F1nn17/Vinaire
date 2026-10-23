@@ -50,17 +50,6 @@ var fingerprintRe = regexp.MustCompile(`^SHA256:[A-Za-z0-9+/]{43}$`)
 // loopback-to-loopback request (local development) are accepted; anything else
 // is rejected unless the operator explicitly opts out.
 func (h *Handler) requireSecureTransport(w http.ResponseWriter, r *http.Request) bool {
-	if h.transportIsSecure(r) {
-		return true
-	}
-	respondError(w, http.StatusBadRequest,
-		"credentials (SSH, tokens, passwords) may only be sent over HTTPS — open Vinaire through a TLS URL (or set PROVISION_ALLOW_INSECURE=true for local development; for a Keycloak administrator on a private network see OIDC_ALLOW_HTTP_PRIVATE_NETWORK)")
-	return false
-}
-
-// transportIsSecure: TLS, a proxy that says https, loopback to loopback (local development), or the explicit
-// development opt-out.
-func (h *Handler) transportIsSecure(r *http.Request) bool {
 	if h.ProvisionAllowInsecure || r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
 		return true
 	}
@@ -73,14 +62,9 @@ func (h *Handler) transportIsSecure(r *http.Request) bool {
 			return true
 		}
 	}
+	respondError(w, http.StatusBadRequest,
+		"credentials (SSH, tokens, passwords) may only be sent over HTTPS — open Vinaire through a TLS URL (or set PROVISION_ALLOW_INSECURE=true for local development; for a Keycloak administrator on a private network see OIDC_ALLOW_HTTP_PRIVATE_NETWORK)")
 	return false
-}
-
-// PasswordTransportOK says whether a person's password may arrive on this request (Roadmap Phase 85): the same
-// rule as for any credential, plus — only if the operator allowed plain http on a private network
-// (OIDC_ALLOW_HTTP_PRIVATE_NETWORK) — a client on a private network.
-func (h *Handler) PasswordTransportOK(r *http.Request) bool {
-	return h.transportIsSecure(r) || (h.OIDCAllowHTTPPrivate && clientOnPrivateNetwork(r))
 }
 
 // requireNodeCreate checks, with the caller's own identity, that they could
