@@ -354,7 +354,7 @@ flow.
   both validated as https), so with a Keycloak on http it can't be made to trust the ID token. Instead, after Vinaire has verified the
   sign-in itself, `Broker.TokenFor` finds or creates **one ServiceAccount per person** (labelled `vinaire.io/oidc-sub=<sha256 of the
   OIDC issuer and subject>` and `managed-by: vinaire`, annotated with the issuer, named `oidc-<username>`) in **one dedicated namespace** (`<fullname>-users`,
-  `OIDC_USER_NAMESPACE`) and asks the TokenRequest API for a short-lived token for it (lifetime = `SESSION_MAX_TTL` when set — the chart always sets it, `sessionMaxTTL`, 12h by default — otherwise 4 hours, `oidcbroker.DefaultTTL`; at least 10 min).
+  `OIDC_USER_NAMESPACE`) and asks the TokenRequest API for a short-lived token for it. When the provider gave a refresh token the token is **short** (`SESSION_TOKEN_TTL`, 30 min by default, 10 min–2 h) and the session **long** (`SESSION_MAX_TTL`), see *Renewal* below; without a refresh token the token lives as long as the session did before (`SESSION_MAX_TTL` when set — the chart sets it, 12h — otherwise 4 hours, `oidcbroker.DefaultTTL`).
   The session holds that token instead of the ID token; the cluster sees `system:serviceaccount:<ns>:oidc-<name>` and **RBAC decides
   everything**. Rules to keep: the broker creates ServiceAccounts and tokens and **never a binding or a role** — a new account has no
   rights; Vinaire's Role (`<fullname>-user-accounts`) is a namespaced Role on `serviceaccounts` get/list/create/**patch** and
@@ -375,8 +375,16 @@ flow.
   sets it) — never the `localhost:3100` development default. The wizard offers the first person **sets of the chart's roles** (reader, admin,
   rbac-admin…; `cluster-admin` only behind a warning), not `cluster-admin`. **`-viewer` is not read-only** — it reads Secrets, opens a shell in
   any pod and carries the fixed audited actions; the chart's `-reader` role (Roadmap Phase 83) is the one that only looks (no Secrets, no exec,
-  no port-forward, no verb but get/list/watch) and is what "Read only" binds. Not done: Keycloak groups (a ServiceAccount token carries none —
-  roles are bound per account), refreshing a token while the Keycloak session lives (Roadmap Phase 84).
+  no port-forward, no verb but get/list/watch) and is what "Read only" binds. **Renewal** (Roadmap Phase 84, `internal/authn/renew.go`): with less than a third of its life left, the next request of a session renews it
+  — Vinaire presents the **refresh token** (kept server-side with the session: in memory, or sealed in the shared store; never sent to the browser,
+  listed or logged) to the provider and, if the provider still vouches for the person, mints a new credential (`Broker.RenewToken`, audited as
+  `oidc-token-renewed`). The provider saying no (`invalid_grant`: the user was **disabled**, the SSO session ended, the token was revoked) ends the
+  Vinaire session at once; a provider that **cannot be reached** is tolerated for `RenewGrace` (1 h since it last said yes) and no longer; a refreshed ID
+  token for another subject/issuer ends the session; **`RenewToken` never creates an account** — an administrator who deletes a person's account cuts them
+  off (a recreated account of the same name would give the RoleBindings back), and the session ends at the next renewal (the old credential stops working
+  within seconds anyway). Concurrent requests share one renewal (`singleflight`) — a rotated refresh token must not be used twice. Exposure after a person
+  is disabled in Keycloak is at most one credential lifetime. Not done: Keycloak groups (a ServiceAccount token carries none — roles are bound per
+  account) and back-channel logout (Keycloak telling Vinaire at once).
 - Backups of an application installed from an image (Roadmap Phase 77b, owner's decision of 2026-10-21; `internal/backup`,
   `internal/k8s/backup_actions.go`, `internal/api/backups.go`) — all as the caller, so the cluster's RBAC decides:
   `POST /api/v1/instances/{namespace}/{name}/backups` creates a **dump** (a `Job`, or a `CronJob` with a `schedule`; one
