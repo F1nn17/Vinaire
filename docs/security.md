@@ -122,6 +122,20 @@ kubectl create clusterrolebinding alice-admin  --clusterrole=<fullname>-admin  -
   default the audit file lives on an `emptyDir` and is lost when the pod is replaced.
 - `PROVISION_ALLOW_INSECURE` and `GITOPS_ALLOW_INSECURE_GIT` exist only for local development.
 
+### Defaults to review for a permanent install
+
+None of these is a mistake — each is a default that suits a first try — but each is worth a decision before Vinaire holds anything you care about.
+
+| Setting | Default | What it means | Change it with |
+|---|---|---|---|
+| Audit log on a volume | off | the log lives on an `emptyDir` and is lost when the pod is replaced | `audit.persistence.enabled: true`, or ship stdout to your log system |
+| NetworkPolicy | off | any pod in the cluster may reach Vinaire; Vinaire may reach anything | `networkPolicy.enabled: true` on a CNI that enforces it |
+| Sessions | in memory (one replica) | a restart signs everyone out | `sessions.store: secret` (the default for more than one replica) |
+| `cookie.secure` | `true` | right for https; over plain http a browser drops the cookie | leave it; `false` only for a trial or an http home server |
+| Keycloak over http | off | Keycloak and its administrator's password stay on https | `keycloak.allowHttpPrivateNetwork: true` — private networks only |
+| Signed-in lifetime with Keycloak | 12 h with the chart (`sessionMaxTTL`); 4 h without `SESSION_MAX_TTL` | the session ends when the person's token does; until Phase 84 nothing renews it, and a person disabled in Keycloak keeps working until then | `sessionMaxTTL` (a Go duration; shorter is safer) |
+| Keycloak groups → roles | not supported | a ServiceAccount token carries no groups | bind roles per account, or use https and the API server's own OIDC |
+
 ## Keeping the audit log
 
 Every audited action is written twice: as a JSON line to the audit file (`AUDIT_LOG_PATH`, `/audit/audit.log`, rotated at

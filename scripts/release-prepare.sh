@@ -3,9 +3,10 @@
 #
 #   scripts/release-prepare.sh 1.0.1
 #
-# It edits two files and nothing else — charts/vinaire/Chart.yaml (version and appVersion, which
-# must stay equal) and CHANGELOG.md (the [Unreleased] section becomes [1.0.1], a fresh empty
-# [Unreleased] goes above it) — then tells you what to do next. Commit the result on a branch, open
+# It edits three kinds of file and nothing else — charts/vinaire/Chart.yaml (version and appVersion, which
+# must stay equal), CHANGELOG.md (the [Unreleased] section becomes [1.0.1], a fresh empty
+# [Unreleased] goes above it) and the version named in the README's install and verify commands (README.md,
+# README.ru.md; skipped for a pre-release) — then tells you what to do next. Commit the result on a branch, open
 # a pull request, merge it, and run the "Release" workflow from main with the same version (docs/releasing.md).
 set -euo pipefail
 
@@ -45,6 +46,15 @@ sed -i.bak -E "s/^version:.*/version: $version/; s/^appVersion:.*/appVersion: \"
 # cut the changelog
 sed -i.bak -E "s/^## \[Unreleased\]/## [Unreleased]\n\n## [$version] - $today/" "$log"
 rm -f "$chart.bak" "$log.bak"
+# the README's quick start names the version it installs and verifies: keep it on the release being cut
+# (a pre-release suffix is not a version people should copy from a README)
+if [[ ! "$version" =~ - ]]; then
+  for readme in README.md README.ru.md; do
+    [ -f "$readme" ] || continue
+    sed -i.bak -E "s#(charts/vinaire --version )[0-9]+\.[0-9]+\.[0-9]+#$version#; s#(ghcr\.io/f1nn17/vinaire:)[0-9]+\.[0-9]+\.[0-9]+#$version#" "$readme"
+    rm -f "$readme.bak"
+  done
+fi
 
 echo "chart $current -> $version, CHANGELOG cut as [$version] - $today"
 echo

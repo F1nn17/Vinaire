@@ -94,6 +94,10 @@ type Handler struct {
 	BrokerClientset kubernetes.Interface
 	BrokerNamespace string
 	BrokerTTL       time.Duration
+	// RolePrefix (ROLE_PREFIX, set by the chart to its full name) is the prefix of the chart's ClusterRoles —
+	// <prefix>-viewer, -installer, -node-admin, -rbac-admin, -lifecycle-admin, -admin — so the wizard can print
+	// commands that name them. Empty outside the chart.
+	RolePrefix string
 
 	// Roadmap Phase 28: the Helm application catalog and release operations.
 	// nil means "not configured" and the endpoints answer 503.

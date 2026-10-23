@@ -14,3 +14,27 @@ func TestValidateCORSOrigins(t *testing.T) {
 		}
 	}
 }
+
+func TestFrontendURLDefaultsToTheSameOriginWhenThisProcessServesTheUI(t *testing.T) {
+	if got := defaultFrontendURLFor("/app/web"); got != "/" {
+		t.Errorf("with STATIC_DIR set the browser must stay on this origin, got %q", got)
+	}
+	if got := defaultFrontendURLFor("  "); got != defaultFrontendURL {
+		t.Errorf("a blank STATIC_DIR is no STATIC_DIR: got %q", got)
+	}
+	if got := defaultFrontendURLFor(""); got != "http://localhost:3100" {
+		t.Errorf("the dev default changed: %q", got)
+	}
+}
+
+func TestFrontendURLFromTheEnvironmentWins(t *testing.T) {
+	t.Setenv("STATIC_DIR", "/app/web")
+	t.Setenv("FRONTEND_URL", "https://vinaire.example.com")
+	if got := Load().FrontendURL; got != "https://vinaire.example.com" {
+		t.Errorf("got %q", got)
+	}
+	t.Setenv("FRONTEND_URL", "")
+	if got := Load().FrontendURL; got != "/" {
+		t.Errorf("an empty FRONTEND_URL with STATIC_DIR set should be %q, got %q", "/", got)
+	}
+}

@@ -164,3 +164,18 @@ func FuzzAccountName(f *testing.F) {
 		}
 	})
 }
+
+func TestWithNoConfiguredLifetimeTheTokenLivesFourHours(t *testing.T) {
+	b, _, _ := newBroker(t)
+	b.TTL = 0
+	tok, err := b.TokenFor(context.Background(), authn.Identity{Subject: "s", Username: "u"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Until(tok.Expiry); d < 3*time.Hour+55*time.Minute || d > 4*time.Hour {
+		t.Errorf("an unset lifetime gave %s, want four hours", d)
+	}
+	if DefaultTTL != 4*time.Hour {
+		t.Errorf("DefaultTTL changed to %s — update AGENTS.md, docs/security.md and the chart comment with it", DefaultTTL)
+	}
+}

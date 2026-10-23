@@ -170,7 +170,9 @@ type KeycloakStatus struct {
 	IdentityMode    string `json:"identityMode,omitempty"`
 	UserNamespace   string `json:"userNamespace,omitempty"`
 	BrokerAvailable bool   `json:"brokerAvailable"`
-	BrokerReason    string `json:"brokerReason,omitempty"`
+	// RolePrefix: the chart's roles are <rolePrefix>-viewer, -admin… (empty when Vinaire wasn't installed by the chart).
+	RolePrefix   string `json:"rolePrefix,omitempty"`
+	BrokerReason string `json:"brokerReason,omitempty"`
 }
 
 // KeycloakStatus handles GET /api/v1/auth/keycloak.
@@ -181,6 +183,7 @@ func (h *Handler) KeycloakStatus(w http.ResponseWriter, r *http.Request) {
 	st := KeycloakStatus{Available: true, AllowHTTPPrivate: h.OIDCAllowHTTPPrivate}
 	st.BrokerAvailable, st.BrokerReason = h.brokerAvailable()
 	st.UserNamespace = h.BrokerNamespace
+	st.RolePrefix = h.RolePrefix
 	oidcOn, tokenOn := h.Auth.SignInMethods()
 	st.Active, st.TokenLogin = oidcOn, tokenOn
 	switch {

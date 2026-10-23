@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **After signing in through Keycloak the browser no longer lands on `http://localhost:3100`.** The backend's development default for `FRONTEND_URL` was used by every Helm install that didn't set `frontendURL`. The chart now always passes `FRONTEND_URL` (`/` — Vinaire serves its own UI), and the backend itself defaults to `/` whenever it serves the UI (`STATIC_DIR`, as in the image), keeping the `:3100` default only for `npm run dev`.
+- **A Keycloak session no longer ends after an hour when `SESSION_MAX_TTL` isn't set** (running the image or the binary without the chart; the chart always sets it, 12h by default). The token Vinaire obtains for a person then lived one hour while the docs said otherwise; the default is now four hours, stated in `docs/security.md`.
+- **`npm audit` passes again:** `dompurify` is raised to 3.4.17 (it reached the build through `monaco-editor`).
+- The README's install and verify commands named chart 1.0.0; they now name the current release, and `scripts/release-prepare.sh` keeps them on it.
+
+### Changed
+
+- **The first person signing in through Keycloak is no longer pointed at `cluster-admin`.** Settings → Sign-in offers sets of the chart's roles — administrator of Vinaire (viewer + admin + rbac-admin, recommended), read only, read and install, read and operate nodes — and prints the matching `kubectl` commands; `cluster-admin` stays available last, behind a warning. The chart passes its role prefix to Vinaire (`ROLE_PREFIX`) so the commands name the right roles.
+
+### Documentation
+
+- `docs/security-review.md` (EN, RU) now describes the ServiceAccount identity broker next to the ID-token path (trust boundaries, critical paths, known limits); `docs/security.md` (EN, RU) gets a table of defaults worth reviewing for a permanent install (audit on a volume, NetworkPolicy, sessions in memory, cookie, http Keycloak, token lifetime, groups).
+
 ## [1.2.2] - 2026-10-22
 
 ### Added

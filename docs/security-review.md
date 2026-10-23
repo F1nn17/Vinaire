@@ -16,7 +16,7 @@ Read [security.md](./security.md) first (threat model, verified properties, resi
 
 A web UI in front of Kubernetes clusters. A Go backend (chi, client-go) serves a static
 Next.js export and a JSON/WebSocket API. Almost every call runs **as the signed-in user**: their
-Kubernetes token (a pasted ServiceAccount token or an OIDC ID token) sits server-side behind an
+Kubernetes token (a pasted ServiceAccount token, a short-lived ServiceAccount token Vinaire obtained for a person who signed in through Keycloak, or — only when the API server trusts the issuer — an OIDC ID token) sits server-side behind an
 opaque, HttpOnly session cookie and is used for the call, so the cluster's RBAC — not Vinaire —
 decides. Vinaire holds credentials of the clusters registered in it (sealed at rest) and has a few
 actions that run with its **own** identity (live-update informers, its own settings, background
@@ -31,6 +31,7 @@ flowchart LR
   V -- "own identity: informers, own Secrets" --> K
   V -- "SSH, one job, credentials in memory" --> N[Server being provisioned]
   V -- "OIDC: discovery, code exchange" --> KC[Keycloak]
+  V -- "own identity at sign-in: one ServiceAccount + a short-lived token per person, in the users namespace only" --> K
   V -- "Admin REST, once" --> KC
   V -- "Transit wrap/unwrap at start" --> VA[Vault / OpenBao]
   V -- "guarded client: https only" --> H[Helm repos, OCI registries, git]
@@ -49,6 +50,7 @@ For each: the code, the property to try to break, and what the tests already pro
 | Path | Code | Try to break | Already proven |
 |---|---|---|---|
 | **Sign-in and sessions** | `internal/authn` | log in as someone else; keep a session after logout/expiry/revoke; fixation; brute-force; read another session; confuse token and OIDC modes; the run-time Keycloak switch | session id entropy and rotation, cookie flags, throttle, 12 h cap, shared store holds no readable token or id, revoke reaches all replicas, token login can't be switched off while OIDC is off |
+| **Identity broker (Keycloak sign-in by ServiceAccount)** | `internal/oidcbroker`, `internal/authn/oidc.go`, chart `templates/users-namespace.yaml` | get more than the person has: reuse another person's account, make Vinaire create a binding or a role, mint a token outside the users namespace, read a Secret with the broker's Role | the broker creates ServiceAccounts and tokens only and never a binding (`TestFirstSignInCreatesAnAccountWithNoRightsAndATokenForIt`); a same-named account that is not ours is never adopted; the chart's Role is shown on a real cluster to stop at its namespace (`integration/broker_test.go`); deleting an account ends its tokens in seconds; an http Keycloak can't be paired with the API-server mode. **Known limit:** the key is the OIDC subject alone (Roadmap Phase 82 adds the issuer) |
 | **Authentication coverage** | `backend/router.go` | find a route that answers without a session | `TestEveryRouteNeedsASessionExceptTheSignInFlow` walks the router; the six public routes are named with reasons |
 | **Per-user authorization** | `internal/api/*`, `internal/stream/authz.go` | read or change what the caller's RBAC forbids; reach a cluster with Vinaire's identity instead of theirs | handlers use the caller's `rest.Config`; the live stream is filtered per event; the "caller's token, never the backend's" tests |
 | **Exec / terminal** | `internal/stream/exec.go` | open a shell without `pods/exec`; keep one after logout; bypass the origin check | start **and** end are audited; origin check on every WebSocket (a test fails the build otherwise) |

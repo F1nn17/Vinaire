@@ -174,6 +174,7 @@ func main() {
 		workloadsHandler.BrokerNamespace = os.Getenv("OIDC_USER_NAMESPACE")
 		workloadsHandler.BrokerTTL = cfg.SessionMaxTTL
 	}
+	workloadsHandler.RolePrefix = os.Getenv("ROLE_PREFIX")
 	if os.Getenv("OIDC_ALLOW_HTTP_PRIVATE_NETWORK") == "true" {
 		workloadsHandler.OIDCAllowHTTPPrivate = true
 		slog.Warn("OIDC_ALLOW_HTTP_PRIVATE_NETWORK is set: Keycloak may be reached over plain http, and its administrator's password may be sent over plain http, on a private network. Use it for a home server without a certificate; never across the internet.")

@@ -147,12 +147,10 @@ keycloak:
   # empty: <release>-vinaire-users, i.e. "<fullname>-users"
   userNamespace: ""
 
-# The public URL this Vinaire install is reachable at (e.g.
-# "https://vinaire.example.com"), used only to send the browser back to
-# the right place after an OIDC login. Leave empty for token/disabled
-# mode. Only needed for oidc mode when Vinaire is reachable at something
-# other than the backend's own default assumption — see the chart's
-# README for why this matters.
+# Where the browser is sent after an OIDC login. Empty (the default) means "/": Vinaire serves its own
+# UI, so the same address is right. Set it only when the UI is reached at another address than the API,
+# e.g. "https://vinaire.example.com". (Until chart 1.2.3 an empty value left the backend's development
+# default, http://localhost:3100, and people landed there after signing in.)
 frontendURL: ""
 
 cookie:

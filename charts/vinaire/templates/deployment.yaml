@@ -62,10 +62,13 @@ spec:
             - name: OIDC_REDIRECT_URL
               value: {{ .Values.oidc.redirectURL | quote }}
             {{- end }}
-            {{- with .Values.frontendURL }}
+            # Where the browser lands after an OIDC login. Vinaire serves its own UI, so the same origin ("/")
+            # is right unless frontendURL says otherwise (e.g. the UI is on another address).
             - name: FRONTEND_URL
-              value: {{ . | quote }}
-            {{- end }}
+              value: {{ default "/" .Values.frontendURL | quote }}
+            # the prefix of this chart's roles, so Settings -> Sign-in can print commands that name them
+            - name: ROLE_PREFIX
+              value: {{ include "vinaire.fullname" . | quote }}
             - name: AUDIT_LOG_PATH
               value: /audit/audit.log
             {{- $store := include "vinaire.sessionStore" . }}
