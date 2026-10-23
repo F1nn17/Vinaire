@@ -34,7 +34,7 @@ Vinaire — веб-интерфейс для Kubernetes, сделанный с �
 На любом кластере, где есть `kubectl` и [Helm](https://helm.sh/docs/intro/install/):
 
 ```bash
-helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.2.2 \
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.2.3 \
   --namespace vinaire --create-namespace
 
 kubectl -n vinaire port-forward svc/vinaire 8080:8080      # затем откройте http://localhost:8080
@@ -49,7 +49,7 @@ HTTPS и OIDC — в разделе [Установка](#установка-hel
 Проверить перед запуском:
 
 ```bash
-cosign verify ghcr.io/f1nn17/vinaire:1.2.2 \
+cosign verify ghcr.io/f1nn17/vinaire:1.2.3 \
   --certificate-identity-regexp 'https://github.com/F1nn17/Vinaire/\.github/workflows/release\.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
