@@ -8,11 +8,12 @@ import {
   useSessions,
   setKeycloakTokenLogin,
   setupKeycloak,
-  accountNameFor,
   type IdentityMode,
   useKeycloakStatus,
   type KeycloakSetupResult,
 } from "@/lib/api/keycloak";
+import { accountNameFor } from "@/lib/rolePresets";
+import { FirstAdminCommands } from "./FirstAdminCommands";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { KeycloakInstall, type InstalledKeycloak } from "./KeycloakInstall";
 import { TypeToConfirmModal } from "@/components/ui/TypeToConfirmModal";
@@ -214,13 +215,12 @@ function Done({
           their own in the namespace{" "}
           <code className="font-mono">{result.userNamespace}</code>, with a
           short-lived token for it. Kubernetes RBAC decides everything, and a
-          new account has <b>no rights</b> until you give it some. The first
-          time, from a machine with kubectl (for the first administrator, after
-          they have signed in once):
-          <pre className="mt-2 overflow-x-auto rounded bg-bg p-2 font-mono text-[11px]">
-            {`kubectl create clusterrolebinding ${account}-admin \\
-  --clusterrole=cluster-admin --serviceaccount=${subject}`}
-          </pre>
+          new account has <b>no rights</b> until you give it some. For the first
+          person, after they have signed in once, run on a machine with kubectl:
+          <FirstAdminCommands
+            account={account}
+            namespace={result.userNamespace ?? "<namespace>"}
+          />
           Later, bind roles from Vinaire&apos;s Access control page to{" "}
           <code className="font-mono">system:serviceaccount:{subject}</code>. If
           Keycloak is down, nothing in the cluster is affected — only new

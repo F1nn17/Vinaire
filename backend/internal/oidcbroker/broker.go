@@ -51,8 +51,10 @@ const (
 
 	// MinTTL is the shortest lifetime Kubernetes accepts for a requested token.
 	MinTTL = 10 * time.Minute
-	// DefaultTTL is used when none is configured.
-	DefaultTTL = time.Hour
+	// DefaultTTL is used when none is configured (SESSION_MAX_TTL unset). Four hours: long enough for a working
+	// session, short enough that a disabled person loses access the same day. Until sessions are renewed
+	// (Roadmap Phase 84) the session ends when the token does.
+	DefaultTTL = 4 * time.Hour
 
 	prefix = "oidc-"
 )

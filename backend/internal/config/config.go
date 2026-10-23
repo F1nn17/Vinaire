@@ -171,6 +171,18 @@ const (
 	envDiscoveryPaths       = "DISCOVERY_KUBECONFIG_PATHS"
 )
 
+// defaultFrontendURLFor is where a browser is sent after an OIDC login when FRONTEND_URL is not set.
+// When this process serves the UI itself (STATIC_DIR is set — the combined image and the Helm chart),
+// the UI is on the same origin as the API, so "/" is right; the Next.js dev server on :3100 is only
+// the answer while developing with `npm run dev` and `go run .` side by side. (Before this, an install
+// without FRONTEND_URL sent people to http://localhost:3100 after signing in.)
+func defaultFrontendURLFor(staticDir string) string {
+	if strings.TrimSpace(staticDir) != "" {
+		return "/"
+	}
+	return defaultFrontendURL
+}
+
 // Load reads configuration from the environment, falling back to defaults
 // that work out of the box for local development.
 func Load() Config {
@@ -178,7 +190,7 @@ func Load() Config {
 		Port:               getEnv(envPort, defaultPort),
 		KubeconfigPath:     os.Getenv(envKubeconfig),
 		CORSAllowedOrigins: splitCSV(getEnv(envCORSAllowedOrigin, defaultCORSOrigin)),
-		FrontendURL:        getEnv(envFrontendURL, defaultFrontendURL),
+		FrontendURL:        getEnv(envFrontendURL, defaultFrontendURLFor(os.Getenv(envStaticDir))),
 		AuthMode:           getEnv(envAuthMode, defaultAuthMode),
 		CookieSecure:       getEnv(envCookieSecure, defaultCookieSecure) == "true",
 		CookieSameSite:     getEnv(envCookieSameSite, defaultCookieSameSite),

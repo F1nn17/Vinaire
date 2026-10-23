@@ -36,7 +36,7 @@ The interface is available in English and Russian.
 On any cluster with `kubectl` and [Helm](https://helm.sh/docs/intro/install/):
 
 ```bash
-helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.0.0 \
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.2.2 \
   --namespace vinaire --create-namespace
 
 kubectl -n vinaire port-forward svc/vinaire 8080:8080      # then open http://localhost:8080
@@ -51,7 +51,7 @@ Every release image and the chart are signed (keyless, with cosign) and carry an
 attestation. To verify before you run:
 
 ```bash
-cosign verify ghcr.io/f1nn17/vinaire:1.0.0 \
+cosign verify ghcr.io/f1nn17/vinaire:1.2.2 \
   --certificate-identity-regexp 'https://github.com/F1nn17/Vinaire/\.github/workflows/release\.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -222,7 +222,7 @@ it through your Ingress controller (the example uses Traefik; use `nginx` etc. a
 has). The released chart and image are public on GitHub's registry:
 
 ```bash
-helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.0.0   --namespace vinaire --create-namespace   --set ingress.enabled=true --set ingress.className=traefik   --set 'ingress.hosts[0].host=vinaire.example.com'
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.2.2   --namespace vinaire --create-namespace   --set ingress.enabled=true --set ingress.className=traefik   --set 'ingress.hosts[0].host=vinaire.example.com'
 ```
 
 To run a build of your own instead, push the image and use the chart from a checkout:

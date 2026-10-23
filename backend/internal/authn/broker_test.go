@@ -169,3 +169,20 @@ func TestDisablingOIDCDropsTheBroker(t *testing.T) {
 		t.Fatal("the broker outlived the Keycloak setting")
 	}
 }
+
+// Regression (Phase 81a): after signing in the browser must land on this Vinaire, not on the development
+// address an install without FRONTEND_URL used to inherit.
+func TestSignInRedirectsToThePathItWasToldAndToTheRootByDefault(t *testing.T) {
+	p, _ := signingProvider(t)
+	for _, tc := range []struct{ frontend, want string }{{"", "/"}, {"/", "/"}, {"https://vinaire.example.com", "https://vinaire.example.com"}} {
+		m := newTokenManager(t)
+		m.FrontendURL = tc.frontend
+		if err := m.ConfigureOIDC(context.Background(), http.DefaultClient, p.URL+"/realms/vinaire", "vinaire", "s", "https://v/cb", true); err != nil {
+			t.Fatal(err)
+		}
+		w := signIn(t, m)
+		if w.Code != http.StatusFound || w.Header().Get("Location") != tc.want {
+			t.Errorf("FrontendURL %q: %d -> %q, want %q", tc.frontend, w.Code, w.Header().Get("Location"), tc.want)
+		}
+	}
+}

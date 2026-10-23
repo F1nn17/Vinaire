@@ -21,7 +21,8 @@ forget and no tag to push by hand.
    ```
 
    It sets `version` and `appVersion` in the chart and turns `## [Unreleased]` of the changelog into
-   `## [1.0.1] - <today>` (with a fresh empty `[Unreleased]` above it). It refuses an empty
+   `## [1.0.1] - <today>` (with a fresh empty `[Unreleased]` above it), and moves the version named in the README's
+   install and verify commands (`README.md`, `README.ru.md`; not for a pre-release) to the one being cut. It refuses an empty
    `[Unreleased]` — there would be nothing to release.
 2. **Review and merge** the pull request. The checks (CI, Security) must pass; `main` is protected.
 3. **Release** — Actions → **Release** → *Run workflow*, branch `main`, version `1.0.1`; or

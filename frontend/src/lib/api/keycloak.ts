@@ -25,6 +25,8 @@ export type KeycloakStatus = {
   userNamespace?: string;
   brokerAvailable?: boolean;
   brokerReason?: string;
+  // the prefix of the chart's roles (<prefix>-viewer, -admin…); empty outside the chart
+  rolePrefix?: string;
 };
 
 export type IdentityMode = "serviceaccount" | "apiserver";
@@ -109,18 +111,6 @@ export function revokeSession(ref: string): Promise<void> {
   return apiFetch(`/api/v1/auth/sessions/${encodeURIComponent(ref)}`, {
     method: "DELETE",
   });
-}
-
-// The name a person's account gets: "oidc-" plus the user name, lower-cased with anything but letters and
-// digits turned into single dashes (the same rule as the backend's oidcbroker.AccountName).
-export function accountNameFor(username: string): string {
-  const core = username
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40)
-    .replace(/-+$/g, "");
-  return `oidc-${core || "user"}`;
 }
 
 // How this session is known to the cluster (GET /api/v1/auth/me). kubernetesUser is set for a person who

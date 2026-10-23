@@ -354,7 +354,7 @@ flow.
   both validated as https), so with a Keycloak on http it can't be made to trust the ID token. Instead, after Vinaire has verified the
   sign-in itself, `Broker.TokenFor` finds or creates **one ServiceAccount per person** (labelled `vinaire.io/oidc-sub=<sha256 of the
   OIDC subject>` and `managed-by: vinaire`, named `oidc-<username>`) in **one dedicated namespace** (`<fullname>-users`,
-  `OIDC_USER_NAMESPACE`) and asks the TokenRequest API for a short-lived token for it (lifetime = `SESSION_MAX_TTL` when set, **otherwise 1 hour** — Roadmap Phase 81b aligns the default; at least 10 min).
+  `OIDC_USER_NAMESPACE`) and asks the TokenRequest API for a short-lived token for it (lifetime = `SESSION_MAX_TTL` when set — the chart always sets it, `sessionMaxTTL`, 12h by default — otherwise 4 hours, `oidcbroker.DefaultTTL`; at least 10 min).
   The session holds that token instead of the ID token; the cluster sees `system:serviceaccount:<ns>:oidc-<name>` and **RBAC decides
   everything**. Rules to keep: the broker creates ServiceAccounts and tokens and **never a binding or a role** — a new account has no
   rights; Vinaire's Role (`<fullname>-user-accounts`) is a namespaced Role on `serviceaccounts` get/list/create and
@@ -367,8 +367,10 @@ flow.
   `apiserver`): an **http Keycloak is refused in `apiserver` mode** (the wizard used to print `--oidc-*` flags Kubernetes would refuse,
   and every call came back 401), and `serviceaccount` is refused where Vinaire doesn't run in a cluster or has no users' namespace.
   `GET /api/v1/auth/me` (a read) says how the session is known (`kubernetesUser`, no token). Audited as `oidc-user-provisioned` and
-  `oidc-token-issued` (account, subject, expiry — never the token). Not done: Keycloak groups (a ServiceAccount token carries none —
-  roles are bound per account), refreshing a token while the Keycloak session lives.
+  `oidc-token-issued` (account, subject, expiry — never the token). After sign-in the browser is sent to `FRONTEND_URL`, which is `/` whenever this process serves the UI (`STATIC_DIR`; the chart always
+  sets it) — never the `localhost:3100` development default. The wizard offers the first person **sets of the chart's roles** (viewer, admin,
+  rbac-admin…; `cluster-admin` only behind a warning), not `cluster-admin`. Not done: Keycloak groups (a ServiceAccount token carries none —
+  roles are bound per account), refreshing a token while the Keycloak session lives (Roadmap Phase 84).
 - Backups of an application installed from an image (Roadmap Phase 77b, owner's decision of 2026-10-21; `internal/backup`,
   `internal/k8s/backup_actions.go`, `internal/api/backups.go`) — all as the caller, so the cluster's RBAC decides:
   `POST /api/v1/instances/{namespace}/{name}/backups` creates a **dump** (a `Job`, or a `CronJob` with a `schedule`; one

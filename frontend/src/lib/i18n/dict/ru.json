@@ -2071,5 +2071,18 @@
  "Later, bind roles from Vinaire's Access control page to": "Позже привязывайте роли на странице Access control к",
  "The cluster knows you as": "Кластер знает вас как",
  "If something is forbidden, an administrator has to bind a role to that name.": "Если что-то запрещено, администратору нужно привязать роль к этому имени.",
- "Kubernetes accepts an https issuer only. Add to kube-apiserver (for k3s, under": "Kubernetes принимает только https-issuer. Добавьте в kube-apiserver (для k3s — в"
+ "Kubernetes accepts an https issuer only. Add to kube-apiserver (for k3s, under": "Kubernetes принимает только https-issuer. Добавьте в kube-apiserver (для k3s — в",
+ "What the first person may do": "Что может делать первый человек",
+ "Administrator of Vinaire (recommended for the first person)": "Администратор Vinaire (рекомендуется для первого человека)",
+ "Browse everything, manage Vinaire itself (clusters, sign-in, audit) and hand out the chart's roles to other people from the Access control page — without being a cluster administrator.": "Видеть всё, управлять самим Vinaire (кластеры, вход, аудит) и выдавать роли чарта другим людям на странице Access control — не будучи администратором кластера.",
+ "Read only": "Только чтение",
+ "Browse workloads, nodes, network, storage and logs; change nothing.": "Смотреть нагрузки, узлы, сеть, хранилище и логи; ничего не менять.",
+ "Read and install applications": "Чтение и установка приложений",
+ "Read only, plus install from the Marketplace and apply YAML in the namespaces the cluster allows.": "Только чтение, плюс установка из Маркетплейса и применение YAML в пространствах имён, где это разрешает кластер.",
+ "Read and operate nodes": "Чтение и управление узлами",
+ "Read only, plus cordon, drain, label, taint and remove nodes.": "Только чтение, плюс cordon, drain, метки, taints и удаление узлов.",
+ "Full cluster administrator (cluster-admin)": "Полный администратор кластера (cluster-admin)",
+ "Everything in the cluster, including reading every Secret and changing any role. Only for a cluster that is yours alone.": "Всё в кластере, включая чтение любого Secret и изменение любых ролей. Только для кластера, который принадлежит только вам.",
+ "new account has": "у нового аккаунта",
+ "For the first person, after they have signed in once, run on a machine with kubectl:": "Для первого человека, после его первого входа, выполните на машине с kubectl:"
 }
