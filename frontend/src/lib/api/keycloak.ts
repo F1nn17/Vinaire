@@ -49,6 +49,8 @@ export type KeycloakSetupRequest = {
   identityMode?: IdentityMode;
   // show Vinaire's own sign-in form: the password is typed into Vinaire and passed to Keycloak
   directLogin?: boolean;
+  // Keycloak's sign-in page in Vinaire's look (the "vinaire" theme, if it is installed on that Keycloak)
+  loginTheme?: boolean;
 };
 
 export type KeycloakSetupResult = {

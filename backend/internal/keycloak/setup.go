@@ -47,6 +47,10 @@ type Params struct {
 	// form can pass a username and password to Keycloak (Roadmap Phase 85, the owner's decision of 2026-10-23).
 	// Off by default and turned OFF again on a client where it was on if a later setup leaves it off.
 	DirectAccess bool
+	// LoginTheme asks for the realm to use the "vinaire" login theme (Roadmap Phase 85b): Keycloak's own sign-in page in
+	// Vinaire's look, with English and Russian. The theme itself has to be installed on the Keycloak (the wizard hands
+	// it out); if Keycloak doesn't list it, the step is skipped — never an error — and the realm is left alone.
+	LoginTheme bool
 
 	// An optional first user.
 	User      string
@@ -179,6 +183,14 @@ func Setup(ctx context.Context, hc *http.Client, p Params) (Result, error) {
 			st = "updated"
 		}
 		res.Steps = append(res.Steps, Step{"Client " + p.ClientID, st})
+	}
+
+	if p.LoginTheme {
+		st, err := c.ensureLoginTheme(ctx, realmPath)
+		if err != nil {
+			return res, fmt.Errorf("set the login theme: %w", err)
+		}
+		res.Steps = append(res.Steps, Step{"Login theme " + LoginThemeName, st})
 	}
 
 	// the client's secret
@@ -363,6 +375,66 @@ func (c *client) ensureRedirect(ctx context.Context, realmPath, id, redirect, or
 		return false, orStatus(err, status)
 	}
 	return true, nil
+}
+
+// LoginThemeName is the theme Vinaire hands out (frontend/src/lib/keycloakTheme.ts).
+const LoginThemeName = "vinaire"
+
+// ensureLoginTheme points the realm's login pages at the "vinaire" theme and turns on English and Russian — only when
+// Keycloak says the theme is installed (GET /admin/serverinfo lists the themes it can load). It returns the step's
+// status: "updated", "reused", or "skipped — …" when the theme isn't there (the page stays Keycloak's own).
+func (c *client) ensureLoginTheme(ctx context.Context, realmPath string) (string, error) {
+	status, _, body, err := c.doBody(ctx, http.MethodGet, "/admin/serverinfo", nil)
+	if err != nil || status != http.StatusOK {
+		return "", orStatus(err, status)
+	}
+	var info struct {
+		Themes struct {
+			Login []struct {
+				Name string `json:"name"`
+			} `json:"login"`
+		} `json:"themes"`
+	}
+	if err := json.Unmarshal(body, &info); err != nil {
+		return "", err
+	}
+	found := false
+	for _, t := range info.Themes.Login {
+		if t.Name == LoginThemeName {
+			found = true
+		}
+	}
+	if !found {
+		return "skipped — the theme isn't installed on this Keycloak (the pages keep Keycloak's own look)", nil
+	}
+	status, _, body, err = c.doBody(ctx, http.MethodGet, realmPath, nil)
+	if err != nil || status != http.StatusOK {
+		return "", orStatus(err, status)
+	}
+	var rep map[string]any
+	if err := json.Unmarshal(body, &rep); err != nil {
+		return "", err
+	}
+	changed := false
+	if rep["loginTheme"] != LoginThemeName {
+		rep["loginTheme"] = LoginThemeName
+		changed = true
+	}
+	// languages: only when the administrator hasn't set up their own list
+	if on, _ := rep["internationalizationEnabled"].(bool); !on {
+		rep["internationalizationEnabled"] = true
+		rep["supportedLocales"] = []string{"en", "ru"}
+		rep["defaultLocale"] = "en"
+		changed = true
+	}
+	if !changed {
+		return "reused", nil
+	}
+	status, _, err = c.do(ctx, http.MethodPut, realmPath, rep)
+	if err != nil || status != http.StatusNoContent {
+		return "", orStatus(err, status)
+	}
+	return "updated", nil
 }
 
 func (c *client) clientSecret(ctx context.Context, realmPath, id string) (string, error) {

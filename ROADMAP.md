@@ -5105,6 +5105,12 @@ Role чарта получила `patch` на ServiceAccount (только в п
 Исправлено: новая роль `<fullname>-reader` (`rbac.reader.create`), пресеты «Read only» и «Администратор Vinaire» теперь на ней, у `-viewer` честное описание везде (README, security.md, AGENTS.md, values.yaml, пресеты); `rbac-admin` может выдавать и `-reader`.
 Следует выпустить исправление (релиз 1.2.4: пользователи 1.2.3 могли привязать `-viewer` как «только чтение»).
 
+## Phase 85b — Страница входа Keycloak в оформлении Vinaire ✅ done
+
+Владелец: «сделать что-то современное» вместо password grant — вход через authorization code + PKCE (пароль не попадает в Vinaire), но страница выглядит как Vinaire.
+
+**Сделано (2026-10-23).** Тема входа `vinaire` (`keycloak/theme/vinaire`, родитель `keycloak.v2`: только стили, формы Keycloak не тронуты; свои цвета тёмная/светлая, название realm вместо логотипа, русский и английский). Мастер: чекбокс «страница входа Keycloak в оформлении Vinaire» (включён), бэкенд ставит `loginTheme` и языки в realm **только если** `GET /admin/serverinfo` показывает тему (иначе шаг «skipped»); чужой список языков и выбранную тему не трогает. В Keycloak, который ставит сам Vinaire (Фаза 69), тема монтируется ConfigMap'ом; для чужого — zip и ConfigMap для скачивания (генерируются в браузере, `src/lib/keycloakTheme.ts`, источник правды — `keycloak/theme/vinaire`, `npm run gen:keycloak-theme`). Форма Фазы 85 в мастере теперь по умолчанию выключена. Тесты: `TestLoginThemeIsSetOnlyWhenAskedAndInstalled`. **Проверено вживую** на Keycloak 26.7 (тема подхватилась, `serverinfo` её показал, `Setup` выставил realm, скриншот светлой версии). **Не проверено:** тёмная версия (headless Chrome не эмулирует), монтирование ConfigMap в поде.
+
 ## Phase 85 — Собственная форма входа (логин и пароль в Vinaire) ✅ done
 
 Владелец: автопереход на страницу Keycloak не нужен, нужна **своя форма** Vinaire, а данные уходят в Keycloak (вместо вариантов 85a/85b — автопереход и тема Keycloak).

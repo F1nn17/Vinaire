@@ -143,7 +143,12 @@ for (const [name, t0] of Object.entries(themes)) {
 }
 
 // ---- 2. no colour outside the tokens ---------------------------------------------
-const allowed = new Set(["app/globals.css", "lib/theme.ts"]);
+// keycloakThemeFiles.ts is the text of Keycloak's sign-in theme (a stylesheet Vinaire hands out), not Vinaire's own UI
+const allowed = new Set([
+  "app/globals.css",
+  "lib/theme.ts",
+  "lib/keycloakThemeFiles.ts",
+]);
 const colourRe =
   /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\boklch\(|\bcolor-mix\(/;
 const walk = (d, out = []) => {

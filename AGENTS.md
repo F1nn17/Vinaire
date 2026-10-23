@@ -403,6 +403,16 @@ flow.
   `oidc-password-login-failed`, `oidc-password-login-refused`, `keycloak-direct-login`. Known trade-off (documented in
   `docs/security.md`): Vinaire sees the password, there is no Keycloak SSO cookie, and the password grant is deprecated in
   OAuth 2.1 — hence an option, not the default.
+- Keycloak's sign-in page in Vinaire's look (Roadmap Phase 85b, `keycloak/theme/vinaire`, `frontend/src/lib/keycloakTheme.ts`,
+  `internal/keycloak/setup.go` `ensureLoginTheme`) — the recommended alternative to the Phase 85 form, and **no new route**: a login
+  *theme* (Keycloak's own `keycloak.v2` re-coloured, English + Russian; only styles — Keycloak's forms, passkeys, 2-step codes and password
+  reset stay Keycloak's). The setup (`loginTheme: true`) makes **two more Keycloak admin calls in the realm it already manages**: only if
+  `GET /admin/serverinfo` lists a `vinaire` login theme it sets the realm's `loginTheme` and — only where the administrator has not turned
+  internationalization on — `en`/`ru`; a Keycloak without the theme gets a "skipped" step, never an error, and a setup that doesn't ask
+  never touches the realm's theme. The theme reaches a Keycloak by the operator's hand (the wizard offers a zip and a ConfigMap generated
+  in the browser — nothing is uploaded) or, for the Keycloak Vinaire installs itself (Phase 69), as a ConfigMap created through Phase 25's
+  generic YAML create and mounted read-only at `/opt/keycloak/themes/vinaire`, as the caller. `keycloak/theme/vinaire` is the source;
+  `frontend/src/lib/keycloakThemeFiles.ts` is generated from it (`npm run gen:keycloak-theme`, `check:keycloak-theme` fails when stale).
 - Backups of an application installed from an image (Roadmap Phase 77b, owner's decision of 2026-10-21; `internal/backup`,
   `internal/k8s/backup_actions.go`, `internal/api/backups.go`) — all as the caller, so the cluster's RBAC decides:
   `POST /api/v1/instances/{namespace}/{name}/backups` creates a **dump** (a `Job`, or a `CronJob` with a `schedule`; one
