@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-10-23
+
 ### Security
 
 - **A person who signs in through Keycloak is now identified by issuer *and* subject.** Until now the account Vinaire gave a person (Phase 80) was found by the subject alone, so the same subject under another Keycloak or realm — for example after moving to a different server with an imported realm, or with a user created with a chosen id — would have reached the first one's account and its rights. The account now carries a label made from both, plus the issuer as an annotation.

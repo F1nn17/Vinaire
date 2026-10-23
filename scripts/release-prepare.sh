@@ -51,7 +51,7 @@ rm -f "$chart.bak" "$log.bak"
 if [[ ! "$version" =~ - ]]; then
   for readme in README.md README.ru.md; do
     [ -f "$readme" ] || continue
-    sed -i.bak -E "s#(charts/vinaire --version )[0-9]+\.[0-9]+\.[0-9]+#$version#; s#(ghcr\.io/f1nn17/vinaire:)[0-9]+\.[0-9]+\.[0-9]+#$version#" "$readme"
+    sed -i.bak -E "s#(charts/vinaire --version )[0-9]+\.[0-9]+\.[0-9]+#\1$version#; s#(ghcr\.io/f1nn17/vinaire:)[0-9]+\.[0-9]+\.[0-9]+#\1$version#" "$readme"
     rm -f "$readme.bak"
   done
 fi
