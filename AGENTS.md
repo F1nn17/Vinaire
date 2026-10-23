@@ -354,7 +354,7 @@ flow.
   both validated as https), so with a Keycloak on http it can't be made to trust the ID token. Instead, after Vinaire has verified the
   sign-in itself, `Broker.TokenFor` finds or creates **one ServiceAccount per person** (labelled `vinaire.io/oidc-sub=<sha256 of the
   OIDC subject>` and `managed-by: vinaire`, named `oidc-<username>`) in **one dedicated namespace** (`<fullname>-users`,
-  `OIDC_USER_NAMESPACE`) and asks the TokenRequest API for a short-lived token for it (lifetime = `SESSION_MAX_TTL`, at least 10 min).
+  `OIDC_USER_NAMESPACE`) and asks the TokenRequest API for a short-lived token for it (lifetime = `SESSION_MAX_TTL` when set, **otherwise 1 hour** — Roadmap Phase 81b aligns the default; at least 10 min).
   The session holds that token instead of the ID token; the cluster sees `system:serviceaccount:<ns>:oidc-<name>` and **RBAC decides
   everything**. Rules to keep: the broker creates ServiceAccounts and tokens and **never a binding or a role** — a new account has no
   rights; Vinaire's Role (`<fullname>-user-accounts`) is a namespaced Role on `serviceaccounts` get/list/create and
