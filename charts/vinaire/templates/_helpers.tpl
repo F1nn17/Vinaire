@@ -6,7 +6,8 @@ key added after that release — `rbac.reader.create` in 1.3.0 — isn't there a
 with "nil pointer evaluating interface {}.create". Every template starts with `include "vinaire.defaults"`, which fills in,
 in place, every key that is ABSENT from .Values with the default from files/defaults.yaml — an exact copy of values.yaml
 (a template can't read values.yaml itself; a test fails if the two differ) that --reuse-values does not touch. Only absent keys are filled: a value the person set — false, 0 or "" included — is never
-replaced. On a normal install nothing is absent and nothing happens.
+replaced. Only on an UPGRADE: on an install Helm has already merged values.yaml, so a key that is absent there was
+deleted on purpose (`--set ingress.hosts=null`) and must stay absent — the schema tests rely on it.
 */}}
 {{- define "vinaire.fill" -}}
 {{- $live := .live -}}
@@ -20,7 +21,9 @@ replaced. On a normal install nothing is absent and nothing happens.
 {{- end }}
 
 {{- define "vinaire.defaults" -}}
+{{- if .Release.IsUpgrade -}}
 {{- $_ := include "vinaire.fill" (dict "live" .Values "defaults" (.Files.Get "files/defaults.yaml" | fromYaml)) -}}
+{{- end -}}
 {{- end }}
 
 {{/*
