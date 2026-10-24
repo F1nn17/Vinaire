@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The version of Vinaire is shown (Roadmap Phase 88).** The user menu (the round button in the top bar) and the Settings header say which release is running ("Vinaire 1.3.0"). The chart sets `VINAIRE_VERSION` to the image tag; without it (a run from source) it says "dev". It comes with the existing `GET /api/v1/auth/me`, so there is no new route and the version is not shown before sign-in.
 ## [1.3.0] - 2026-10-24
 
 ### Fixed

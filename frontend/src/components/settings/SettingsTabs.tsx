@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRememberedState } from "@/lib/hooks/useRememberedState";
+import { useWhoAmI } from "@/lib/api/keycloak";
 
 // The Settings header: the title and the tab bar. "All resources" and "Security checks" are pages of
 // their own (their addresses don't change), but they are part of Settings — this bar is on them too,
@@ -37,6 +38,7 @@ export function SettingsTabs({
   onTab?: (t: SettingsTab) => void;
 }) {
   const router = useRouter();
+  const { data: me } = useWhoAmI();
   const [, remember] = useRememberedState<SettingsTab>("settings-tab", "help");
 
   function pick(id: SettingsTab) {
@@ -50,7 +52,14 @@ export function SettingsTabs({
 
   return (
     <div className="flex flex-col gap-[18px]">
-      <div className="text-[15px] font-semibold">Settings</div>
+      <div className="flex items-baseline gap-3">
+        <div className="text-[15px] font-semibold">Settings</div>
+        {me?.version && (
+          <div className="text-[11px] text-text-faint">
+            Vinaire {me.version}
+          </div>
+        )}
+      </div>
       <div className="flex gap-1 border-b border-border">
         {settingsTabs.map((t) => (
           <button

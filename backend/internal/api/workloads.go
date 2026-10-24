@@ -49,6 +49,9 @@ type WorkloadRow struct {
 // Clientset isn't (no metrics-server / no Gateway API CRDs) — handlers
 // using them must degrade gracefully rather than fail the whole request.
 type Handler struct {
+	// Version is the release this Vinaire is (VINAIRE_VERSION, set by the chart to the image tag); shown in the UI.
+	Version string
+
 	Clusters *clusters.Registry
 	Auth     *authn.Manager
 

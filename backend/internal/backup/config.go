@@ -89,10 +89,11 @@ func (c *Config) Validate() error {
 		if strings.EqualFold(u.Hostname(), "localhost") {
 			return fmt.Errorf("target %q: endpoint address is not allowed", t.Name)
 		}
-		if !bucketRe.MatchString(t.Bucket) {
+		// ".." is never part of a real bucket name (S3 forbids adjacent periods) and in a prefix it would climb a path
+		if !bucketRe.MatchString(t.Bucket) || strings.Contains(t.Bucket, "..") {
 			return fmt.Errorf("target %q: invalid bucket", t.Name)
 		}
-		if t.Prefix != "" && !prefixRe.MatchString(t.Prefix) {
+		if t.Prefix != "" && (!prefixRe.MatchString(t.Prefix) || strings.Contains(t.Prefix, "..")) {
 			return fmt.Errorf("target %q: invalid prefix", t.Name)
 		}
 		if t.Region != "" && !regionRe.MatchString(t.Region) {

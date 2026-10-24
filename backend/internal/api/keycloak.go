@@ -594,5 +594,5 @@ func (h *Handler) WhoAmI(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
-	respondJSON(w, map[string]string{"username": sess.Username, "kubernetesUser": sess.KubernetesUser, "mode": string(h.Auth.Mode)})
+	respondJSON(w, map[string]string{"username": sess.Username, "kubernetesUser": sess.KubernetesUser, "mode": string(h.Auth.Mode), "version": h.Version})
 }

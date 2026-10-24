@@ -121,6 +121,8 @@ export type WhoAmI = {
   username: string;
   kubernetesUser: string;
   mode: string;
+  // the release of this Vinaire ("dev" when it was not set)
+  version?: string;
 };
 
 export function useWhoAmI() {
