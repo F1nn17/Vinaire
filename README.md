@@ -388,7 +388,7 @@ kubectl create clusterrolebinding shiraku-admin --clusterrole=cluster-admin \
 
 The name is `oidc-` plus the user name (the user menu shows it); later roles can be bound from Vinaire's Access control
 page. If Keycloak is down nothing in the cluster is affected — only new sign-ins wait, and pasting a token still works.
-Keycloak groups are not carried over (a ServiceAccount token has none): bind roles per account.
+Keycloak groups are not carried over (a ServiceAccount token has none) — by decision, not by omission: honouring them would make Vinaire grant rights on its own authority (see [docs/decisions.md](docs/decisions.md)). Bind roles per account, or use https and the API server's own OIDC, where groups work natively.
 
 #### Keeping the master key outside the cluster
 

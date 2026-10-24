@@ -139,7 +139,7 @@ kubectl create clusterrolebinding alice-admin  --clusterrole=<fullname>-admin  -
 | `cookie.secure` | `true` | верно для https; по обычному http браузер отбрасывает cookie | оставьте; `false` — только для пробы или домашнего сервера по http |
 | Keycloak по http | выкл. | Keycloak и пароль его администратора остаются на https | `keycloak.allowHttpPrivateNetwork: true` — только частные сети |
 | Время работы после входа через Keycloak | сессия 12 ч с чартом (`sessionMaxTTL`), учётные данные 30 мин (`sessionTokenTTL`) продлеваются, пока Keycloak ручается за человека | отключённый в Keycloak человек (или с закончившейся сессией Keycloak) теряет доступ при следующем продлении — в пределах срока одних учётных данных; недоступность Keycloak терпится час, затем сессии заканчиваются | `sessionMaxTTL`, `sessionTokenTTL` (длительности Go; короче — безопаснее) |
-| Группы Keycloak → роли | не поддерживаются | токен ServiceAccount не несёт групп | привязывайте роли к аккаунтам или используйте https и OIDC самого API-сервера |
+| Группы Keycloak → роли | не поддерживаются — по решению (Фаза 87, см. [decisions](decisions.md)) | токен ServiceAccount не несёт групп, а учёт групп заставил бы Vinaire выдавать права от своего имени | привязывайте роли к аккаунтам или используйте https и OIDC самого API-сервера |
 
 ## Как сохранить журнал аудита
 
