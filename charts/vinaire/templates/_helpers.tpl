@@ -1,4 +1,29 @@
 {{/*
+Values a release made before a key existed don't have (Roadmap Phase 92).
+
+`helm upgrade --reuse-values` replaces the new chart's own defaults (values.yaml) with the OLD release's values, so a
+key added after that release — `rbac.reader.create` in 1.3.0 — isn't there at all and `.Values.rbac.reader.create` fails
+with "nil pointer evaluating interface {}.create". Every template starts with `include "vinaire.defaults"`, which fills in,
+in place, every key that is ABSENT from .Values with the default from files/defaults.yaml — an exact copy of values.yaml
+(a template can't read values.yaml itself; a test fails if the two differ) that --reuse-values does not touch. Only absent keys are filled: a value the person set — false, 0 or "" included — is never
+replaced. On a normal install nothing is absent and nothing happens.
+*/}}
+{{- define "vinaire.fill" -}}
+{{- $live := .live -}}
+{{- range $k, $d := .defaults -}}
+{{- if not (hasKey $live $k) -}}
+{{- $_ := set $live $k $d -}}
+{{- else if and (kindIs "map" $d) (kindIs "map" (index $live $k)) -}}
+{{- $_ := include "vinaire.fill" (dict "live" (index $live $k) "defaults" $d) -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{- define "vinaire.defaults" -}}
+{{- $_ := include "vinaire.fill" (dict "live" .Values "defaults" (.Files.Get "files/defaults.yaml" | fromYaml)) -}}
+{{- end }}
+
+{{/*
 Chart name, truncated and DNS-1123-safe.
 */}}
 {{/*

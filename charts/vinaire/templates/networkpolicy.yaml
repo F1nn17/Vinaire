@@ -1,3 +1,4 @@
+{{- $_ := include "vinaire.defaults" . -}}
 {{- if .Values.networkPolicy.enabled }}
 # Roadmap Phase 36. Inbound: only from where you say (the ingress controller);
 # outbound: DNS, HTTPS/6443 (the Kubernetes API, other registered clusters, Helm

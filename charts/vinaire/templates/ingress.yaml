@@ -1,3 +1,4 @@
+{{- $_ := include "vinaire.defaults" . -}}
 {{- if .Values.ingress.enabled }}
 {{- if not .Values.ingress.hosts }}
 {{- fail "ingress.enabled is true but ingress.hosts is empty — set at least one host (ingress.hosts[0].host)" }}
