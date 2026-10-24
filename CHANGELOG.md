@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-24
+
 ### Fixed
 
 - **"Read only" in Settings → Sign-in bound a role that is not read-only.** The first-person presets added in 1.2.3 labelled the chart's `-viewer` role "Read only" (and built "Administrator of Vinaire" on it), but `-viewer` means *use Vinaire fully*: it reads Secrets, opens a shell in any pod, restarts and deletes workloads and pods and deletes namespaces. The chart now has a role that really only looks, `<fullname>-reader` (get/list/watch of what the pages show — no Secrets, no `pods/exec`, no port-forward, no change of any kind; `rbac.reader.create`, on by default, unbound), the presets bind it, "Administrator of Vinaire" is now reader + admin + rbac-admin, and the `-viewer` presets say plainly what the role includes. **If you bound `-viewer` from the 1.2.3 wizard believing it was read-only, replace that binding with `-reader`** (the rbac-admin role may hand out the new role too).
