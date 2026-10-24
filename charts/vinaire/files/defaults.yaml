@@ -1,0 +1,311 @@
+# Default values for the vinaire chart.
+
+replicaCount: 1
+
+# Where the master key of Vinaire's encrypted store lives (Roadmap Phase 49).
+#   local — in a Secret next to the data (CLUSTER_STORE_KEY or the managed
+#           vinaire-clusters-key): protects a leaked backup, not someone who can read
+#           every Secret of this namespace.
+#   vault — only *wrapped* by a HashiCorp Vault / OpenBao Transit key is stored; the
+#           raw key exists in Vinaire's memory. Vault has its own access control and
+#           audit log, so reading the Secrets gets an attacker a blob that is useless
+#           without asking Vault. An existing store is migrated on the first start
+#           (the same key, wrapped; the raw copy is removed). Vinaire refuses to start
+#           when Vault can't be reached — it never invents a new key.
+# Create the Transit key first:  vault secrets enable transit && vault write -f transit/keys/vinaire
+keyProvider:
+  type: local
+  vault:
+    addr: ""            # https://vault.example.com:8200
+    transitMount: transit
+    key: vinaire
+    namespace: ""       # Vault Enterprise / HCP namespace
+    # "kubernetes": Vault's Kubernetes auth with this pod's ServiceAccount (a role bound
+    # to it, allowed encrypt/decrypt/rewrap on the key). "token": a token from an existing
+    # Secret (tokenSecret, key tokenSecretKey).
+    auth: kubernetes
+    kubernetesRole: vinaire
+    kubernetesMount: kubernetes
+    tokenSecret: ""
+    tokenSecretKey: token
+    allowInsecure: false  # http:// Vault — local development only
+  # After rotating the Transit key, set once to move the wrapped key to its newest version.
+  rewrapOnStart: false
+
+# Where signed-in sessions live (Roadmap Phase 48).
+#   memory — inside the pod: lost on a restart, and only one replica is possible.
+#   secret — sealed in a Secret of this namespace, shared by every replica and
+#            surviving restarts (needs rbac.clusterManagement.create and an
+#            encryption key: CLUSTER_STORE_KEY or the managed vinaire-clusters-key).
+#   auto   — memory for one replica, secret for more.
+# With more than one replica the chart also elects one leader (a Lease) for work that
+# must happen once (the GitOps poller), asks the Service for client-IP affinity (a
+# running install or provisioning job lives on the replica that started it) and adds a
+# PodDisruptionBudget.
+sessions:
+  store: auto
+
+# The audit log (Roadmap Phase 76). By default it is written to an emptyDir: it survives a restart of
+# the container but not the pod being replaced, so ship the container's stdout to your log system too
+# (every audited action is also a line there — see docs/security.md). To keep the file itself, switch
+# persistence on: a PersistentVolumeClaim is created (or name your own with existingClaim) and mounted
+# at /audit. It is a ReadWriteOnce volume with one writer, so it needs replicaCount: 1 (the Deployment
+# is then replaced rather than rolled, because the new pod can't mount it while the old one holds it),
+# and the claim is kept when the release is uninstalled.
+audit:
+  persistence:
+    enabled: false
+    size: 1Gi
+    storageClass: ""     # empty: the cluster's default class; "-": none (a volume you made yourself)
+    existingClaim: ""    # use this claim instead of creating one
+
+image:
+  # The released, signed image (see .github/workflows/release.yml); the tag
+  # defaults to the chart's appVersion. To run a build of your own, point this at
+  # wherever you pushed it (see the repo root Dockerfile) — a bare name such as
+  # "vinaire" only resolves on a cluster that already has the image locally
+  # (e.g. via `k3d image import`).
+  repository: ghcr.io/f1nn17/vinaire
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# Publish Vinaire through an Ingress. Off by default (reach it with
+# `kubectl port-forward` — see NOTES.txt). Terminate TLS here: with cookie.secure
+# left at its default (true) the browser only keeps the session cookie over HTTPS,
+# so a plain-HTTP ingress sends you back to the login screen after you enter a token.
+ingress:
+  enabled: false
+  # e.g. traefik (k3s ships it), nginx. Empty = the cluster's default class.
+  className: ""
+  annotations: {}
+  hosts:
+    - host: vinaire.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # tls:
+  #   - secretName: vinaire-tls
+  #     hosts: [vinaire.example.com]
+  tls: []
+
+# What the cluster picker in Vinaire's own UI shows for this install.
+# Kubernetes has no self-reported cluster name the API exposes, and
+# running in-cluster (this chart's whole point) means there's no
+# kubeconfig context name to fall back on either — so this is the only
+# way to get something more meaningful than the literal word "default".
+# Defaults to the Helm release name, which is at least distinct across
+# multiple installs.
+clusterName: ""
+
+# AUTH_MODE: how Vinaire establishes who's calling (see AGENTS.md's
+# Authentication section) — "token" (paste a Kubernetes ServiceAccount
+# token on the login screen) is the safe default for a real install.
+# "disabled" skips login entirely (every request uses this chart's own
+# ServiceAccount) — fine for a disposable local cluster, never for
+# anything shared. "oidc" enables real username/password login through
+# Keycloak or another OIDC provider — fill in the oidc block below and see
+# Vinaire's own Settings -> Справка -> "Вход по логину и паролю" for the
+# full walkthrough (including the important caveat that the target
+# cluster's own API server must separately be configured to trust that
+# OIDC issuer).
+authMode: token
+
+oidc:
+  issuerURL: ""
+  clientID: ""
+  # Stored in a Secret this chart creates, never as a plain env value. Or point
+  # at an existing Secret instead (then leave clientSecret empty):
+  clientSecret: ""
+  existingSecret: ""
+  existingSecretKey: clientSecret
+  redirectURL: ""
+
+# Signing in through Keycloak set up from Vinaire's Settings -> Sign-in tab normally needs https:
+# Vinaire talks to a Keycloak, and accepts its administrator's password, over TLS only. A home
+# server on a private network often has no certificate. Set this to true to allow plain http for
+# exactly that case: Keycloak may be reached over http, and the administrator's password may arrive
+# over http, ONLY when the address is on a private network (10.x, 172.16-31.x, 192.168.x, 100.64-127.x
+# - NetBird/Tailscale). An http address anywhere else is still refused. Never a substitute for TLS
+# across the internet. Also needs cookie.secure=false, because a browser does not keep a Secure
+# cookie over http.
+keycloak:
+  allowHttpPrivateNetwork: false
+  # How a person who signed in through Keycloak reaches the cluster. Kubernetes' API server accepts an OIDC
+  # issuer only over https, so with an http Keycloak (a home server) it can't be told to trust it. With this on
+  # (the default) Vinaire verifies the sign-in itself and gives each person a ServiceAccount of their own in
+  # userNamespace plus a short-lived token for it: the cluster's RBAC still decides everything, a new account has
+  # no rights until you bind a role to it, and nothing about the API server or K3s needs to change. The chart
+  # creates that namespace and a Role letting Vinaire create accounts and request tokens THERE and nowhere else.
+  serviceAccountSignIn:
+    enabled: true
+  # empty: <release>-vinaire-users, i.e. "<fullname>-users"
+  userNamespace: ""
+
+# Where the browser is sent after an OIDC login. Empty (the default) means "/": Vinaire serves its own
+# UI, so the same address is right. Set it only when the UI is reached at another address than the API,
+# e.g. "https://vinaire.example.com". (Until chart 1.2.3 an empty value left the backend's development
+# default, http://localhost:3100, and people landed there after signing in.)
+frontendURL: ""
+
+cookie:
+  # true (the default) is right for HTTPS: the browser only keeps a Secure cookie
+  # set over an https:// page. Over plain HTTP it drops the cookie and you land
+  # back on the login screen after entering a token — set false ONLY for a
+  # local, HTTP-only trial (see examples/values-local.yaml), never on a real install.
+  secure: true
+  # strict: the session cookie is never sent on a cross-site request. Use "lax"
+  # only if something legitimately links into Vinaire from another site, and
+  # "none" only for a deployment where the UI and the API are on different sites.
+  sameSite: strict
+
+# How long a login lasts at most, whatever the token's own lifetime (a
+# ServiceAccount token can be valid for a year). A Go duration.
+sessionMaxTTL: 12h
+# How long the Kubernetes credential of a person signed in through Keycloak lives before Vinaire renews it
+# (Roadmap Phase 84; 10m to 2h). Shorter means a person disabled in Keycloak loses access sooner (at the next
+# renewal); a renewal asks Keycloak whether the person still has a session, so it needs Keycloak to be reachable
+# — up to an hour of its being down is tolerated.
+sessionTokenTTL: 30m
+
+# Set true ONLY when a proxy you control (the ingress) sets X-Forwarded-For: the
+# login throttle then counts the real client address instead of the proxy's.
+trustForwardedFor: false
+
+# Optional, independent proxies to an already-running observability
+# stack (Vinaire never installs or evaluates these itself) — see
+# Settings -> Справка -> "Метрики, логи, алерты" for what each one
+# actually lights up in the UI. Leave any of them empty to leave that
+# integration off.
+observability:
+  prometheusURL: ""
+  lokiURL: ""
+  alertmanagerURL: ""
+
+serviceAccount:
+  create: true
+  # Generated from the release name when empty.
+  name: ""
+
+rbac:
+  # The narrow, "not cluster-admin" ClusterRole/ClusterRoleBinding this
+  # ServiceAccount needs to do anything at all — see AGENTS.md's "Example:
+  # a minimal ClusterRole for Vinaire" for exactly what each rule backs.
+  # Turn this off only if you're binding an existing role yourself.
+  create: true
+  # Give Vinaire's OWN ServiceAccount the broad browse-and-act set. Off by
+  # default: in token/OIDC mode users act as themselves and this account only
+  # needs the little the informers read (and nothing that writes, no Secrets).
+  # AUTH_MODE=disabled turns it on automatically — every request then runs as it.
+  broad: false
+  # Look, don't touch: every page that only reads, with no Secrets, no shell in a pod, no
+  # delete. Created unbound. Not the same as viewer below.
+  reader:
+    create: true
+  # A role for PEOPLE who USE Vinaire: everything its UI browses AND its fixed audited
+  # actions — including reading Secrets, a shell in any pod (pods/exec), deleting pods and
+  # deployments and namespaces. NOT read-only (that is reader). Created unbound — bind it
+  # to the ServiceAccount or user that logs in (see NOTES.txt). It still can't change
+  # Vinaire itself; that needs adminRole.
+  viewer:
+    create: true
+  # A role for installing Helm charts and applying YAML: create/update/delete on the
+  # namespaced kinds charts usually contain, plus release Secrets. Created unbound;
+  # bind it IN ADDITION to the viewer role to whoever may install from the
+  # Marketplace. Charts creating other kinds (ClusterRoles, CRDs) need extraRules.
+  installer:
+    create: true
+    extraRules: []
+  # A role for operating nodes: cordon/uncordon, drain (evictions), labels, taints and
+  # deleting a Node object. Created unbound; bind it IN ADDITION to the viewer role.
+  nodeAdmin:
+    create: true
+  # A role for the lifecycle of applications installed from an image (Roadmap Phase 77):
+  # backups (Jobs/CronJobs, the claim they write to, VolumeSnapshots), restore, and changing
+  # an instance's image tag. Created unbound; bind it IN ADDITION to the viewer role.
+  lifecycleAdmin:
+    create: true
+  # A role for managing access: create/delete RoleBindings and ClusterRoleBindings and
+  # ask "what can X do?". It may bind this chart's own roles (the `bind` verb) but not
+  # arbitrary ones: Kubernetes' escalation check still applies. Created unbound.
+  rbacAdmin:
+    create: true
+  # Permission to change Vinaire ITSELF (add/remove clusters, GitOps mode and
+  # sources): resources clusters.vinaire.io and gitops.vinaire.io, which exist
+  # only as names for this permission. IT IS NOT "CLUSTER ADMIN" — it grants nothing
+  # inside Kubernetes, so whoever has it also needs the viewer role (and the
+  # installer role to install charts). subjects, if given, are bound to it:
+  #   subjects:
+  #     - {kind: User, name: alice, apiGroup: rbac.authorization.k8s.io}
+  adminRole:
+    create: true
+    subjects: []
+  # Extra rules appended to the generated ClusterRole — most commonly for
+  # Custom Resources (Phase 15) whose API groups this chart can't know in
+  # advance. Example:
+  #   extraRules:
+  #     - apiGroups: ["cert-manager.io"]
+  #       resources: ["*"]
+  #       verbs: ["get", "list", "watch"]
+  extraRules: []
+  # The narrow write path backing "add a cluster via the web UI" (Settings
+  # page) — create-only on Secrets in this release's own namespace, plus
+  # get/update scoped to exactly the one Secret this feature persists to.
+  # See AGENTS.md's core rule for why this is a separate, deliberately
+  # narrower Role than the ClusterRole above.
+  clusterManagement:
+    create: true
+
+# Requests/limits (Roadmap Phase 36) — Vinaire is light; raise the memory limit if
+# you register many clusters or large Helm repositories.
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# Roadmap Phase 36. Off by default because the right egress depends on your
+# cluster (and it needs a CNI that enforces NetworkPolicy). When on: inbound only
+# from ingressFrom, outbound only to DNS, 443/6443 (never the metadata address)
+# and optionally SSH.
+networkPolicy:
+  enabled: false
+  # Who may reach Vinaire, as NetworkPolicyPeers. Empty = anything in the cluster.
+  #   ingressFrom:
+  #     - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+  ingressFrom: []
+  # SSH provisioning (Add node / Add cluster over SSH) needs port 22 outbound.
+  allowSSH: false
+  # Anything else Vinaire must reach, e.g. Prometheus on a non-443 port:
+  #   extraEgress:
+  #     - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]
+  #       ports: [{port: 9090, protocol: TCP}]
+  extraEgress: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Backups of applications installed from an image (Roadmap Phase 77b). Dumps can always go to a
+# volume claim in the application's namespace; list S3-compatible stores here to offer them too.
+# Only https endpoints; the credentials are never put here - the person making a backup names a
+# Secret (keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) in the application's namespace.
+#   backup:
+#     targets:
+#       - {name: minio, endpoint: "https://minio.example.com", bucket: backups, prefix: vinaire}
+backup:
+  targets: []
+  # the image that uploads a dump (pinned); empty: Vinaire's default
+  uploadImage: ""
+
+# Extra plain env vars, appended as-is:
+#   extraEnv:
+#     - name: SOME_VAR
+#       value: "some value"
+extraEnv: []

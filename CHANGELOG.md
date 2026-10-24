@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`helm upgrade --reuse-values` no longer fails after a release that lacks a newer value (Roadmap Phase 92).** Upgrading 1.2.3 to 1.3.0 stopped with `nil pointer evaluating interface {}.create`: `--reuse-values` replaces the new chart's defaults with the old release's values, so a key added since (`rbac.reader.create`) was missing and the template read it. Every template now first fills in, in place, only the keys that are **absent** with the chart's defaults (`files/defaults.yaml`, an exact copy of `values.yaml` that a test keeps in step); a value you set — `false`, `0` or empty included — is never replaced, and a fresh install renders exactly as before (checked: identical output). CI has a new job that installs the oldest and the latest earlier release from their tags and upgrades each to the checkout with `--reuse-values`.
 ### Added
 
 - **The version of Vinaire is shown (Roadmap Phase 88).** The user menu (the round button in the top bar) and the Settings header say which release is running ("Vinaire 1.3.0"). The chart sets `VINAIRE_VERSION` to the image tag; without it (a run from source) it says "dev". It comes with the existing `GET /api/v1/auth/me`, so there is no new route and the version is not shown before sign-in.

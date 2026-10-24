@@ -169,3 +169,41 @@ func TestServiceProxyRulesNameSchemeServicePort(t *testing.T) {
 		}
 	}
 }
+
+// Roadmap Phase 92: a template can't read values.yaml, so the chart keeps an exact copy, files/defaults.yaml, from
+// which "vinaire.defaults" fills in the keys an older release (helm upgrade --reuse-values) doesn't have. A copy that
+// drifts would fill in stale defaults.
+func TestChartDefaultsFileIsACopyOfValuesYaml(t *testing.T) {
+	norm := func(path string) string {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.ReplaceAll(string(b), "\r\n", "\n")
+	}
+	if norm("../charts/vinaire/values.yaml") != norm("../charts/vinaire/files/defaults.yaml") {
+		t.Fatal("charts/vinaire/files/defaults.yaml differs from values.yaml — copy it: cp charts/vinaire/values.yaml charts/vinaire/files/defaults.yaml")
+	}
+}
+
+// Every chart template must start by filling in the defaults (the first line), or a key missing from an old
+// release's values fails that template alone.
+func TestEveryChartTemplateFillsInTheDefaultsFirst(t *testing.T) {
+	files, err := filepath.Glob("../charts/vinaire/templates/*")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no templates found: %v", err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_helpers.tpl") {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first := strings.SplitN(strings.ReplaceAll(string(b), "\r\n", "\n"), "\n", 2)[0]
+		if !strings.Contains(first, `include "vinaire.defaults" .`) {
+			t.Errorf("%s: the first line must be {{- $_ := include \"vinaire.defaults\" . -}}", f)
+		}
+	}
+}

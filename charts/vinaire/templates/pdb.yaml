@@ -1,3 +1,4 @@
+{{- $_ := include "vinaire.defaults" . -}}
 {{- if gt (int .Values.replicaCount) 1 }}
 # With several replicas, a node drain must not take them all down at once (Roadmap Phase 48).
 apiVersion: policy/v1

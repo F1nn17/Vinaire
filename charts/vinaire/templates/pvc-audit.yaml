@@ -1,3 +1,4 @@
+{{- $_ := include "vinaire.defaults" . -}}
 {{- if and .Values.audit.persistence.enabled (not .Values.audit.persistence.existingClaim) }}
 # Roadmap Phase 76: where the audit log lives when audit.persistence is on. Kept on `helm uninstall`
 # (the log is the record of what was done with the release) — delete the claim yourself to remove it.

@@ -1,3 +1,4 @@
+{{- $_ := include "vinaire.defaults" . -}}
 {{- if .Values.rbac.create }}
 {{- /*
 Vinaire's OWN ServiceAccount. In token and OIDC mode every request a user makes
