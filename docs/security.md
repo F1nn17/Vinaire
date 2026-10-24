@@ -137,7 +137,7 @@ None of these is a mistake — each is a default that suits a first try — but 
 | `cookie.secure` | `true` | right for https; over plain http a browser drops the cookie | leave it; `false` only for a trial or an http home server |
 | Keycloak over http | off | Keycloak and its administrator's password stay on https | `keycloak.allowHttpPrivateNetwork: true` — private networks only |
 | Signed-in lifetime with Keycloak | session 12 h with the chart (`sessionMaxTTL`), credential 30 min (`sessionTokenTTL`) renewed while Keycloak vouches for the person | a person disabled in Keycloak (or whose Keycloak session ended) loses access at the next renewal — within one credential lifetime; Keycloak being down is tolerated for an hour, then sessions end | `sessionMaxTTL`, `sessionTokenTTL` (Go durations; shorter is safer) |
-| Keycloak groups → roles | not supported | a ServiceAccount token carries no groups | bind roles per account, or use https and the API server's own OIDC |
+| Keycloak groups → roles | not supported, by decision (Phase 87, see [decisions](decisions.md)) | a ServiceAccount token carries no groups, and mapping them would make Vinaire grant rights on its own authority | bind roles per account, or use https and the API server's own OIDC |
 
 ## Keeping the audit log
 

@@ -53,6 +53,36 @@ The phase list and its order live only in [ROADMAP.md](../ROADMAP.md).
 
 - Keycloak sign-in may run over plain http, but only as an operator opt-in (`keycloak.allowHttpPrivateNetwork`) and only on a private network (RFC 1918, 100.64/10, IPv6 ULA) — not a checkbox in the UI, not for public addresses.
 
+## Keycloak groups are not turned into rights (decided 2026-10-24, Roadmap Phase 87)
+
+**Decision.** Vinaire does not map Keycloak groups to Kubernetes roles ("everyone in `devs` gets role X"). This is a
+deliberate "no", not a missing feature, and it stays a no unless the owner decides to accept the cost below.
+
+**Why.**
+- In the ServiceAccount mode (Phase 80, the only way to use a Keycloak on http) the cluster sees a ServiceAccount token, and
+  that token carries no groups. The only way to honour a group would be for Vinaire to **create RoleBindings itself** for each
+  member, from what Keycloak says about them.
+- That makes Vinaire the one who *grants* rights, on its own authority. Everywhere else it hands out only roles that already
+  exist, **as the caller**, so Kubernetes' escalation check applies and nobody gets more than the person clicking already has
+  (Phase 44). A background mapping has no caller, so it would need the right to bind roles it does not itself hold
+  (`bind`/`escalate`) — a standing power to give anyone any role.
+- So a compromised Vinaire, or a wrong group in Keycloak, would become cluster administration: whoever can edit group
+  membership in Keycloak could grant themselves rights in the cluster without Kubernetes ever asking who approved it. Today a
+  person's rights are decided in one place, the cluster's RBAC, and Keycloak only proves who they are. We keep it that way.
+- It would also be a second source of truth: bindings made by Vinaire from groups would drift from what Keycloak says after
+  every membership change, and cleaning up (someone leaves a group) needs the same standing power to delete.
+
+**What to do instead.**
+- **Keycloak on https:** let the Kubernetes API server trust it (`--oidc-*` flags, `identityMode: apiserver`) and put the
+  groups claim in the token. Kubernetes then sees `Group` subjects natively and a RoleBinding to a group works — approved by
+  whoever creates the binding, as the caller, with nothing extra for Vinaire.
+- **Keycloak on http (home server):** bind roles to people one by one on the Access control page (each is audited and checked
+  by Kubernetes' escalation rule), or create one RoleBinding with several ServiceAccount subjects yourself.
+
+**When to revisit.** If the owner accepts a Vinaire that grants rights on its own authority — then it needs its own design
+(an explicit allow-list of group → role pairs in the operator's configuration, never in a request; roles limited to the chart's
+own; every grant audited; removal on leaving the group) and a new entry in AGENTS.md's list of what may write.
+
 ## Working with agents
 
 - Work through phases one after another in a session until the context fills, then continue in a new one. Each phase ends with a commit, a CHANGELOG.md entry and a short summary (done / checked / left).
