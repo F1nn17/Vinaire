@@ -1,0 +1,125 @@
+/* Vinaire's look for Keycloak's sign-in pages. Colours are Vinaire's own (dark by default, light when the
+   browser asks for it). Keycloak's own logo is replaced by the realm's display name. */
+:root {
+  --vn-bg: #0e0f13;
+  --vn-surface: #16181d;
+  --vn-surface-2: #1c1f26;
+  --vn-border: #262a33;
+  --vn-text: #edeff3;
+  --vn-muted: #9ba3b7;
+  --vn-accent: #8b5fbf;
+  --vn-accent-hover: #9b73c9;
+  --vn-err: #f1665c;
+  --keycloak-logo-url: none;
+  --keycloak-bg-logo-url: none;
+  --keycloak-card-top-color: var(--vn-accent);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --vn-bg: #f4f5f9;
+    --vn-surface: #ffffff;
+    --vn-surface-2: #eceff5;
+    --vn-border: #d3d8e3;
+    --vn-text: #14161c;
+    --vn-muted: #474f63;
+    --vn-accent: #7a4eb0;
+    --vn-accent-hover: #6a3f9e;
+    --vn-err: #c0271b;
+  }
+}
+
+.login-pf body,
+body {
+  background: var(--vn-bg) !important;
+  color: var(--vn-text);
+  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* the name instead of Keycloak's logo */
+div.kc-logo-text {
+  background: none;
+  height: auto;
+  width: auto;
+}
+div.kc-logo-text span {
+  display: block;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--vn-text);
+}
+#kc-header-wrapper {
+  color: var(--vn-text) !important;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.pf-v5-c-login__main {
+  background: var(--vn-surface);
+  border: 1px solid var(--vn-border);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.pf-v5-c-login__main-header {
+  border-top: 4px solid var(--vn-accent);
+}
+.pf-v5-c-login__main-header,
+.pf-v5-c-login__main-body,
+.pf-v5-c-login__main-footer {
+  background: transparent;
+  color: var(--vn-text);
+}
+.pf-v5-c-title,
+.pf-v5-c-form__label-text,
+.pf-v5-c-check__label,
+.pf-v5-c-login__main-footer-band,
+.pf-v5-c-login__main-footer-band-item {
+  color: var(--vn-text);
+}
+.pf-v5-c-login__main-header-desc,
+.pf-v5-c-form__helper-text,
+.pf-v5-c-helper-text__item-text {
+  color: var(--vn-muted);
+}
+
+.pf-v5-c-form-control {
+  background: var(--vn-surface-2);
+  color: var(--vn-text);
+  border-radius: 8px;
+  --pf-v5-c-form-control--BorderColor: var(--vn-border);
+  --pf-v5-c-form-control--BorderTopColor: var(--vn-border);
+  --pf-v5-c-form-control--BorderRightColor: var(--vn-border);
+  --pf-v5-c-form-control--BorderBottomColor: var(--vn-border);
+  --pf-v5-c-form-control--BorderLeftColor: var(--vn-border);
+  --pf-v5-c-form-control--before--BorderColor: var(--vn-border);
+}
+.pf-v5-c-form-control:focus-within {
+  --pf-v5-c-form-control--BorderBottomColor: var(--vn-accent);
+  outline: 2px solid var(--vn-accent);
+  outline-offset: 0;
+}
+.pf-v5-c-form-control input,
+.pf-v5-c-form-control select {
+  color: var(--vn-text);
+  background: transparent;
+}
+
+.pf-v5-c-button.pf-m-primary {
+  background: var(--vn-accent);
+  color: #ffffff;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.pf-v5-c-button.pf-m-primary:hover,
+.pf-v5-c-button.pf-m-primary:focus {
+  background: var(--vn-accent-hover);
+}
+.pf-v5-c-button.pf-m-link,
+a {
+  color: var(--vn-accent);
+}
+.pf-v5-c-alert.pf-m-danger {
+  --pf-v5-c-alert--m-danger--BorderTopColor: var(--vn-err);
+}

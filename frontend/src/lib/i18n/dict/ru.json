@@ -2092,5 +2092,11 @@
  "Use Vinaire fully, and install applications": "Пользоваться Vinaire полностью и устанавливать приложения",
  "The viewer role (see above), plus install from the Marketplace and apply YAML in the namespaces the cluster allows.": "Роль viewer (см. выше), плюс установка из Маркетплейса и применение YAML в пространствах имён, где это разрешает кластер.",
  "Use Vinaire fully, and operate nodes": "Пользоваться Vinaire полностью и управлять узлами",
- "The viewer role (see above), plus cordon, drain, label, taint and remove nodes.": "Роль viewer (см. выше), плюс cordon, drain, метки, taints и удаление узлов."
+ "The viewer role (see above), plus cordon, drain, label, taint and remove nodes.": "Роль viewer (см. выше), плюс cordon, drain, метки, taints и удаление узлов.",
+ "Show Keycloak's sign-in page in Vinaire's look (recommended)": "Показывать страницу входа Keycloak в оформлении Vinaire (рекомендуется)",
+ "Keycloak's own page, restyled as Vinaire (dark and light, English and Russian). The password never reaches Vinaire, and passkeys, two-step codes and password reset work as in Keycloak. It takes effect if the theme is installed on that Keycloak — a Keycloak that Vinaire installed has it already; for another one,": "Родная страница Keycloak в оформлении Vinaire (тёмная и светлая, английский и русский). Пароль не попадает в Vinaire, а passkeys, двухфакторные коды и сброс пароля работают как в Keycloak. Действует, если тема установлена в этом Keycloak: в Keycloak, который поставил Vinaire, она уже есть; для другого —",
+ "download the theme (zip)": "скачайте тему (zip)",
+ "and unpack it into Keycloak's themes folder (or": "и распакуйте её в папку themes Keycloak (или",
+ "download it as a ConfigMap": "скачайте как ConfigMap",
+ "), then run this setup again.": "), затем запустите эту настройку ещё раз."
 }

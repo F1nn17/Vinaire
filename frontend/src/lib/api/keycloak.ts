@@ -45,6 +45,8 @@ export type KeycloakSetupRequest = {
   allowTokenLogin: boolean;
   // empty: ServiceAccounts for an http address, the API server for an https one
   identityMode?: IdentityMode;
+  // Keycloak's sign-in page in Vinaire's look (the "vinaire" theme, if it is installed on that Keycloak)
+  loginTheme?: boolean;
 };
 
 export type KeycloakSetupResult = {

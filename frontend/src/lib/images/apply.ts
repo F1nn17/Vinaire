@@ -1,4 +1,4 @@
-import { parse } from "yaml";
+import { parse, stringify } from "yaml";
 import { createResource } from "@/lib/api/resources";
 import { ApiError } from "@/lib/api/http";
 import { getResourceObject } from "@/lib/api/allResources";
@@ -41,10 +41,18 @@ export async function statefulSetUid(
 export async function applyInstance(
   form: Form,
   passwords: Record<string, string>,
+  // an optional change to the StatefulSet before it is created (the Keycloak sign-in theme's volume)
+  tweak?: (sts: Record<string, any>) => void, // eslint-disable-line @typescript-eslint/no-explicit-any
 ): Promise<string> {
   const sts = build(form, passwords).find((d) => d.kind === "StatefulSet");
   if (!sts) throw new Error("nothing to create");
-  await withBackoff(() => createResource(sts.yaml));
+  let yaml = sts.yaml;
+  if (tweak) {
+    const obj = parse(yaml) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    tweak(obj);
+    yaml = stringify(obj);
+  }
+  await withBackoff(() => createResource(yaml));
   const uid = await statefulSetUid(form.namespace, form.name);
   for (const kind of ["Secret", "Service"] as const) {
     const d = build(form, passwords, uid).find((x) => x.kind === kind);
@@ -59,7 +67,11 @@ export async function readyReplicas(
   name: string,
 ): Promise<number> {
   try {
-    const obj = await getResourceObject("apps/v1/statefulsets", namespace, name);
+    const obj = await getResourceObject(
+      "apps/v1/statefulsets",
+      namespace,
+      name,
+    );
     const st = (parse(obj.yaml) as { status?: { readyReplicas?: number } })
       ?.status;
     return st?.readyReplicas ?? 0;

@@ -282,7 +282,7 @@ flow.
   credentials (in the POST body, over a secure transport only, wrapped in
   `keycloak.Secret`, used for **one token request** and never stored, logged, audited or
   returned) and creates — idempotently — a realm, a **confidential** OIDC client for
-  Vinaire (authorization-code flow with PKCE only; no password grant, no service account,
+  Vinaire (authorization-code flow with PKCE; no password grant, no service account,
   redirect URI and web origin exactly Vinaire's own, never a wildcard; an existing
   *public* client is refused) and, optionally, a first user. The new client's secret is
   the one thing kept: sealed in the same store as the cluster registry
@@ -385,6 +385,16 @@ flow.
   within seconds anyway). Concurrent requests share one renewal (`singleflight`) — a rotated refresh token must not be used twice. Exposure after a person
   is disabled in Keycloak is at most one credential lifetime. Not done: Keycloak groups (a ServiceAccount token carries none — roles are bound per
   account) and back-channel logout (Keycloak telling Vinaire at once).
+- Keycloak's sign-in page in Vinaire's look (Roadmap Phase 85b, `keycloak/theme/vinaire`, `frontend/src/lib/keycloakTheme.ts`,
+  `internal/keycloak/setup.go` `ensureLoginTheme`) — the way to make the sign-in feel like Vinaire's own (a Vinaire-side username/password form was built and **withdrawn** — the password would pass through Vinaire, and the password grant is deprecated in OAuth 2.1; don't bring it back), and **no new route**: a login
+  *theme* (Keycloak's own `keycloak.v2` re-coloured, English + Russian; only styles — Keycloak's forms, passkeys, 2-step codes and password
+  reset stay Keycloak's). The setup (`loginTheme: true`) makes **two more Keycloak admin calls in the realm it already manages**: only if
+  `GET /admin/serverinfo` lists a `vinaire` login theme it sets the realm's `loginTheme` and — only where the administrator has not turned
+  internationalization on — `en`/`ru`; a Keycloak without the theme gets a "skipped" step, never an error, and a setup that doesn't ask
+  never touches the realm's theme. The theme reaches a Keycloak by the operator's hand (the wizard offers a zip and a ConfigMap generated
+  in the browser — nothing is uploaded) or, for the Keycloak Vinaire installs itself (Phase 69), as a ConfigMap created through Phase 25's
+  generic YAML create and mounted read-only at `/opt/keycloak/themes/vinaire`, as the caller. `keycloak/theme/vinaire` is the source;
+  `frontend/src/lib/keycloakThemeFiles.ts` is generated from it (`npm run gen:keycloak-theme`, `check:keycloak-theme` fails when stale).
 - Backups of an application installed from an image (Roadmap Phase 77b, owner's decision of 2026-10-21; `internal/backup`,
   `internal/k8s/backup_actions.go`, `internal/api/backups.go`) — all as the caller, so the cluster's RBAC decides:
   `POST /api/v1/instances/{namespace}/{name}/backups` creates a **dump** (a `Job`, or a `CronJob` with a `schedule`; one

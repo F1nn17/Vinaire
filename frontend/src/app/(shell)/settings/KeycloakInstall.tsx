@@ -20,6 +20,7 @@ import {
 } from "@/lib/keycloakInstall";
 import { ensureNamespace, randomPassword } from "@/lib/values/secretHelpers";
 import { t } from "@/lib/i18n/translate";
+import { themeConfigMapYaml, themeVolume } from "@/lib/keycloakTheme";
 
 const input =
   "rounded-lg border border-border bg-surface px-3 py-1.75 font-mono text-xs outline-none placeholder:text-text-faint";
@@ -118,9 +119,21 @@ export function KeycloakInstall({
 
       current = "Keycloak";
       mark("Keycloak", "doing");
-      const uid = await applyInstance(keycloakForm(input_), {
-        "admin-password": adminPw,
-      });
+      // Keycloak's sign-in page in Vinaire's look (Roadmap Phase 85b): the theme is a ConfigMap mounted into the pod
+      await withBackoff(() => createResource(themeConfigMapYaml(f.namespace)));
+      const uid = await applyInstance(
+        keycloakForm(input_),
+        { "admin-password": adminPw },
+        (sts) => {
+          const { volume, mount } = themeVolume();
+          const pod = sts.spec.template.spec;
+          pod.volumes = [...(pod.volumes ?? []), volume];
+          pod.containers[0].volumeMounts = [
+            ...(pod.containers[0].volumeMounts ?? []),
+            mount,
+          ];
+        },
+      );
       mark("Keycloak", "done");
 
       current = "Address (Ingress)";

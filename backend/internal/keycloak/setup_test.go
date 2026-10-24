@@ -19,12 +19,14 @@ type fakeKeycloak struct {
 	realms   map[string]bool
 	clients  map[string]map[string]any // clientId -> representation
 	users    map[string]bool
+	themes   []string                  // login themes the server lists
+	realmRep map[string]map[string]any // realm representations
 	gotToken string
 	bodies   []string // every request body, to prove no password leaks beyond the user's own credential
 }
 
 func newFake(t *testing.T) (*fakeKeycloak, *httptest.Server) {
-	f := &fakeKeycloak{realms: map[string]bool{"master": true}, clients: map[string]map[string]any{}, users: map[string]bool{}}
+	f := &fakeKeycloak{realms: map[string]bool{"master": true}, clients: map[string]map[string]any{}, users: map[string]bool{}, realmRep: map[string]map[string]any{}}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -54,6 +56,22 @@ func newFake(t *testing.T) (*fakeKeycloak, *httptest.Server) {
 			}
 			f.realms[name] = true
 			w.WriteHeader(http.StatusCreated)
+		case r.Method == "GET" && r.URL.Path == "/admin/serverinfo":
+			var list []map[string]string
+			for _, n := range f.themes {
+				list = append(list, map[string]string{"name": n})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"themes": map[string]any{"login": list}})
+		case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/admin/realms/") && strings.Count(r.URL.Path, "/") == 3:
+			name := strings.TrimPrefix(r.URL.Path, "/admin/realms/")
+			rep := f.realmRep[name]
+			if rep == nil {
+				rep = map[string]any{"realm": name, "enabled": true}
+			}
+			_ = json.NewEncoder(w).Encode(rep)
+		case r.Method == "PUT" && strings.HasPrefix(r.URL.Path, "/admin/realms/") && strings.Count(r.URL.Path, "/") == 3:
+			f.realmRep[strings.TrimPrefix(r.URL.Path, "/admin/realms/")] = body
+			w.WriteHeader(http.StatusNoContent)
 		case r.Method == "GET" && strings.HasSuffix(r.URL.Path, "/clients"):
 			var out []map[string]any
 			if c, ok := f.clients[r.URL.Query().Get("clientId")]; ok {
@@ -196,4 +214,58 @@ func TestSecretNeverPrints(t *testing.T) {
 	if strings.Contains(string(j), "s3cret-admin") || strings.Contains(string(j), "alice-password") {
 		t.Errorf("a credential leaked into JSON: %s", j)
 	}
+}
+
+// Roadmap Phase 85b: the realm uses the Vinaire login theme only when asked AND when Keycloak has the theme installed.
+func TestLoginThemeIsSetOnlyWhenAskedAndInstalled(t *testing.T) {
+	ctx := context.Background()
+	f, srv := newFake(t)
+	f.themes = []string{"keycloak", "keycloak.v2"}
+	asked := params(srv.URL)
+	asked.LoginTheme = true
+	res, err := Setup(ctx, srv.Client(), asked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.realmRep["vinaire"]["loginTheme"] != nil || !strings.Contains(fmt.Sprint(res.Steps), "skipped — the theme isn't installed") {
+		t.Fatalf("the realm was changed although the theme isn't installed: %v %v", f.realmRep["vinaire"], res.Steps)
+	}
+	f.themes = append(f.themes, "vinaire")
+	res, err = Setup(ctx, srv.Client(), asked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep := f.realmRep["vinaire"]
+	if rep["loginTheme"] != "vinaire" || rep["internationalizationEnabled"] != true || !strings.Contains(fmt.Sprint(res.Steps), "Login theme vinaire updated") {
+		t.Fatalf("theme not applied: %v %v", rep, res.Steps)
+	}
+	if res, _ = Setup(ctx, srv.Client(), asked); !strings.Contains(fmt.Sprint(res.Steps), "Login theme vinaire reused") {
+		t.Errorf("a second run should change nothing: %v", res.Steps)
+	}
+	// not asked: an administrator's own choice of theme is never touched
+	f2, srv2 := newFake(t)
+	f2.themes = []string{"vinaire"}
+	f2.realmRep["vinaire"] = map[string]any{"loginTheme": "mine"}
+	if _, err := Setup(ctx, srv2.Client(), params(srv2.URL)); err != nil {
+		t.Fatal(err)
+	}
+	if f2.realmRep["vinaire"]["loginTheme"] != "mine" {
+		t.Fatal("the realm's theme was changed without being asked")
+	}
+	// the administrator's own language list is kept
+	f3, srv3 := newFake(t)
+	f3.themes = []string{"vinaire"}
+	f3.realmRep["vinaire"] = map[string]any{"internationalizationEnabled": true, "supportedLocales": []any{"de"}}
+	if _, err := Setup(ctx, srv3.Client(), asked2(srv3.URL)); err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(f3.realmRep["vinaire"]["supportedLocales"]); got != "[de]" {
+		t.Fatalf("languages overwritten: %s", got)
+	}
+}
+
+func asked2(base string) Params {
+	p := params(base)
+	p.LoginTheme = true
+	return p
 }

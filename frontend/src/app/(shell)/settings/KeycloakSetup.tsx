@@ -16,6 +16,7 @@ import { accountNameFor } from "@/lib/rolePresets";
 import { FirstAdminCommands } from "./FirstAdminCommands";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { KeycloakInstall, type InstalledKeycloak } from "./KeycloakInstall";
+import { themeConfigMapYaml, themeZip } from "@/lib/keycloakTheme";
 import { TypeToConfirmModal } from "@/components/ui/TypeToConfirmModal";
 
 const input =
@@ -251,6 +252,31 @@ function Done({
   );
 }
 
+function saveBlob(name: string, data: BlobPart, type: string) {
+  const url = URL.createObjectURL(new Blob([data], { type }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadThemeZip() {
+  saveBlob(
+    "vinaire-keycloak-theme.zip",
+    themeZip() as BlobPart,
+    "application/zip",
+  );
+}
+
+function downloadThemeConfigMap() {
+  saveBlob(
+    "vinaire-keycloak-theme-configmap.yaml",
+    themeConfigMapYaml("keycloak"),
+    "text/yaml",
+  );
+}
+
 function Hint({ children }: { children: React.ReactNode }) {
   return <span className="text-[11px] text-text-faint">{children}</span>;
 }
@@ -278,6 +304,8 @@ function SetupForm({
     userPassword: "",
     userChangePassword: true,
     allowTokenLogin: true,
+    // Keycloak's page in Vinaire's look
+    loginTheme: true,
     // "" = automatic: ServiceAccounts for an http address, the API server for an https one
     identityMode: "" as IdentityMode | "",
   });
@@ -309,6 +337,7 @@ function SetupForm({
         userPassword: f.createUser ? f.userPassword : "",
         userChangePassword: f.userChangePassword,
         allowTokenLogin: f.allowTokenLogin,
+        loginTheme: f.loginTheme,
         ...(f.identityMode ? { identityMode: f.identityMode } : {}),
       });
       // the passwords leave this form's state as soon as they were sent
@@ -504,6 +533,39 @@ function SetupForm({
         </div>
       )}
 
+      <div className="flex flex-col gap-1 text-xs text-text-muted">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={f.loginTheme}
+            onChange={(e) => set({ loginTheme: e.target.checked })}
+          />
+          Show Keycloak&apos;s sign-in page in Vinaire&apos;s look (recommended)
+        </label>
+        <Hint>
+          Keycloak&apos;s own page, restyled as Vinaire (dark and light, English
+          and Russian). The password never reaches Vinaire, and passkeys,
+          two-step codes and password reset work as in Keycloak. It takes effect
+          if the theme is installed on that Keycloak — a Keycloak that Vinaire
+          installed has it already; for another one,{" "}
+          <button
+            type="button"
+            onClick={downloadThemeZip}
+            className="underline"
+          >
+            download the theme (zip)
+          </button>{" "}
+          and unpack it into Keycloak&apos;s themes folder (or{" "}
+          <button
+            type="button"
+            onClick={downloadThemeConfigMap}
+            className="underline"
+          >
+            download it as a ConfigMap
+          </button>
+          ), then run this setup again.
+        </Hint>
+      </div>
       <label className="flex items-center gap-2 text-xs text-text-muted">
         <input
           type="checkbox"

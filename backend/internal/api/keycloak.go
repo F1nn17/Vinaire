@@ -243,6 +243,8 @@ type keycloakSetupBody struct {
 	// IdentityMode: "serviceaccount" or "apiserver"; empty picks serviceaccount for an http Keycloak and
 	// apiserver for an https one.
 	IdentityMode string `json:"identityMode"`
+	// LoginTheme asks Keycloak to show its sign-in page in Vinaire's look (the "vinaire" theme, if it is installed there).
+	LoginTheme bool `json:"loginTheme"`
 }
 
 // KeycloakSetupResult is the answer to a setup.
@@ -308,7 +310,8 @@ func (h *Handler) KeycloakSetup(w http.ResponseWriter, r *http.Request) {
 	p := keycloak.Params{
 		BaseURL: b.KeycloakURL, AdminRealm: b.AdminRealm, AdminUser: b.AdminUser, AdminPass: keycloak.NewSecret(b.AdminPassword),
 		Realm: b.Realm, ClientID: b.ClientID, RedirectURL: redirect, Origin: origin,
-		User: b.User, UserEmail: b.UserEmail, UserPass: keycloak.NewSecret(b.UserPassword), UserMustChangePassword: b.UserChangePassword,
+		LoginTheme: b.LoginTheme,
+		User:       b.User, UserEmail: b.UserEmail, UserPass: keycloak.NewSecret(b.UserPassword), UserMustChangePassword: b.UserChangePassword,
 	}
 	b.AdminPassword, b.UserPassword = "", "" // out of the plain struct as soon as they're wrapped
 	if err := p.Validate(); err != nil {
