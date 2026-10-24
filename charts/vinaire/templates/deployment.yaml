@@ -69,6 +69,9 @@ spec:
             # the prefix of this chart's roles, so Settings -> Sign-in can print commands that name them
             - name: ROLE_PREFIX
               value: {{ include "vinaire.fullname" . | quote }}
+            # the release, for the version shown in the UI
+            - name: VINAIRE_VERSION
+              value: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
             - name: AUDIT_LOG_PATH
               value: /audit/audit.log
             # Information for Settings -> Security ("This installation"): how the chart was installed. They change nothing.

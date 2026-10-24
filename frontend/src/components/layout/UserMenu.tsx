@@ -41,6 +41,11 @@ export function UserMenu() {
 
       {open && (
         <div className="absolute right-0 top-[calc(100%+6px)] z-20 min-w-[160px] rounded-lg border border-border bg-surface p-1 shadow-lg">
+          {me?.version && (
+            <div className="border-b border-border px-3 py-2 text-[11px] text-text-muted">
+              Vinaire {me.version}
+            </div>
+          )}
           {me?.username && (
             <div className="border-b border-border px-3 py-2 text-xs">
               <div className="font-semibold">{me.username}</div>
