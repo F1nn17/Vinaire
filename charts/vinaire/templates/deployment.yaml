@@ -71,6 +71,11 @@ spec:
               value: {{ include "vinaire.fullname" . | quote }}
             - name: AUDIT_LOG_PATH
               value: /audit/audit.log
+            # Information for Settings -> Security ("This installation"): how the chart was installed. They change nothing.
+            - name: INSTALL_AUDIT_PERSISTENT
+              value: {{ .Values.audit.persistence.enabled | default false | quote }}
+            - name: INSTALL_NETWORK_POLICY
+              value: {{ .Values.networkPolicy.enabled | default false | quote }}
             {{- $store := include "vinaire.sessionStore" . }}
             {{- if and (eq $store "memory") (gt (int .Values.replicaCount) 1) }}
             {{- fail "replicaCount > 1 needs sessions.store=secret (or auto): sessions kept in a pod's memory can't be shared between replicas" }}

@@ -74,6 +74,8 @@ func (h *Handler) SecurityChecks(w http.ResponseWriter, r *http.Request) {
 		snap.ClusterRoleBindings = nil
 	}
 
+	h.addInstallation(snap)
+
 	resp := SecurityChecksResponse{GeneratedAt: time.Now().UTC().Format(time.RFC3339), Results: securitychecks.RunAll(snap)}
 	for _, res := range resp.Results {
 		switch res.Status {
@@ -86,4 +88,22 @@ func (h *Handler) SecurityChecks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	respondJSON(w, resp)
+}
+
+// addInstallation puts Vinaire's own configuration into the snapshot (Roadmap Phase 86). It reads no cluster: the
+// facts are this process's settings and, for what only the Helm chart knows, variables the chart sets. A fact that
+// isn't known makes the checks that need it "unknown", never "pass".
+func (h *Handler) addInstallation(snap *securitychecks.Snapshot) {
+	if h.Install == nil {
+		snap.Unavailable["installation"] = "this Vinaire doesn't know its own configuration"
+		return
+	}
+	inst := *h.Install
+	if e, ok := h.ClusterStore.(interface{ Encrypted() bool }); ok && !e.Encrypted() {
+		inst.StoreUnencrypted = true
+	}
+	snap.Installation = &inst
+	if !inst.Chart {
+		snap.Unavailable["installation-chart"] = "Vinaire wasn't installed with its Helm chart, so it can't tell"
+	}
 }

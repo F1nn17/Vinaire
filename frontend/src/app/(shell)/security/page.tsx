@@ -115,6 +115,11 @@ export default function SecurityPage() {
             nodes themselves (kubelet and API-server settings, file permissions,
             etcd).
           </div>
+          <div className="mt-2 max-w-3xl text-xs text-text-muted">
+            The last group, “This installation”, is about how Vinaire itself was
+            set up — it reads Vinaire&apos;s own settings, not the cluster, and
+            only warns: it changes no default.
+          </div>
         </div>
         <button
           type="button"

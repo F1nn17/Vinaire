@@ -33,6 +33,9 @@ type Snapshot struct {
 	RoleBindings        []rbacv1.RoleBinding
 	ClusterRoleBindings []rbacv1.ClusterRoleBinding
 
+	// Installation: how this Vinaire was installed (Roadmap Phase 86); nil = not known.
+	Installation *Installation
+
 	// Unavailable: kind -> why it couldn't be read.
 	Unavailable map[string]string
 }
