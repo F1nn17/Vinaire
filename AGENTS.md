@@ -511,6 +511,13 @@ kube-bench-style scan needs a privileged Job on every node and is a deliberate d
 "pass". A new check is a function over `Snapshot` plus a test; don't add a code path that reads with
 Vinaire's own identity.
 
+**"This installation" group (Roadmap Phase 86, `internal/securitychecks/installation.go`, `Handler.addInstallation`):** the same
+list also warns about how Vinaire itself was set up — sign-in off, a development-only switch on, an unencrypted cluster registry,
+`cookie.secure=false`, Keycloak over plain http, audit log not on a volume, sessions in memory, no NetworkPolicy. It reads **no
+cluster**: the facts are this process's own settings plus two informational variables the chart sets (`INSTALL_AUDIT_PERSISTENT`,
+`INSTALL_NETWORK_POLICY` — they change nothing); a fact that isn't known is `unknown`, never `pass`. It only warns: no default is
+changed, nothing blocks, nothing is written. A new check is a `Check` in that file plus a case in `installation_test.go`.
+
 ## Port-forward proxy (Phase 26) — not a write, but a new access path
 
 `/proxy/{cluster}/{namespace}/{pod}/{port}/…` (or `{https:port}`) is an

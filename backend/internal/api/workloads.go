@@ -26,6 +26,7 @@ import (
 	"github.com/f1nn17/vinaire/backend/internal/helm"
 	"github.com/f1nn17/vinaire/backend/internal/k8s"
 	"github.com/f1nn17/vinaire/backend/internal/provision"
+	"github.com/f1nn17/vinaire/backend/internal/securitychecks"
 )
 
 // WorkloadRow matches the frontend's WorkloadRow type exactly
@@ -50,6 +51,10 @@ type WorkloadRow struct {
 type Handler struct {
 	Clusters *clusters.Registry
 	Auth     *authn.Manager
+
+	// Install is what Vinaire knows about its own installation (Roadmap Phase 86), for the "This installation"
+	// security checks. Nil: not known.
+	Install *securitychecks.Installation
 
 	// ClusterStore backs cluster management via the web UI
 	// (internal/api/clusters.go's AddCluster/RemoveCluster) — nil when this
