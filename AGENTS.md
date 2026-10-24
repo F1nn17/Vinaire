@@ -383,8 +383,9 @@ flow.
   token for another subject/issuer ends the session; **`RenewToken` never creates an account** — an administrator who deletes a person's account cuts them
   off (a recreated account of the same name would give the RoleBindings back), and the session ends at the next renewal (the old credential stops working
   within seconds anyway). Concurrent requests share one renewal (`singleflight`) — a rotated refresh token must not be used twice. Exposure after a person
-  is disabled in Keycloak is at most one credential lifetime. Not done: Keycloak groups (a ServiceAccount token carries none — roles are bound per
-  account) and back-channel logout (Keycloak telling Vinaire at once).
+  is disabled in Keycloak is at most one credential lifetime. Keycloak groups are **deliberately not mapped to roles** (owner's decision of 2026-10-24, Phase 87 — a
+  ServiceAccount token carries none, and honouring them would make Vinaire grant rights on its own authority; see
+  docs/decisions.md — don't add it quietly; roles are bound per account) and back-channel logout (Keycloak telling Vinaire at once).
 - Keycloak's sign-in page in Vinaire's look (Roadmap Phase 85b, `keycloak/theme/vinaire`, `frontend/src/lib/keycloakTheme.ts`,
   `internal/keycloak/setup.go` `ensureLoginTheme`) — the way to make the sign-in feel like Vinaire's own (a Vinaire-side username/password form was built and **withdrawn** — the password would pass through Vinaire, and the password grant is deprecated in OAuth 2.1; don't bring it back), and **no new route**: a login
   *theme* (Keycloak's own `keycloak.v2` re-coloured, English + Russian; only styles — Keycloak's forms, passkeys, 2-step codes and password
