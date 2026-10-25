@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A Keycloak that is already running can get Vinaire's sign-in theme (Roadmap Phase 91).** If the sign-in page showed only the name "Vinaire" and everything else was Keycloak's own look, the theme was simply not in that Keycloak (a Keycloak installed before the theme existed has none): the setup then skips it, and used to say so only in a small line. Settings → Sign-in now finds the Keycloak in this cluster and has a button, "Add the theme to this Keycloak", that creates the theme's ConfigMap and mounts it into the Keycloak (one restart), as you, through the generic YAML create and update; after it, run the setup again and the realm switches to the theme. A skipped theme is shown in warning colour with what to do. The theme itself was rebuilt on PatternFly's own colour variables, so the inputs, buttons, links, errors and the other Keycloak pages follow, in both dark and light; checked on Keycloak 26.0, 26.5 and 26.7.
+
 - **The Ingress page shows what the Ingress does (Roadmap Phase 89).** Opening an Ingress from Routing used to show only its kind, namespace and labels. It now shows the class and the address the controller gave it, a table of routes (host, path and its type, the Service and port it goes to — a link to that Service — and whether the host is served over HTTPS), the TLS block (hosts and the Secret, a link to it) or a plain "no TLS" with what to add, the default backend and the annotations. Each host and backend has a Copy button, a host has an Open link, and "Edit (YAML)" opens the YAML tab, whose apply is the generic one — no new way to write. It reads only what the page already read, as you.
 
 ## [1.3.1] - 2026-10-25

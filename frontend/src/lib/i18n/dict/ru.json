@@ -2153,5 +2153,12 @@
  "Secret in the YAML tab.": "на вкладке YAML.",
  "the controller's own certificate": "собственный сертификат контроллера",
  "Not covered by TLS:": "Без TLS:",
- "Annotations": "Аннотации"
+ "Annotations": "Аннотации",
+ "Add the theme to this Keycloak": "Добавить тему в этот Keycloak",
+ "The theme is mounted": "Тема подключена",
+ "Keycloak restarts once to pick it up (a minute or two). When it is back, run": "Keycloak один раз перезапустится, чтобы подхватить её (минута-две). Когда он вернётся, запустите",
+ "“Set up Keycloak sign-in” below again with the administrator's password: that step switches the realm to the theme.": "«Set up Keycloak sign-in» ниже ещё раз с паролем администратора: этот шаг переключит realm на тему.",
+ "Keycloak found in this cluster — it needs the theme (the ConfigMap": "В этом кластере найден Keycloak — чтобы он показывал тему, она нужна (ConfigMap",
+ ") to show it:": "):",
+ "The sign-in page still has Keycloak's own look: this Keycloak doesn't have the Vinaire theme yet. Add it with the button above (or download it) and run this setup again.": "Страница входа пока выглядит как родная страница Keycloak: в этом Keycloak ещё нет темы Vinaire. Добавьте её кнопкой выше (или скачайте) и запустите эту настройку ещё раз."
 }

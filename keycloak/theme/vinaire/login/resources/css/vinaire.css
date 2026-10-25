@@ -1,14 +1,22 @@
-/* Vinaire's look for Keycloak's sign-in pages. Colours are Vinaire's own (dark by default, light when the
-   browser asks for it). Keycloak's own logo is replaced by the realm's display name. */
+/* Vinaire's look for Keycloak's sign-in pages (Roadmap Phase 85b, 91).
+
+   Keycloak's own page is built on PatternFly 5, and every colour in it comes from a PatternFly variable. So this theme
+   does not fight the page rule by rule: it gives PatternFly Vinaire's colours — dark by default, light when the browser
+   asks for it, which is also when Keycloak itself switches to its dark variant — and a few rules for what has no variable
+   (the page background, the name instead of Keycloak's logo, the card). Every input, button, link, alert and the
+   password-reset, one-time-code and error pages follow, because they use the same variables. */
+
 :root {
   --vn-bg: #0e0f13;
   --vn-surface: #16181d;
   --vn-surface-2: #1c1f26;
   --vn-border: #262a33;
+  --vn-border-strong: #3a404d;
   --vn-text: #edeff3;
   --vn-muted: #9ba3b7;
   --vn-accent: #8b5fbf;
   --vn-accent-hover: #9b73c9;
+  --vn-accent-text: #b79be0;
   --vn-err: #f1665c;
   --keycloak-logo-url: none;
   --keycloak-bg-logo-url: none;
@@ -21,17 +29,50 @@
     --vn-surface: #ffffff;
     --vn-surface-2: #eceff5;
     --vn-border: #d3d8e3;
+    --vn-border-strong: #9aa3b5;
     --vn-text: #14161c;
     --vn-muted: #474f63;
     --vn-accent: #7a4eb0;
     --vn-accent-hover: #6a3f9e;
+    --vn-accent-text: #6a3f9e;
     --vn-err: #c0271b;
   }
 }
 
+/* PatternFly's variables, in Vinaire's colours. `html:root` and `html.pf-v5-theme-dark` are more specific than PatternFly's
+   own `:root` and `:where(.pf-v5-theme-dark)`, so this wins whatever the order the stylesheets load in. */
+html:root,
+html.pf-v5-theme-dark {
+  --pf-v5-global--BackgroundColor--100: var(--vn-surface);
+  --pf-v5-global--BackgroundColor--200: var(--vn-surface-2);
+  --pf-v5-global--BackgroundColor--dark-100: var(--vn-bg);
+  --pf-v5-global--Color--100: var(--vn-text);
+  --pf-v5-global--Color--200: var(--vn-muted);
+  --pf-v5-global--BorderColor--100: var(--vn-border);
+  --pf-v5-global--BorderColor--200: var(--vn-border-strong);
+  --pf-v5-global--BorderColor--300: var(--vn-border);
+  --pf-v5-global--primary-color--100: var(--vn-accent);
+  --pf-v5-global--primary-color--200: var(--vn-accent-hover);
+  --pf-v5-global--active-color--100: var(--vn-accent);
+  --pf-v5-global--link--Color: var(--vn-accent-text);
+  --pf-v5-global--link--Color--hover: var(--vn-accent-hover);
+  --pf-v5-global--danger-color--100: var(--vn-err);
+  --pf-v5-global--danger-color--200: var(--vn-err);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  html:root:not(.pf-v5-theme-dark) {
+    color-scheme: light;
+  }
+}
+
+/* the page itself: no Keycloak background image, Vinaire's background colour */
+html,
+body,
 .login-pf body,
-body {
+.pf-v5-c-login {
   background: var(--vn-bg) !important;
+  background-image: none !important;
   color: var(--vn-text);
   font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -55,8 +96,9 @@ div.kc-logo-text span {
   letter-spacing: 0.04em;
 }
 
+/* the card */
 .pf-v5-c-login__main {
-  background: var(--vn-surface);
+  --pf-v5-c-login__main--BackgroundColor: var(--vn-surface);
   border: 1px solid var(--vn-border);
   border-radius: 14px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
@@ -65,61 +107,47 @@ div.kc-logo-text span {
 .pf-v5-c-login__main-header {
   border-top: 4px solid var(--vn-accent);
 }
-.pf-v5-c-login__main-header,
-.pf-v5-c-login__main-body,
-.pf-v5-c-login__main-footer {
-  background: transparent;
-  color: var(--vn-text);
+
+/* inputs: one surface, one border, one focus ring in the accent colour (the field shows PatternFly's blue underline
+   otherwise) */
+.pf-v5-c-form-control {
+  --pf-v5-c-form-control--BackgroundColor: var(--vn-surface-2);
+  --pf-v5-c-form-control--after--BorderBottomColor: var(--vn-border-strong);
+  --pf-v5-c-form-control--hover--after--BorderBottomColor: var(--vn-accent);
+  --pf-v5-c-form-control--focus--after--BorderBottomColor: var(--vn-accent);
+  border-radius: 8px;
 }
-.pf-v5-c-title,
-.pf-v5-c-form__label-text,
-.pf-v5-c-check__label,
-.pf-v5-c-login__main-footer-band,
-.pf-v5-c-login__main-footer-band-item {
+.pf-v5-c-form-control:focus-within {
+  outline: 2px solid var(--vn-accent);
+  outline-offset: 1px;
+}
+/* the input inside has its own browser focus ring; the field's ring above is the one to see */
+.pf-v5-c-form-control input:focus,
+.pf-v5-c-form-control input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* buttons and the little show-password button */
+.pf-v5-c-button.pf-m-primary {
+  --pf-v5-c-button--m-primary--Color: #ffffff;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.pf-v5-c-button.pf-m-control {
+  --pf-v5-c-button--m-control--BackgroundColor: var(--vn-surface-2);
+  --pf-v5-c-button--m-control--Color: var(--vn-text);
+  --pf-v5-c-button--m-control--BorderColor: var(--vn-border);
+}
+
+/* the language switch and secondary text */
+select,
+.pf-v5-c-form-control select {
   color: var(--vn-text);
+  background: transparent;
 }
 .pf-v5-c-login__main-header-desc,
 .pf-v5-c-form__helper-text,
 .pf-v5-c-helper-text__item-text {
   color: var(--vn-muted);
-}
-
-.pf-v5-c-form-control {
-  background: var(--vn-surface-2);
-  color: var(--vn-text);
-  border-radius: 8px;
-  --pf-v5-c-form-control--BorderColor: var(--vn-border);
-  --pf-v5-c-form-control--BorderTopColor: var(--vn-border);
-  --pf-v5-c-form-control--BorderRightColor: var(--vn-border);
-  --pf-v5-c-form-control--BorderBottomColor: var(--vn-border);
-  --pf-v5-c-form-control--BorderLeftColor: var(--vn-border);
-  --pf-v5-c-form-control--before--BorderColor: var(--vn-border);
-}
-.pf-v5-c-form-control:focus-within {
-  --pf-v5-c-form-control--BorderBottomColor: var(--vn-accent);
-  outline: 2px solid var(--vn-accent);
-  outline-offset: 0;
-}
-.pf-v5-c-form-control input,
-.pf-v5-c-form-control select {
-  color: var(--vn-text);
-  background: transparent;
-}
-
-.pf-v5-c-button.pf-m-primary {
-  background: var(--vn-accent);
-  color: #ffffff;
-  border-radius: 8px;
-  font-weight: 600;
-}
-.pf-v5-c-button.pf-m-primary:hover,
-.pf-v5-c-button.pf-m-primary:focus {
-  background: var(--vn-accent-hover);
-}
-.pf-v5-c-button.pf-m-link,
-a {
-  color: var(--vn-accent);
-}
-.pf-v5-c-alert.pf-m-danger {
-  --pf-v5-c-alert--m-danger--BorderTopColor: var(--vn-err);
 }
