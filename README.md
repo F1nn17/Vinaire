@@ -406,6 +406,23 @@ renewed while Keycloak still vouches for the person (the credential lasts `sessi
 `sessionMaxTTL`), so someone disabled in Keycloak loses access within one credential lifetime. The running version
 of Vinaire is shown in the user menu and at the top of Settings.
 
+#### Behind a reverse proxy that ends TLS (`trustedProxies`)
+
+When TLS ends at your ingress controller or reverse proxy, Vinaire itself sees plain HTTP. It believes the proxy's
+`X-Forwarded-Proto: https` **only from an address you name**, because any client that can reach Vinaire directly could send
+that header too. The default is nobody, so a **password, a token or an SSH key sent through such a proxy is refused**
+("may only be sent over HTTPS") until you list the proxy — the refusal tells you which address Vinaire saw. Signing in with a
+pasted token is not affected.
+
+```yaml
+trustedProxies:
+  - 10.42.0.15/32        # the address the proxy connects to Vinaire FROM, not its public name
+```
+
+List the proxy's own address (a `/32`, or a small subnet nobody else is in) — not a whole pod network or a private `/16`:
+every address in the list can claim https. The proxy must overwrite `X-Forwarded-Proto`, not pass the client's value through.
+Settings → Security warns about wide ranges. Without Helm: `TRUSTED_PROXIES=10.42.0.15/32`. `0.0.0.0/0` is refused at start.
+
 #### Keeping the master key outside the cluster
 
 By default the key that seals Vinaire's store lives in a Secret next to the data. If you run HashiCorp Vault or
@@ -443,6 +460,7 @@ has (Custom Resources; see Vinaire's Settings → Справка once logged in)
 | `clusterrole "vinaire-viewer" not found` when binding | Vinaire was deployed without the chart (a hand-written Deployment), so the roles were never created. Install it with `helm upgrade --install` — the chart creates them. |
 | After entering a token you're sent back to the login screen | (1) `cookie.secure` is `true` but you're on plain HTTP — use HTTPS, or `--set cookie.secure=false` for a local trial; (2) `authMode` isn't `token`; (3) the token expired (`--duration`). |
 | Setting up Keycloak sign-in says the URL must be https / the password may only be sent over HTTPS | You are on a home server without a certificate: allow plain HTTP **on a private network** — see [Keycloak sign-in on a home server without HTTPS](#keycloak-sign-in-on-a-home-server-without-https-keycloakallowhttpprivatenetwork). |
+| Entering a password, a token or an SSH key fails with "may only be sent over HTTPS" although the address is https | TLS ends at a reverse proxy and Vinaire doesn't know to believe it: list the proxy under `trustedProxies` — the message names the address Vinaire saw (see [Behind a reverse proxy that ends TLS](#behind-a-reverse-proxy-that-ends-tls-trustedproxies)). |
 | `pods is forbidden` / `403` everywhere | The account whose token you pasted has no rights. Check with `kubectl auth can-i … --as=system:serviceaccount:<ns>:<name>` and make sure the **viewer** role is bound to *your* ServiceAccount, not to Vinaire's own. |
 | Marketplace install: "you don't have the permissions this chart needs" | Bind `-installer` (in addition to `-viewer`). Note `-admin` grants no cluster rights. |
 | The Ingress answers 404 / doesn't resolve | `ingress.className` must match your controller (`kubectl get ingressclass`); the host must resolve to it (hosts file / DNS). |

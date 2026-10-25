@@ -22,6 +22,7 @@ import (
 
 	"github.com/f1nn17/vinaire/backend/internal/authn"
 	"github.com/f1nn17/vinaire/backend/internal/provision"
+	"github.com/f1nn17/vinaire/backend/internal/trustedproxy"
 )
 
 // Roadmap Phase 30: adding worker nodes over SSH. This is the most
@@ -46,11 +47,12 @@ const maxProvisionBody = 64 << 10
 var fingerprintRe = regexp.MustCompile(`^SHA256:[A-Za-z0-9+/]{43}$`)
 
 // requireSecureTransport refuses to accept credentials over plain HTTP. HTTPS
-// directly, a TLS-terminating proxy that says so (X-Forwarded-Proto), and a
+// directly, a TLS-terminating proxy that the operator named (TRUSTED_PROXIES) and that says so
+// (X-Forwarded-Proto — believed from no one else, Roadmap Phase 96), and a
 // loopback-to-loopback request (local development) are accepted; anything else
 // is rejected unless the operator explicitly opts out.
 func (h *Handler) requireSecureTransport(w http.ResponseWriter, r *http.Request) bool {
-	if h.ProvisionAllowInsecure || r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+	if h.ProvisionAllowInsecure || h.TrustedProxies.IsHTTPS(r) {
 		return true
 	}
 	if remote, _, err := net.SplitHostPort(r.RemoteAddr); err == nil && net.ParseIP(remote).IsLoopback() {
@@ -62,8 +64,13 @@ func (h *Handler) requireSecureTransport(w http.ResponseWriter, r *http.Request)
 			return true
 		}
 	}
-	respondError(w, http.StatusBadRequest,
-		"credentials (SSH, tokens, passwords) may only be sent over HTTPS — open Vinaire through a TLS URL (or set PROVISION_ALLOW_INSECURE=true for local development; for a Keycloak administrator on a private network see OIDC_ALLOW_HTTP_PRIVATE_NETWORK)")
+	msg := "credentials (SSH, tokens, passwords) may only be sent over HTTPS — open Vinaire through a TLS URL (or set PROVISION_ALLOW_INSECURE=true for local development; for a Keycloak administrator on a private network see OIDC_ALLOW_HTTP_PRIVATE_NETWORK)"
+	// Behind a reverse proxy that ends TLS this is the usual refusal: the proxy has to be named. Say which address the
+	// request came from (not a secret) so the operator knows what to list.
+	if r.Header.Get("X-Forwarded-Proto") != "" {
+		msg += ". This request arrived from " + trustedproxy.Peer(r.RemoteAddr) + " and says it was HTTPS, but Vinaire believes that only from a proxy you list: if that address is your reverse proxy, set trustedProxies (TRUSTED_PROXIES) to it"
+	}
+	respondError(w, http.StatusBadRequest, msg)
 	return false
 }
 

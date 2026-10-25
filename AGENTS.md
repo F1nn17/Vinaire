@@ -599,7 +599,8 @@ Keep every one of these rules when touching it:
   into the audit trail. A unit test asserts the `Secret` formatting; re-run
   the "grep the backend log for the password/token" check after any change.
 - **HTTPS only.** `requireSecureTransport` refuses the request unless it's TLS,
-  a proxy says `X-Forwarded-Proto: https`, or it's loopback-to-loopback (local
+  a proxy **named in `TRUSTED_PROXIES`** (default: nobody — the header of any other client is ignored, Roadmap Phase 96;
+  `internal/trustedproxy`) says `X-Forwarded-Proto: https`, or it's loopback-to-loopback (local
   dev). `PROVISION_ALLOW_INSECURE=true` is the explicit opt-out for a dev
   cluster — never set it on a real deployment.
 - **Host key pinning, no `InsecureIgnoreHostKey`.** `POST

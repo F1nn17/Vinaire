@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/f1nn17/vinaire/backend/internal/trustedproxy"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -60,7 +61,15 @@ func TestKeycloakCredentialsNeedTLSUnlessThePrivateNetworkOptInIsOn(t *testing.T
 	// TLS is accepted either way
 	tlsReq := reqFrom("203.0.113.9:5000")
 	tlsReq.Header.Set("X-Forwarded-Proto", "https")
-	if !off.requireSecureTransportOrPrivate(httptest.NewRecorder(), tlsReq) {
-		t.Error("https via a proxy must be accepted")
+	if off.requireSecureTransportOrPrivate(httptest.NewRecorder(), tlsReq) {
+		t.Error("a client's own X-Forwarded-Proto: https must not be believed (Roadmap Phase 96)")
+	}
+	trusted, _, err := trustedproxy.Parse("203.0.113.9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	behind := &Handler{TrustedProxies: trusted}
+	if !behind.requireSecureTransportOrPrivate(httptest.NewRecorder(), tlsReq) {
+		t.Error("https via a proxy the operator named must be accepted")
 	}
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/f1nn17/vinaire/backend/internal/k8s"
 	"github.com/f1nn17/vinaire/backend/internal/provision"
 	"github.com/f1nn17/vinaire/backend/internal/securitychecks"
+	"github.com/f1nn17/vinaire/backend/internal/trustedproxy"
 )
 
 // WorkloadRow matches the frontend's WorkloadRow type exactly
@@ -54,6 +55,10 @@ type Handler struct {
 
 	Clusters *clusters.Registry
 	Auth     *authn.Manager
+
+	// TrustedProxies are the reverse proxies whose X-Forwarded-Proto is believed (TRUSTED_PROXIES; Roadmap Phase 96).
+	// Zero value: nobody.
+	TrustedProxies trustedproxy.Set
 
 	// Install is what Vinaire knows about its own installation (Roadmap Phase 86), for the "This installation"
 	// security checks. Nil: not known.

@@ -403,6 +403,24 @@ kubectl create clusterrolebinding shiraku-admin --clusterrole=cluster-admin \
 что отключённый в Keycloak человек теряет доступ не позже чем через срок жизни одних учётных данных. Версия
 работающего Vinaire видна в меню пользователя и вверху Настроек.
 
+#### За обратным прокси, который заканчивает TLS (`trustedProxies`)
+
+Когда TLS заканчивается на вашем ingress-контроллере или обратном прокси, сам Vinaire видит обычный HTTP. Заголовку
+прокси `X-Forwarded-Proto: https` он верит **только с названного вами адреса**: любой клиент, который достучится до Vinaire
+напрямую, может прислать такой заголовок сам. По умолчанию не верит никому, поэтому **пароль, токен или SSH-ключ, присланные
+через такой прокси, отклоняются** («may only be sent over HTTPS»), пока вы не укажете прокси; в отказе написано, какой адрес
+увидел Vinaire. Вход вставкой токена это не затрагивает.
+
+```yaml
+trustedProxies:
+  - 10.42.0.15/32        # адрес, с которого прокси подключается к Vinaire, а не его публичное имя
+```
+
+Указывайте собственный адрес прокси (`/32` или маленькую подсеть, где больше никого нет), а не всю сеть подов и не частную
+`/16`: любой адрес из списка может заявить https. Прокси обязан перезаписывать `X-Forwarded-Proto`, а не пропускать значение
+клиента. Settings → Security предупреждает о широких диапазонах. Без Helm: `TRUSTED_PROXIES=10.42.0.15/32`. `0.0.0.0/0`
+отклоняется при запуске.
+
 #### Мастер-ключ вне кластера
 
 По умолчанию ключ, которым запечатано хранилище Vinaire, лежит в Secret рядом с данными. Если у вас есть HashiCorp Vault
@@ -439,6 +457,7 @@ kubectl create clusterrolebinding shiraku-admin --clusterrole=cluster-admin \
 | `ImagePullBackOff` у пода Vinaire | На ноде нет `vinaire:latest`. Импортируйте его (см. сценарий 1) и проверьте `sudo k3s ctr images list \| grep vinaire`; убедитесь, что `image.pullPolicy` — `IfNotPresent`/`Never`, а тег в `kubectl describe pod` — тот, что вы импортировали. |
 | `clusterrole "vinaire-viewer" not found` при привязке | Vinaire развёрнут без чарта (рукописный Deployment), поэтому роли не создавались. Установите через `helm upgrade --install` — чарт их создаёт. |
 | После ввода токена вас возвращает на экран входа | (1) `cookie.secure` равен `true`, а вы на обычном HTTP — используйте HTTPS или `--set cookie.secure=false` для локальной пробы; (2) `authMode` не `token`; (3) токен истёк (`--duration`). |
+| Ввод пароля, токена или SSH-ключа заканчивается «may only be sent over HTTPS», хотя адрес https | TLS заканчивается на обратном прокси, а Vinaire не знает, что ему верить: укажите прокси в `trustedProxies` — в сообщении написан адрес, который увидел Vinaire (см. [За обратным прокси, который заканчивает TLS](#за-обратным-прокси-который-заканчивает-tls-trustedproxies)). |
 | `pods is forbidden` / `403` везде | У учётной записи, токен которой вы вставили, нет прав. Проверьте `kubectl auth can-i … --as=system:serviceaccount:<ns>:<имя>` и убедитесь, что роль **viewer** привязана к *вашему* ServiceAccount, а не к собственному аккаунту Vinaire. |
 | Установка из Marketplace: «you don't have the permissions this chart needs» | Привяжите `-installer` (вдобавок к `-viewer`). Помните, что `-admin` прав в кластере не даёт. |
 | Ingress отвечает 404 / не разрешается | `ingress.className` должен совпадать с вашим контроллером (`kubectl get ingressclass`); хост должен разрешаться в него (hosts / DNS). |

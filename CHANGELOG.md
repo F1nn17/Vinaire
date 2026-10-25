@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Behind a reverse proxy that ends TLS, name the proxy (Roadmap Phase 96) — an upgrade note.** Vinaire used to believe `X-Forwarded-Proto: https` from anyone, so a client that reached it directly could send the header and have a password, a token or an SSH key accepted over plain http. It now believes the header only from an address listed under the new chart value `trustedProxies` (`TRUSTED_PROXIES`), and the list is **empty by default**. **If TLS ends at your ingress controller or proxy, a password, token or SSH key sent through it is refused ("may only be sent over HTTPS") until you add the proxy** — the refusal names the address Vinaire saw, and the install notes say so. Signing in with a pasted token is not affected. List the proxy's own address, not a whole network; `0.0.0.0/0` is refused at start, and wide ranges are reported in Settings → Security → "This installation".
+
 ### Fixed
 
 - **Two replicas no longer fight over one Keycloak session (Roadmap Phase 95).** With `replicaCount > 1` and a Keycloak that rotates refresh tokens, two replicas could renew the same session at the same moment: one presented a refresh token the other had just spent, Keycloak refused it (and may treat the reuse as theft), and the person was signed out. Renewal now takes a lease in the shared session Secret (a version check on the Secret — no extra rights needed): only the replica that holds it presents the refresh token, the others wait for its result and use it; if the lease can't be taken the token is simply not rotated and the next request tries again. A lease whose holder died lapses by itself after about 40 seconds. A single replica is not affected.

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/f1nn17/vinaire/backend/internal/config"
+	"github.com/f1nn17/vinaire/backend/internal/trustedproxy"
 )
 
 func TestInstallationFactsReadTheSettingsAndTheChartsHints(t *testing.T) {
@@ -13,7 +14,7 @@ func TestInstallationFactsReadTheSettingsAndTheChartsHints(t *testing.T) {
 	t.Setenv("VAULT_ALLOW_INSECURE", "true")
 	t.Setenv("INSTALL_AUDIT_PERSISTENT", "false")
 	t.Setenv("INSTALL_NETWORK_POLICY", "true")
-	i := installationFacts(cfg)
+	i := installationFacts(cfg, trustedproxy.Set{})
 	if i.AuthMode != "oidc" || i.CookieSecure || i.SessionStore != "memory" || !i.HTTPKeycloakAllowed {
 		t.Fatalf("%+v", i)
 	}
@@ -28,7 +29,18 @@ func TestInstallationFactsReadTheSettingsAndTheChartsHints(t *testing.T) {
 func TestWithoutTheChartsHintsTheChartFactsAreNotKnown(t *testing.T) {
 	t.Setenv("INSTALL_AUDIT_PERSISTENT", "")
 	t.Setenv("INSTALL_NETWORK_POLICY", "true") // meaningless alone
-	if i := installationFacts(config.Config{}); i.Chart || i.NetworkPolicy {
+	if i := installationFacts(config.Config{}, trustedproxy.Set{}); i.Chart || i.NetworkPolicy {
 		t.Fatalf("%+v", i)
+	}
+}
+
+func TestWideTrustedProxyRangesAreReportedButAProxysOwnAddressIsNot(t *testing.T) {
+	set, _, err := trustedproxy.Parse("10.0.0.0/8, 192.168.88.10/32")
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := installationFacts(config.Config{}, set)
+	if strings.Join(i.BroadTrustedProxies, ",") != "10.0.0.0/8" {
+		t.Fatalf("%v", i.BroadTrustedProxies)
 	}
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/f1nn17/vinaire/backend/internal/netguard"
 	"github.com/f1nn17/vinaire/backend/internal/provision"
 	"github.com/f1nn17/vinaire/backend/internal/stream"
+	"github.com/f1nn17/vinaire/backend/internal/trustedproxy"
 )
 
 // writeRateLimit/writeRateBurst bound the three Phase 9 write endpoints
@@ -176,7 +177,18 @@ func main() {
 		workloadsHandler.BrokerTTL = cfg.SessionMaxTTL
 	}
 	workloadsHandler.RolePrefix = os.Getenv("ROLE_PREFIX")
-	workloadsHandler.Install = installationFacts(cfg)
+	// Roadmap Phase 96: which reverse proxies' X-Forwarded-Proto is believed. A list that cannot be read is fatal — silently
+	// trusting nobody would break every sign-in behind the proxy, silently trusting everybody would be worse.
+	proxies, proxyWarnings, err := trustedproxy.Parse(cfg.TrustedProxies)
+	if err != nil {
+		slog.Error("TRUSTED_PROXIES is not valid", "error", err)
+		os.Exit(1)
+	}
+	for _, w := range proxyWarnings {
+		slog.Warn("TRUSTED_PROXIES names a wide range: any address in it can claim https with a forged X-Forwarded-Proto. List your proxy's own address.", "range", w)
+	}
+	workloadsHandler.TrustedProxies = proxies
+	workloadsHandler.Install = installationFacts(cfg, proxies)
 	workloadsHandler.Version = versionFromEnv()
 	if os.Getenv("OIDC_ALLOW_HTTP_PRIVATE_NETWORK") == "true" {
 		workloadsHandler.OIDCAllowHTTPPrivate = true
