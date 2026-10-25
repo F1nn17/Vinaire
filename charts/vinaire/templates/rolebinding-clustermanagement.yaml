@@ -1,3 +1,4 @@
+{{- $_ := include "vinaire.defaults" . -}}
 {{- if .Values.rbac.clusterManagement.create }}
 # Backs "add a cluster via the web UI" (Settings page, Roadmap Phase 24) —
 # a deliberately separate, narrower Role from the ClusterRole above: it

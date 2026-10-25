@@ -1,3 +1,4 @@
+{{- $_ := include "vinaire.defaults" . -}}
 {{- if .Values.backup.targets }}
 # Where backups of applications installed from an image may be uploaded (Roadmap Phase 77b).
 # Read by Vinaire (BACKUP_TARGETS); a request can name one of these, never an address.

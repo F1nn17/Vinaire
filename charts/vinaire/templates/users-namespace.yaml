@@ -1,3 +1,4 @@
+{{- $_ := include "vinaire.defaults" . -}}
 {{- if .Values.keycloak.serviceAccountSignIn.enabled }}
 {{- $ns := include "vinaire.userNamespace" . }}
 # A home for the people who sign in through Keycloak (Roadmap Phase 80). Kubernetes accepts an OIDC

@@ -1,3 +1,4 @@
+{{- $_ := include "vinaire.defaults" . -}}
 {{- $fullname := include "vinaire.fullname" . -}}
 {{- $ns := .Release.Namespace -}}
 Vinaire {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installing.
