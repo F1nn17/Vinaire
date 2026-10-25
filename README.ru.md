@@ -38,7 +38,7 @@ Vinaire — веб-интерфейс для Kubernetes, сделанный с �
 На любом кластере, где есть `kubectl` и [Helm](https://helm.sh/docs/intro/install/):
 
 ```bash
-helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.3.1 \
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.4.0 \
   --namespace vinaire --create-namespace
 
 kubectl -n vinaire port-forward svc/vinaire 8080:8080      # затем откройте http://localhost:8080
@@ -53,7 +53,7 @@ HTTPS и OIDC — в разделе [Установка](#установка-hel
 Проверить перед запуском:
 
 ```bash
-cosign verify ghcr.io/f1nn17/vinaire:1.3.1 \
+cosign verify ghcr.io/f1nn17/vinaire:1.4.0 \
   --certificate-identity-regexp 'https://github.com/F1nn17/Vinaire/\.github/workflows/release\.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -445,6 +445,11 @@ trustedProxies:
 значений чарта по умолчанию и никогда не заменяет заданное вами. Обновление до **1.3.0** с ним падало с
 `nil pointer evaluating interface {}.create` — для этого одного шага используйте `--reset-then-reuse-values` (или
 передайте файл значений через `-f`). CI проверяет релизы, обновляя прежние с `--reuse-values`.
+
+**Обновление до 1.4.0 — одно, что нужно проверить.** Если TLS заканчивается на вашем ingress или обратном прокси,
+пароль, токен или SSH-ключ, присланные через него, отклоняются, пока вы не добавите прокси в `trustedProxies`
+([За обратным прокси, который заканчивает TLS](#за-обратным-прокси-который-заканчивает-tls-trustedproxies)); в отказе
+написан адрес, который нужно указать. Остальное (прямое TLS-соединение, вход вставкой токена) работает как раньше.
 
 Все параметры — в `charts/vinaire/values.yaml`, прежде всего `authMode`, `ingress`, `cookie`,
 `networkPolicy` и `rbac.extraRules` для чтения CRD вашего кластера (Custom Resources; после

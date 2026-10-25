@@ -40,7 +40,7 @@ The interface is available in English and Russian.
 On any cluster with `kubectl` and [Helm](https://helm.sh/docs/intro/install/):
 
 ```bash
-helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.3.1 \
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.4.0 \
   --namespace vinaire --create-namespace
 
 kubectl -n vinaire port-forward svc/vinaire 8080:8080      # then open http://localhost:8080
@@ -55,7 +55,7 @@ Every release image and the chart are signed (keyless, with cosign) and carry an
 attestation. To verify before you run:
 
 ```bash
-cosign verify ghcr.io/f1nn17/vinaire:1.3.1 \
+cosign verify ghcr.io/f1nn17/vinaire:1.4.0 \
   --certificate-identity-regexp 'https://github.com/F1nn17/Vinaire/\.github/workflows/release\.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -226,7 +226,7 @@ it through your Ingress controller (the example uses Traefik; use `nginx` etc. a
 has). The released chart and image are public on GitHub's registry:
 
 ```bash
-helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.3.1   --namespace vinaire --create-namespace   --set ingress.enabled=true --set ingress.className=traefik   --set 'ingress.hosts[0].host=vinaire.example.com'
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.4.0   --namespace vinaire --create-namespace   --set ingress.enabled=true --set ingress.className=traefik   --set 'ingress.hosts[0].host=vinaire.example.com'
 ```
 
 To run a build of your own instead, push the image and use the chart from a checkout:
@@ -447,6 +447,11 @@ GitOps poller, sets client-IP affinity on the Service and adds a PodDisruptionBu
 defaults, and never replaces one you set. Upgrading to **1.3.0** with it failed with
 `nil pointer evaluating interface {}.create` — for that one step use `--reset-then-reuse-values` (or pass your values file
 with `-f`). Releases are checked by CI by upgrading earlier ones with `--reuse-values`.
+
+**Upgrading to 1.4.0 — one thing to check.** If TLS ends at your ingress or reverse proxy, a password, token or SSH key
+sent through it is refused until you add the proxy under `trustedProxies`
+([Behind a reverse proxy that ends TLS](#behind-a-reverse-proxy-that-ends-tls-trustedproxies)); the refusal names the
+address to list. Everything else (a direct TLS connection, signing in with a pasted token) works as before.
 
 See `charts/vinaire/values.yaml` for every option — most notably `authMode`, `ingress`,
 `cookie`, `networkPolicy`, and `rbac.extraRules` for read access to the CRDs your own cluster
