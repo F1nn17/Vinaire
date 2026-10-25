@@ -58,7 +58,7 @@ in docker-compose.yml plus every `8180` reference below.
 
 ## The Vinaire sign-in theme
 
-`theme/vinaire` is the login theme the setup wizard offers (Roadmap Phase 85b): Keycloak's own sign-in page in Vinaire's
+`theme/vinaire` is the login theme the setup wizard offers (Roadmap Phases 85b and 91; it re-colours PatternFly through its own variables, so every Keycloak page follows): Keycloak's own sign-in page in Vinaire's
 colours, in English and Russian. The compose file mounts it, so a realm can use it right away (Realm settings → Themes →
 Login theme → `vinaire`); the wizard sets it for a realm it creates. It is the **source** of what Settings → Sign-in hands
 out (`frontend/src/lib/keycloakThemeFiles.ts` is generated from it with `npm run gen:keycloak-theme`, and

@@ -17,6 +17,7 @@ import { FirstAdminCommands } from "./FirstAdminCommands";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { KeycloakInstall, type InstalledKeycloak } from "./KeycloakInstall";
 import { themeConfigMapYaml, themeZip } from "@/lib/keycloakTheme";
+import { KeycloakThemeInstall } from "./KeycloakThemeInstall";
 import { TypeToConfirmModal } from "@/components/ui/TypeToConfirmModal";
 
 const input =
@@ -204,11 +205,21 @@ function Done({
       </div>
       <ul className="list-disc pl-5 text-text-muted">
         {result.steps.map((s) => (
-          <li key={s.what}>
+          <li
+            key={s.what}
+            className={s.status.startsWith("skipped") ? "text-warn" : ""}
+          >
             {s.what} — {s.status}
           </li>
         ))}
       </ul>
+      {result.steps.some((s) => s.status.startsWith("skipped — the theme")) && (
+        <div className="rounded-lg border border-warn/60 bg-surface-2 p-3 text-text-muted">
+          The sign-in page still has Keycloak&apos;s own look: this Keycloak
+          doesn&apos;t have the Vinaire theme yet. Add it with the button above
+          (or download it) and run this setup again.
+        </div>
+      )}
       {result.identityMode === "serviceaccount" ? (
         <div className="rounded-lg border border-border bg-surface-2 p-3 text-text-muted">
           <b className="text-text">Nothing to change in the cluster.</b> Vinaire
@@ -565,6 +576,7 @@ function SetupForm({
           </button>
           ), then run this setup again.
         </Hint>
+        <KeycloakThemeInstall />
       </div>
       <label className="flex items-center gap-2 text-xs text-text-muted">
         <input

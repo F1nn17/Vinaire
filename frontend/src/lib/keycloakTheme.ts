@@ -1,5 +1,5 @@
 import { stringify } from "yaml";
-import { KEYCLOAK_THEME_FILES } from "./keycloakThemeFiles";
+import { KEYCLOAK_THEME_FILES } from "./keycloakThemeFiles.ts";
 
 // Keycloak's sign-in page in Vinaire's look (Roadmap Phase 85b): a theme named "vinaire", handed out here as
 // a zip (for any Keycloak: unpack it into its `themes` folder) or as a ConfigMap mounted into the Keycloak
