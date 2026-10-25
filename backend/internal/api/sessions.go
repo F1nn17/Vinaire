@@ -58,16 +58,16 @@ func (h *Handler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ref := chi.URLParam(r, "ref")
-	owner := ""
+	owner, who := "", ""
 	for _, s := range lister.List() {
 		if s.Ref == ref {
-			owner = s.Owner
+			owner, who = s.Owner, s.Username
 		}
 	}
 	if len(ref) < 8 || len(ref) > 16 || !lister.Revoke(ref) {
 		respondError(w, http.StatusNotFound, "no such session")
 		return
 	}
-	h.auditLog(r, "session-revoke", "", ref, "owner", owner)
+	h.auditLog(r, "session-revoke", "", ref, "owner", owner, "username", who)
 	respondJSON(w, map[string]string{"status": "ok"})
 }

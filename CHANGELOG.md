@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A background job's owner no longer depends on the display name (Roadmap Phase 93).** Who may watch an install or a node-provisioning job was decided by `user:<preferred_username>`, so two people with the same name in different realms (or one person after a rename) got the same key, although the identity everywhere else has been issuer + subject since 1.2.3. The key is now a hash of issuer and subject (a pasted token: a hash of the token); the session-revoke audit line carries the person's name separately. A job still running when Vinaire is updated is no longer shown to its author — start it again.
 - **`helm upgrade --reuse-values` no longer fails after a release that lacks a newer value (Roadmap Phase 92).** Upgrading 1.2.3 to 1.3.0 stopped with `nil pointer evaluating interface {}.create`: `--reuse-values` replaces the new chart's defaults with the old release's values, so a key added since (`rbac.reader.create`) was missing and the template read it. Every template now first fills in, in place, only the keys that are **absent** with the chart's defaults (`files/defaults.yaml`, an exact copy of `values.yaml` that a test keeps in step); a value you set — `false`, `0` or empty included — is never replaced, and a fresh install renders exactly as before (checked: identical output). CI has a new job that installs the oldest and the latest earlier release from their tags and upgrades each to the checkout with `--reuse-values`.
 ### Added
 
