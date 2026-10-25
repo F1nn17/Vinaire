@@ -23,7 +23,9 @@ import (
 // providerControl steers the fake identity provider of the renewal tests.
 type providerControl struct {
 	mu             sync.Mutex
-	refresh        string // "" ok, "invalid_grant", "down"
+	refresh        string // "" ok, "invalid_grant", "down", "hang" (never answers until the caller gives up)
+	strict         bool   // like a Keycloak that rotates: only the newest refresh token is accepted, a spent one is refused
+	current        string // the newest refresh token (strict mode)
 	refreshSubject string // the subject the refreshed ID token names ("" = the same person)
 	noRefreshToken bool   // the code exchange gives no refresh token
 	refreshCalls   atomic.Int32
@@ -75,16 +77,38 @@ func renewalProvider(t *testing.T) (*httptest.Server, *providerControl) {
 					w.WriteHeader(http.StatusBadRequest)
 					_, _ = w.Write([]byte(`{"error":"invalid_grant","error_description":"Session not active"}`))
 					return
+				case "hang":
+					select {
+					case <-r.Context().Done():
+					case <-time.After(10 * time.Second):
+					}
+					return
 				case "down":
 					w.WriteHeader(http.StatusServiceUnavailable)
 					_, _ = w.Write([]byte("unavailable"))
 					return
 				}
+				ctl.mu.Lock()
+				if ctl.strict {
+					if ctl.current == "" {
+						ctl.current = "rt-1"
+					}
+					if r.Form.Get("refresh_token") != ctl.current {
+						ctl.mu.Unlock()
+						w.WriteHeader(http.StatusBadRequest)
+						_, _ = w.Write([]byte(`{"error":"invalid_grant","error_description":"Token is not active"}`))
+						return
+					}
+				}
+				ctl.mu.Unlock()
 				sub := "sub-123"
 				if otherSub != "" {
 					sub = otherSub
 				}
 				n := ctl.rotations.Add(1)
+				ctl.mu.Lock()
+				ctl.current = fmt.Sprintf("rt-%d", n+1)
+				ctl.mu.Unlock()
 				_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "a", "token_type": "Bearer", "id_token": idToken(sub), "refresh_token": fmt.Sprintf("rt-%d", n+1)})
 				return
 			}
@@ -105,6 +129,7 @@ func renewalProvider(t *testing.T) (*httptest.Server, *providerControl) {
 type renewingBroker struct {
 	logins, renewals atomic.Int32
 	gone             atomic.Bool
+	failRenew        atomic.Bool // the Kubernetes call that mints the new credential fails
 	lastTTL          atomic.Int64
 }
 
@@ -118,9 +143,15 @@ func (b *renewingBroker) token(prefix string, n int32, ttl time.Duration) Broker
 func (b *renewingBroker) TokenFor(_ context.Context, id Identity) (BrokeredToken, error) {
 	return b.token("login", b.logins.Add(1), id.TokenTTL), nil
 }
-func (b *renewingBroker) RenewToken(_ context.Context, id Identity) (BrokeredToken, error) {
+func (b *renewingBroker) RenewToken(ctx context.Context, id Identity) (BrokeredToken, error) {
 	if b.gone.Load() {
 		return BrokeredToken{}, ErrAccountGone
+	}
+	if err := ctx.Err(); err != nil { // a real client call does not run on a context that is already over
+		return BrokeredToken{}, err
+	}
+	if b.failRenew.Load() {
+		return BrokeredToken{}, errors.New("the Kubernetes API did not answer")
 	}
 	return b.token("renewed", b.renewals.Add(1), id.TokenTTL), nil
 }
@@ -396,5 +427,71 @@ func TestTheConfiguredCredentialLifetimeIsKeptWithinWhatMakesSense(t *testing.T)
 	m.TokenTTL = 30 * time.Minute
 	if m.renewLead() != 10*time.Minute {
 		t.Errorf("a 30 minute credential should be renewed in its last 10 minutes, got %s", m.renewLead())
+	}
+}
+
+// Roadmap Phase 94, defect 1: one deadline used to cover the call to the provider AND the minting of the Kubernetes
+// credential, so a provider that never answered used the whole time up and the credential could not be minted — the
+// person lost their session although the grace period had hours left.
+func TestAProviderThatNeverAnswersDoesNotUseUpTheTimeForTheKubernetesCredential(t *testing.T) {
+	old := renewTimeout
+	renewTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { renewTimeout = old })
+	f := newRenewalFixture(t)
+	f.ctl.set(func(c *providerControl) { c.refresh = "hang" })
+	f.dueIn(t, time.Minute)
+	start := time.Now()
+	sess, ok := f.m.Authenticate(f.request())
+	if !ok {
+		t.Fatal("the session ended because the provider timed out — within the grace period it must go on")
+	}
+	if time.Since(start) > 3*time.Second {
+		t.Errorf("the request waited %s for a provider that never answers", time.Since(start))
+	}
+	if f.broker.renewals.Load() != 1 || sess.K8sToken != "renewed-1" {
+		t.Fatalf("the Kubernetes credential was not renewed after the provider timed out: %+v (renewals %d)", sess, f.broker.renewals.Load())
+	}
+}
+
+// Roadmap Phase 94, defect 2: the provider rotates the refresh token on every use. If the Kubernetes credential then
+// could not be minted, the new refresh token was dropped with the unsaved session, and the next renewal presented the
+// spent one: invalid_grant, session over.
+func TestARotatedRefreshTokenIsKeptEvenWhenTheKubernetesCredentialCouldNotBeMinted(t *testing.T) {
+	f := newRenewalFixture(t)
+	f.ctl.set(func(c *providerControl) { c.strict = true })
+	f.broker.failRenew.Store(true)
+	f.dueIn(t, time.Minute)
+	if _, ok := f.m.Authenticate(f.request()); !ok {
+		t.Fatal("the session ended although the current credential still works")
+	}
+	stored, _ := f.m.Sessions.Get(f.id)
+	if stored == nil || stored.RefreshToken != "rt-2" {
+		t.Fatalf("the rotated refresh token was lost: %+v", stored)
+	}
+	// Kubernetes is back: the next renewal presents the NEW token, which the provider accepts
+	f.broker.failRenew.Store(false)
+	f.dueIn(t, time.Minute)
+	sess, ok := f.m.Authenticate(f.request())
+	if !ok || f.broker.renewals.Load() != 1 || sess.K8sToken != "renewed-1" {
+		t.Fatalf("the next renewal failed: ok=%v renewals=%d %+v", ok, f.broker.renewals.Load(), sess)
+	}
+	if sess.RefreshToken != "rt-3" {
+		t.Errorf("the second rotation was not kept: %q", sess.RefreshToken)
+	}
+}
+
+// A renewal belongs to the session, not to the request that started it.
+func TestARenewalIsNotCancelledWithTheRequestThatStartedIt(t *testing.T) {
+	f := newRenewalFixture(t)
+	f.ctl.set(func(c *providerControl) { c.strict = true })
+	f.dueIn(t, time.Minute)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // the client went away before the renewal began
+	cur, _ := f.m.Sessions.Get(f.id)
+	if out, ok := f.m.renewIfDue(ctx, cur); !ok || out.K8sToken != "renewed-1" {
+		t.Fatalf("a request that was already gone cancelled the renewal: ok=%v %+v", ok, out)
+	}
+	if stored, _ := f.m.Sessions.Get(f.id); stored == nil || stored.RefreshToken != "rt-2" {
+		t.Fatalf("the rotated refresh token was not saved: %+v", stored)
 	}
 }
