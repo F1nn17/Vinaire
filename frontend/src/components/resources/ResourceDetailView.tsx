@@ -10,6 +10,7 @@ import { UnderlineTabs } from "@/components/ui/Tabs";
 import { FillHeight } from "@/components/ui/FillHeight";
 import { YamlPanel } from "@/components/editor/YamlPanel";
 import { YamlEditor } from "@/components/editor/YamlEditor";
+import { IngressOverview } from "@/components/network/IngressOverview";
 
 type Tab = "overview" | "yaml";
 
@@ -76,6 +77,7 @@ function ResourceDetail({ context }: { context: ResourceContext }) {
   // A Secret's values are redacted in this view, so it must never be saved back
   // from here — the backend refuses it too. Values: the Secrets page's audited reveal.
   const isSecret = key === "core/v1/secrets";
+  const isIngress = key === "networking.k8s.io/v1/ingresses";
   const back = routing
     ? "/network"
     : `/resources?r=${encodeURIComponent(key)}${namespace ? `&ns=${encodeURIComponent(namespace)}` : ""}`;
@@ -99,6 +101,14 @@ function ResourceDetail({ context }: { context: ResourceContext }) {
       </div>
 
       <UnderlineTabs items={tabs} active={tab} onChange={setTab} />
+
+      {tab === "overview" && isIngress && (
+        <IngressOverview
+          yaml={data.yaml}
+          namespace={data.namespace ?? namespace}
+          onEdit={() => setTab("yaml")}
+        />
+      )}
 
       {tab === "overview" && (
         <div className="max-w-xl rounded-[10px] border border-border bg-surface p-5">

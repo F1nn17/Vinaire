@@ -73,7 +73,7 @@ cosign verify ghcr.io/f1nn17/vinaire:1.3.1 \
 
 ### Что нужно
 
-- Node.js 20+ и npm
+- Node.js 22+ и npm
 - Go 1.27+
 - Доступный кластер Kubernetes (для разработки задуман локальный [k3d](https://k3d.io/)) и
   рабочий `~/.kube/config`

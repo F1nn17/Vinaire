@@ -12,6 +12,7 @@
     "format:check": "prettier --check .",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:theme": "node scripts/check-theme.mjs",
+    "test:unit": "node --test --experimental-strip-types src/lib/*.test.ts",
     "gen:keycloak-theme": "node scripts/gen-keycloak-theme.mjs",
     "check:keycloak-theme": "node scripts/gen-keycloak-theme.mjs --check",
     "test:e2e": "playwright test"

@@ -77,7 +77,7 @@ Releases are made as described in [docs/releasing.md](./docs/releasing.md).
 
 ### Prerequisites
 
-- Node.js 20+ and npm
+- Node.js 22+ and npm
 - Go 1.27+
 - A reachable Kubernetes cluster (a local [k3d](https://k3d.io/) cluster is
   the intended dev target) and a working `~/.kube/config`
