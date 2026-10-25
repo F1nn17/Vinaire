@@ -21,6 +21,10 @@ what you can do is decided by your real Kubernetes RBAC, not by a second permiss
   create, whether you may, a preview of the manifests, cancel with roll-back), guided setup for databases and
   common apps, and **install one instance from a publisher's image** (PostgreSQL, Redis, Keycloak, …) with every
   value explained.
+- **Run what you installed** — an *Instances* page for what you installed from an image: backups (a dump or
+  snapshots, now or on a schedule), restore into a new instance, a version upgrade with a way back, and a safe
+  delete; dashboards that follow what the cluster holds (PostgreSQL, Redis, MinIO, Keycloak), with the exporter
+  installed in one click.
 - **Change things carefully** — a YAML editor with a server-side dry-run and a diff before anything is
   written, bulk actions with typed confirmation, node cordon/drain, role bindings. Every write is audited and
   made with *your* identity.
@@ -288,6 +292,10 @@ kubectl create clusterrolebinding me-vinaire-reader \
 kubectl create clusterrolebinding me-vinaire-viewer \
   --clusterrole=vinaire-viewer --serviceaccount=vinaire:me
 
+# optional: backups, restore and version upgrades of what you installed from an image — in addition to viewer
+kubectl create clusterrolebinding me-vinaire-lifecycle-admin \
+  --clusterrole=vinaire-lifecycle-admin --serviceaccount=vinaire:me
+
 # optional: install from the Marketplace / apply YAML — in addition to viewer
 kubectl create clusterrolebinding me-vinaire-installer \
   --clusterrole=vinaire-installer --serviceaccount=vinaire:me
@@ -307,7 +315,9 @@ kubectl create clusterrolebinding me-vinaire-admin \
 kubectl create token me -n vinaire --duration=1h      # paste this into the login screen
 ```
 
-The three roles do different things, and **`-admin` is not cluster admin**: it only lets you
+The roles do different things. `-reader` only looks; `-viewer` is the working role (reads Secrets, opens a terminal,
+restarts and deletes — **not read-only**); `-installer`, `-node-admin`, `-rbac-admin` and `-lifecycle-admin` each add one
+kind of action to `-viewer`; and **`-admin` is not cluster admin**: it only lets you
 change Vinaire's own configuration (the registry of clusters, GitOps) and to read the audit log, and grants nothing
 inside Kubernetes, so it is always *in addition to* `-viewer`. `-installer` gives create /
 update / delete on the namespaced kinds Helm charts usually contain; a chart that also creates
@@ -390,6 +400,12 @@ The name is `oidc-` plus the user name (the user menu shows it); later roles can
 page. If Keycloak is down nothing in the cluster is affected — only new sign-ins wait, and pasting a token still works.
 Keycloak groups are not carried over (a ServiceAccount token has none) — by decision, not by omission: honouring them would make Vinaire grant rights on its own authority (see [docs/decisions.md](docs/decisions.md)). Bind roles per account, or use https and the API server's own OIDC, where groups work natively.
 
+The Keycloak sign-in page can look like Vinaire's own: the wizard offers a login theme (`vinaire`) — mounted
+automatically in a Keycloak that Vinaire installed, a zip or a ConfigMap to download for another one. A session is
+renewed while Keycloak still vouches for the person (the credential lasts `sessionTokenTTL`, the session
+`sessionMaxTTL`), so someone disabled in Keycloak loses access within one credential lifetime. The running version
+of Vinaire is shown in the user menu and at the top of Settings.
+
 #### Keeping the master key outside the cluster
 
 By default the key that seals Vinaire's store lives in a Secret next to the data. If you run HashiCorp Vault or
@@ -408,10 +424,12 @@ GitOps poller, sets client-IP affinity on the Service and adds a PodDisruptionBu
 
 #### Upgrading
 
-`helm upgrade --install` is the same command for first install and every upgrade. Chart 0.2.0
-changed the defaults (log in as a ServiceAccount bound to `-viewer`, not as Vinaire's own;
-`SameSite=Strict`); 0.3.0 adds the Ingress, `values.schema.json`, the `-installer` role and the
-examples, and changes nothing that existed.
+`helm upgrade --install` is the same command for a first install and every upgrade; what each release changes is in
+[CHANGELOG.md](./CHANGELOG.md). `--reuse-values` keeps the values you set earlier and works across versions: upgrading
+*to* 1.3.1 or later fills in whatever a release made before it doesn't have (a value added later) from the chart's own
+defaults, and never replaces one you set. Upgrading to **1.3.0** with it failed with
+`nil pointer evaluating interface {}.create` — for that one step use `--reset-then-reuse-values` (or pass your values file
+with `-f`). Releases are checked by CI by upgrading earlier ones with `--reuse-values`.
 
 See `charts/vinaire/values.yaml` for every option — most notably `authMode`, `ingress`,
 `cookie`, `networkPolicy`, and `rbac.extraRules` for read access to the CRDs your own cluster
@@ -441,7 +459,7 @@ that remain. In short:
 - **Vinaire is a single point with access to every cluster registered in it** — treat it like a
   bastion host, and keep `CLUSTER_STORE_KEY` out of the repository and the image.
 - Almost everything runs as the signed-in user, so the cluster's own RBAC decides; the roles in
-  the chart (`viewer`, `installer`, `node-admin`, `rbac-admin`, `admin`) are created unbound — bind them deliberately.
+  the chart (`reader`, `viewer`, `installer`, `node-admin`, `rbac-admin`, `lifecycle-admin`, `admin`) are created unbound — bind them deliberately.
 - The `Security` workflow (govulncheck, gosec, npm audit, gitleaks, Trivy, an OWASP ZAP
   baseline and browser checks of the CSP) runs on every pull request and weekly.
 
@@ -452,9 +470,13 @@ that remain. In short:
 ├── frontend/     Next.js app
 ├── backend/      Go HTTP server + Kubernetes client
 ├── charts/       Helm chart for installing onto a real cluster
+├── docs/         Security (threat model, verified properties, review package), decisions, releasing, route list
+├── keycloak/     A throwaway dev Keycloak, and the `vinaire` login theme for Keycloak's sign-in page
+├── scripts/      Release preparation and verification
+├── .github/      CI, security and release workflows, the pinned versions of the tools they install
 ├── package.json  Root orchestrator (`npm run dev` runs both at once)
-├── AGENTS.md     Conventions & architecture rules for AI coding agents
-├── ROADMAP.md    Staged plan (MVP → GitOps write flow)
+├── AGENTS.md     Conventions & architecture rules for AI coding agents (and the rules for docs)
+├── ROADMAP.md    The phase plan, what is done and what was decided against
 └── CHANGELOG.md
 ```
 

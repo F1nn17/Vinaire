@@ -76,12 +76,12 @@ For each: the code, the property to try to break, and what the tests already pro
 * **Fuzzing** (Security workflow, 30 s per target on every run; seeds run on every build):
   kubeconfig parsing, cluster server URLs, token/key parsing, single-document YAML, proxy targets,
   node label/taint and RBAC-binding validation, shell quoting and the SSH-install validators, the
-  metrics-stack options (YAML injection), the Keycloak parameters.
+  metrics-stack options (YAML injection), the Keycloak parameters, the backup configuration, upgrade tags, pod diagnosis and account names (19 targets).
 * **Canary test:** a marker placed in every credential-carrying field never reaches a log or an
   error response.
 * **Supply chain:** SBOM (CycloneDX) for the repository on every run and for each released image;
   released images are signed with cosign (keyless) with a provenance attestation
-  (`.github/workflows/release.yml`); third-party actions are pinned by commit.
+  (`.github/workflows/release.yml`); the release workflow pins every action by commit, and the CI and Security workflows install their tools at pinned versions with checked hashes (`.github/tool-versions.env`; `TestWorkflowsInstallNothingUnpinned`). The first-party actions of CI are pinned by major tag.
 
 ## 5. What is *not* covered — please look here
 
@@ -89,6 +89,7 @@ For each: the code, the property to try to break, and what the tests already pro
   generous. Review the roles the chart ships (`charts/vinaire/templates/clusterrole.yaml`).
 * **The browser side beyond the CSP/XSS checks:** a manual pass over `dangerouslySetInnerHTML`-free rendering
   of cluster data, the Monaco/xterm integrations and the `postMessage`-free design.
+* **Renewal with several replicas and the `X-Forwarded-Proto` header** are known gaps with fixes planned (Roadmap Phases 95 and 96); see "Known residual risks" in [security.md](./security.md).
 * **Race conditions and logic across handlers:** session creation vs. revocation; the order of the
   token/OIDC switch; the registry's read-modify-write; the apply dry-run → write gap.
 * **Denial of service:** per-identity write limits exist; the read side, WebSocket counts and the

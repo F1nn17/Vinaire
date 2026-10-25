@@ -19,6 +19,10 @@ Vinaire — веб-интерфейс для Kubernetes, сделанный с �
 - **Ставить софт** — **Маркетплейс** поверх Helm-чартов с нужными проверками (что чарт создаст, можно ли вам,
   предпросмотр манифестов, отмена с откатом), мастера для баз данных и популярных приложений и
   **установка одного экземпляра из образа издателя** (PostgreSQL, Redis, Keycloak, …) с пояснением каждого значения.
+- **Обслуживать поставленное** — страница *Instances* для того, что вы поставили из образа: резервные копии
+  (дамп или снимки, сразу или по расписанию), восстановление в новый экземпляр, обновление версии с возможностью
+  вернуться и безопасное удаление; дашборды, которые следуют за тем, что есть в кластере (PostgreSQL, Redis, MinIO,
+  Keycloak), с установкой exporter'а в один клик.
 - **Менять аккуратно** — YAML-редактор с проверкой на сервере (dry-run) и diff до записи, массовые действия с
   подтверждением вводом, cordon/drain нод, привязки ролей. Каждая запись попадает в аудит и делается с
   **вашей** учётной записью.
@@ -275,9 +279,17 @@ API-сервер самого кластера тоже **должен** дов�
 ```bash
 kubectl create serviceaccount me -n vinaire
 
-# просмотр + фиксированные действия (перезапуск, масштабирование, логи, терминал, проброс порта)
+# только смотреть: все страницы, которые лишь читают — без Secret, без терминала, без проброса порта, без изменений
+kubectl create clusterrolebinding me-vinaire-reader \
+  --clusterrole=vinaire-reader --serviceaccount=vinaire:me
+
+# ИЛИ работать с Vinaire в полную силу — НЕ только чтение; просмотр + фиксированные действия (перезапуск, масштабирование, логи, терминал, проброс порта)
 kubectl create clusterrolebinding me-vinaire-viewer \
   --clusterrole=vinaire-viewer --serviceaccount=vinaire:me
+
+# по желанию: резервные копии, восстановление и обновление версии того, что поставлено из образа — вдобавок к viewer
+kubectl create clusterrolebinding me-vinaire-lifecycle-admin \
+  --clusterrole=vinaire-lifecycle-admin --serviceaccount=vinaire:me
 
 # по желанию: установка из Marketplace / применение YAML — вдобавок к viewer
 kubectl create clusterrolebinding me-vinaire-installer \
@@ -298,7 +310,9 @@ kubectl create clusterrolebinding me-vinaire-admin \
 kubectl create token me -n vinaire --duration=1h      # вставьте это на экране входа
 ```
 
-Роли делают разное, и **`-admin` — это не администратор кластера**: он лишь позволяет менять
+Роли делают разное. `-reader` только смотрит; `-viewer` — рабочая роль (читает Secret, открывает терминал,
+перезапускает и удаляет — **не только чтение**); `-installer`, `-node-admin`, `-rbac-admin` и `-lifecycle-admin`
+добавляют к `-viewer` по одному виду действий; а **`-admin` — это не администратор кластера**: он лишь позволяет менять
 собственные настройки Vinaire (реестр кластеров, GitOps) и читать журнал аудита и не даёт
 никаких прав внутри Kubernetes, поэтому всегда выдаётся *вдобавок к* `-viewer`. `-installer`
 даёт create / update / delete на namespaced-виды, которые обычно содержат Helm-чарты; чарту,
@@ -383,6 +397,12 @@ kubectl create clusterrolebinding shiraku-admin --clusterrole=cluster-admin \
 в Vinaire. Если Keycloak недоступен, в кластере ничего не ломается — ждут только новые входы, а вставка токена работает.
 Группы Keycloak не переносятся (в токене ServiceAccount их нет) — по решению, а не по недосмотру: учёт групп заставил бы Vinaire выдавать права от своего имени (см. [docs/decisions.md](docs/decisions.md)). Привязывайте роли к каждому аккаунту или используйте https и собственный OIDC API-сервера, где группы работают штатно.
 
+Страница входа Keycloak может выглядеть как Vinaire: мастер предлагает тему входа (`vinaire`) — в Keycloak, который
+поставил сам Vinaire, она подключается автоматически, для другого её можно скачать zip-архивом или ConfigMap. Сессия
+продлевается, пока Keycloak подтверждает человека (учётные данные живут `sessionTokenTTL`, сессия — `sessionMaxTTL`), так
+что отключённый в Keycloak человек теряет доступ не позже чем через срок жизни одних учётных данных. Версия
+работающего Vinaire видна в меню пользователя и вверху Настроек.
+
 #### Мастер-ключ вне кластера
 
 По умолчанию ключ, которым запечатано хранилище Vinaire, лежит в Secret рядом с данными. Если у вас есть HashiCorp Vault
@@ -401,10 +421,12 @@ kubectl create clusterrolebinding shiraku-admin --clusterrole=cluster-admin \
 
 #### Обновление
 
-`helm upgrade --install` — одна и та же команда и для первой установки, и для каждого
-обновления. Чарт 0.2.0 поменял значения по умолчанию (входить как ServiceAccount с привязкой
-к `-viewer`, а не как собственный аккаунт Vinaire; `SameSite=Strict`); 0.3.0 добавляет Ingress,
-`values.schema.json`, роль `-installer` и примеры и ничего из существовавшего не меняет.
+`helm upgrade --install` — одна и та же команда и для первой установки, и для каждого обновления; что меняет каждый
+релиз — в [CHANGELOG.md](./CHANGELOG.md). `--reuse-values` сохраняет значения, которые вы задавали раньше, и работает между
+версиями: обновление *до* 1.3.1 и новее само добавляет то, чего нет у прежнего релиза (значение, появившееся позже), из
+значений чарта по умолчанию и никогда не заменяет заданное вами. Обновление до **1.3.0** с ним падало с
+`nil pointer evaluating interface {}.create` — для этого одного шага используйте `--reset-then-reuse-values` (или
+передайте файл значений через `-f`). CI проверяет релизы, обновляя прежние с `--reuse-values`.
 
 Все параметры — в `charts/vinaire/values.yaml`, прежде всего `authMode`, `ingress`, `cookie`,
 `networkPolicy` и `rbac.extraRules` для чтения CRD вашего кластера (Custom Resources; после
@@ -434,7 +456,7 @@ kubectl create clusterrolebinding shiraku-admin --clusterrole=cluster-admin \
 - **Vinaire — единая точка с доступом ко всем зарегистрированным в нём кластерам**: относитесь
   к нему как к бастиону и держите `CLUSTER_STORE_KEY` вне репозитория и образа.
 - Почти всё выполняется от имени вошедшего пользователя, поэтому решает RBAC самого кластера;
-  роли в чарте (`viewer`, `installer`, `node-admin`, `rbac-admin`, `admin`) создаются без
+  роли в чарте (`reader`, `viewer`, `installer`, `node-admin`, `rbac-admin`, `lifecycle-admin`, `admin`) создаются без
   привязок — привязывайте их осознанно.
 - Workflow `Security` (govulncheck, gosec, npm audit, gitleaks, Trivy, базовый прогон OWASP
   ZAP и браузерные проверки CSP) запускается на каждый pull request и раз в неделю.
@@ -446,9 +468,13 @@ kubectl create clusterrolebinding shiraku-admin --clusterrole=cluster-admin \
 ├── frontend/     приложение Next.js
 ├── backend/      Go HTTP-сервер + клиент Kubernetes
 ├── charts/       Helm-чарт для установки на настоящий кластер
+├── docs/         Безопасность (модель угроз, проверенные свойства, пакет для ревью), решения, выпуск релизов, список маршрутов
+├── keycloak/     Одноразовый dev-Keycloak и тема входа `vinaire` для страницы входа Keycloak
+├── scripts/      Подготовка и проверка релиза
+├── .github/      Workflow CI, безопасности и релиза, закреплённые версии устанавливаемых ими инструментов
 ├── package.json  Корневой оркестратор (`npm run dev` запускает всё сразу)
-├── AGENTS.md     Соглашения и архитектурные правила для ИИ-агентов
-├── ROADMAP.md    Поэтапный план (от MVP до записи через GitOps)
+├── AGENTS.md     Соглашения и архитектурные правила для ИИ-агентов (и правила для документации)
+├── ROADMAP.md    План по фазам: что сделано и от чего решено отказаться
 └── CHANGELOG.md
 ```
 

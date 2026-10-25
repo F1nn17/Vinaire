@@ -1222,18 +1222,34 @@ function KeycloakHelp() {
 
       <div className="rounded-md border border-warn/60 bg-surface-2 p-3 text-text-muted">
         <span className="font-semibold text-foreground">Важно понимать: </span>
-        вход через Keycloak — это только про то,{" "}
-        <span className="italic">как вы попадаете в Vinaire</span>. Токен,
-        которым Vinaire потом обращается к самому Kubernetes API — это тот же
-        самый OIDC id_token, что вы получили при входе. Значит API-сервер
-        подключаемого кластера должен сам доверять этому Keycloak (флаги вида{" "}
-        <span className="font-mono">--oidc-issuer-url</span> при запуске
-        kube-apiserver, или аналог у managed-провайдера). На обычном локальном
-        k3d/k3s из коробки такого доверия нет — вход через Keycloak пройдёт, а
-        обращения к кластеру будут падать с 401, пока API-сервер не настроен
-        отдельно. Это делает не Vinaire, а администратор кластера — после
-        настройки мастер показывает готовые флаги. Если это не ваш случай,
-        оставайтесь на токене.
+        вход через Keycloak — это про то,{" "}
+        <span className="italic">как вы попадаете в Vinaire</span>. А то, как
+        Vinaire потом обращается к самому Kubernetes, зависит от режима{" "}
+        <span className="font-mono">identityMode</span>, который выбирает
+        мастер:
+        <ul className="mt-1.5 list-disc pl-5">
+          <li>
+            <span className="font-mono">serviceaccount</span> — для Keycloak по
+            http (и по желанию по https). Vinaire сам проверяет вход, заводит
+            каждому человеку собственный ServiceAccount (в namespace{" "}
+            <span className="font-mono">&lt;релиз&gt;-vinaire-users</span>) и
+            выдаёт к нему короткий токен. API-серверу не нужно доверять
+            Keycloak. Новый аккаунт не имеет никаких прав: права выдаёте вы —
+            первому администратору командой kubectl (мастер её показывает),
+            остальным со страницы Access control. Сессия продлевается, пока
+            Keycloak подтверждает человека.
+          </li>
+          <li className="mt-1">
+            <span className="font-mono">apiserver</span> — по умолчанию для
+            Keycloak по https. В Kubernetes уходит тот же OIDC id_token, поэтому
+            API-сервер кластера должен сам доверять этому Keycloak (флаги вида{" "}
+            <span className="font-mono">--oidc-issuer-url</span> у
+            kube-apiserver, или аналог у managed-провайдера; мастер показывает
+            готовые). Без этого вход пройдёт, а обращения к кластеру будут
+            падать с 401. Настраивает это администратор кластера, а не Vinaire.
+          </li>
+        </ul>
+        Если это не ваш случай, оставайтесь на токене.
       </div>
 
       <div>
@@ -1284,11 +1300,22 @@ function KeycloakHelp() {
           </li>
         </ol>
         <div className="mt-1.5 text-xs text-text-faint">
-          Vinaire общается с Keycloak только по https: у установленного здесь
-          Keycloak должен быть адрес с https (вариант «без https» установит
-          Keycloak, но войти через него не даст). Выдать сертификат (например,
-          cert-manager) и сделать так, чтобы этот адрес открывался из пода
-          Vinaire — задача администратора кластера.
+          По умолчанию Vinaire общается с Keycloak только по https: у
+          установленного здесь Keycloak должен быть адрес с https (вариант «без
+          https» установит Keycloak, но войти через него не даст). Выдать
+          сертификат (например, cert-manager) и сделать так, чтобы этот адрес
+          открывался из пода Vinaire — задача администратора кластера. Для
+          домашнего сервера без сертификата оператор может разрешить http,
+          только в частной сети: значение чарта{" "}
+          <span className="font-mono">keycloak.allowHttpPrivateNetwork</span>{" "}
+          (см. README, раздел про домашний сервер без HTTPS).
+        </div>
+        <div className="mt-1.5 text-xs text-text-faint">
+          Страница входа Keycloak может выглядеть как Vinaire: в мастере галочка
+          «Показывать страницу входа Keycloak в оформлении Vinaire». В Keycloak,
+          который поставил сам Vinaire, тема подключается автоматически; для
+          другого Keycloak скачайте её там же (zip или ConfigMap) и запустите
+          настройку ещё раз.
         </div>
       </div>
 

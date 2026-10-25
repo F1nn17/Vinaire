@@ -501,6 +501,41 @@ records what was verified and how.
   text gets a `Fuzz*` test stating what it must never accept.
 - **Add a test that fails if the property is lost**, and run `govulncheck`, `gosec -severity medium
   -confidence medium` and `npm audit` (the `Security` workflow does).
+- **Documentation is part of the phase** — see "Documentation in every phase" below: update what the phase changes, and check it.
+
+## Documentation in every phase
+
+A phase is not finished until what it changed is written down where a person will look — in the **same branch**, not
+"later". The audit of 2026-10-24 found the README still describing three roles when there were seven, the in-app help
+telling people the API server must trust Keycloak (untrue since the ServiceAccount mode), a "no unit tests yet" line
+in this file and numbers (fuzz targets, gated handlers) that had long been wrong: each was true when written and was not
+revisited when the code moved. So, in every phase:
+
+1. **Decide what changed for a reader** and update each place that says it — only those the phase touches, but all of them:
+   - `README.md` **and** `README.ru.md` — install, upgrade, roles, sign-in, anything an operator types;
+   - `docs/security.md` + `security.ru.md` — a new verified property (with the test that keeps it true) or a residual risk,
+     including a gap you knowingly leave; `docs/threat-model.md` — a new threat and its control;
+     `docs/security-review.md` + `.ru.md` — a new critical path, a new automatic check;
+   - the in-app help (`frontend/src/app/(shell)/settings/HelpGuides.tsx`, `settings/page.tsx`): the Russian text **and** its
+     English entry in `lib/i18n/dict/en.json` (`npm run check:i18n` fails without it);
+   - `charts/vinaire/values.yaml` comments (and its copy `files/defaults.yaml`), `charts/vinaire/examples/`;
+   - `docs/decisions.md` — a decision of the owner and why; `docs/releasing.md` + `.ru.md` — anything about making a release;
+   - `CHANGELOG.md` `[Unreleased]` — everything a user or operator can notice; `ROADMAP.md` — the phase's "done" note, with
+     what was **not** verified and any decision left to the owner; this file — a new rule, a new write path.
+   If nothing needs updating, say so in the phase's closing note ("docs: unchanged, because …"). Silence is how drift starts.
+2. **Check what you wrote, don't trust it.**
+   - Run the mechanical checks: `go test . -run TestDocs` in `backend/` (every link resolves, every chart value and environment
+     variable the docs name exists), `npm run check:i18n`, `npm run check:keycloak-theme`, and `UPDATE_ROUTES=1 go test . -run
+     TestRouteInventory` when routes changed.
+   - Then **read** the docs the phase touched against the code: each command copy-pasted from the README must be a real
+     command, each value a real key, each default the real default. Run the command when it is cheap to (a `helm template`, a
+     `kubectl create …` in a scratch cluster).
+   - Don't write a number a test could change (how many fuzz targets, handlers, routes) unless you just counted it; prefer
+     wording without one. When a claim can't be checked in this session, say "not verified" in the doc, not nothing.
+3. **Keep the mirrors together.** Every Russian/English pair (`README`, `security`, `security-review`, `releasing`) changes in
+   the same commit; a translation that lags is a discrepancy.
+4. **A docs audit before every release:** read the README's quick start and upgrade notes against the chart that is about to
+   be released, and re-run the mechanical checks (docs/releasing.md).
 
 ## Security checks (Phase 54, light) — read-only
 
@@ -960,10 +995,12 @@ resource name it doesn't know at build time — these pages instead read
 │                           (Phase 21) — Deployment/Service/ServiceAccount/
 │                           ClusterRole templates for the same combined
 │                           image as the repo-root Dockerfile
+├── docs/                   Security (properties, threat model, review package), decisions, releasing, the route list
+├── scripts/                Release preparation and verification
 ├── package.json            Root orchestrator only (`npm run dev` = both apps)
-├── ROADMAP.md              Staged plan
+├── ROADMAP.md              The phase plan: what is done, what was decided against
 ├── CHANGELOG.md            Keep a Changelog format
-└── .github/workflows/      CI
+└── .github/                CI/Security/Release workflows, scripts, and tool-versions.env (every tool CI installs, pinned)
 ```
 
 ## Conventions
@@ -1040,9 +1077,9 @@ npm run format:check
 npm run build
 ```
 
-There's no unit test suite yet (see ROADMAP.md — this is pre-MVP) — but
-Roadmap Phase 23 added a real integration/e2e suite, run against an actual
-disposable cluster rather than mocked client-go:
+`go test ./...` in `backend/` runs the unit tests, the route and codebase rule tests, the documentation checks (`TestDocs…`) and the seeds
+of every fuzz target; the fuzz targets themselves run in the `Security` workflow. Roadmap Phase 23 added a real integration/e2e suite, run against an
+actual disposable cluster rather than mocked client-go:
 
 ```bash
 # Backend integration tests (needs a real cluster + a running backend —
@@ -1061,9 +1098,8 @@ Both are excluded from the fast `go build`/`go vet`/`npm run build` path
 above (the integration tests sit behind a `go:build integration` tag; the
 e2e test skips itself when `E2E_TOKEN` is unset) and only run in CI on
 pull requests into main, not every push — they need a real k3d cluster,
-which is noticeably slower than the lint/build jobs. When adding the first
-unit test, add it alongside its own feature rather than retrofitting
-later.
+which is noticeably slower than the lint/build jobs. A test goes in the phase
+that adds the feature, not later.
 
 ## Git module path
 
