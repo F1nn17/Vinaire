@@ -52,6 +52,9 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// requestIsHTTPS decides only whether the response carries Strict-Transport-Security, which a browser ignores over plain
+// http — so, unlike a credential (internal/trustedproxy), it does no harm for a forged X-Forwarded-Proto to be believed here,
+// and leaving it as it is keeps HSTS on behind a proxy that has not been listed.
 func requestIsHTTPS(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }

@@ -135,6 +135,12 @@
       "description": "A Go duration, e.g. 12h or 90m."
     },
     "trustForwardedFor": { "type": "boolean" },
+    "trustedProxies": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "maxItems": 64,
+      "description": "Reverse proxies (addresses or CIDRs) whose X-Forwarded-Proto: https is believed. Empty: nobody."
+    },
     "ingress": {
       "type": "object",
       "properties": {

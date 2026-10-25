@@ -5,6 +5,7 @@ import (
 
 	"github.com/f1nn17/vinaire/backend/internal/config"
 	"github.com/f1nn17/vinaire/backend/internal/securitychecks"
+	"github.com/f1nn17/vinaire/backend/internal/trustedproxy"
 )
 
 // devOptOuts are the switches that turn a safety check off for local development; none is meant for a real
@@ -19,12 +20,13 @@ var devOptOuts = []string{
 // installationFacts is what Vinaire says about its own installation (Roadmap Phase 86). The Helm chart sets
 // INSTALL_AUDIT_PERSISTENT and INSTALL_NETWORK_POLICY ("true"/"false") — pure information for the checks, not
 // settings: without them the two facts they carry are "not known".
-func installationFacts(cfg config.Config) *securitychecks.Installation {
+func installationFacts(cfg config.Config, proxies trustedproxy.Set) *securitychecks.Installation {
 	inst := &securitychecks.Installation{
 		AuthMode:            cfg.AuthMode,
 		CookieSecure:        cfg.CookieSecure,
 		SessionStore:        cfg.SessionStore,
 		HTTPKeycloakAllowed: os.Getenv("OIDC_ALLOW_HTTP_PRIVATE_NETWORK") == "true",
+		BroadTrustedProxies: proxies.Broad(),
 	}
 	for _, name := range devOptOuts {
 		if os.Getenv(name) == "true" {

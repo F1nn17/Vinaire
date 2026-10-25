@@ -79,3 +79,15 @@ func TestAnInstallationWithSignInOffDoesNotAlsoNagAboutItsCookieAndSessions(t *t
 		t.Errorf("%+v", r)
 	}
 }
+
+func TestAWideTrustedProxyRangeIsReported(t *testing.T) {
+	good := Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", Chart: true, AuditOnVolume: true, NetworkPolicy: true}
+	if r := find(RunAll(instSnap(&good)), "inst-proxies-broad"); r.Status != Pass {
+		t.Fatalf("a narrow or empty list must pass: %+v", r)
+	}
+	wide := good
+	wide.BroadTrustedProxies = []string{"10.0.0.0/8", "172.16.0.0/12"}
+	if r := find(RunAll(instSnap(&wide)), "inst-proxies-broad"); r.Status != Fail || r.Total != 2 || r.Findings[0].Detail == "" {
+		t.Fatalf("%+v", r)
+	}
+}

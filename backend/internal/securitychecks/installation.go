@@ -19,6 +19,8 @@ type Installation struct {
 	HTTPKeycloakAllowed bool     // OIDC_ALLOW_HTTP_PRIVATE_NETWORK
 	DevOptOuts          []string // names of the development-only switches that are on
 	StoreUnencrypted    bool     // the cluster registry is kept unencrypted
+	// BroadTrustedProxies: entries of trustedProxies wider than one small subnet (Roadmap Phase 96)
+	BroadTrustedProxies []string
 }
 
 func installationCheck(test func(i *Installation) (detail string, flagged bool)) func(*Snapshot) []Finding {
@@ -71,6 +73,23 @@ func init() {
 			Run: installationCheck(func(i *Installation) (string, bool) {
 				return "the registry's Secret is not encrypted", i.StoreUnencrypted
 			}),
+		},
+		Check{
+			ID: "inst-proxies-broad", Category: "This installation", Severity: Medium,
+			Title:       "A wide range of addresses is trusted as a reverse proxy",
+			Description: "Vinaire believes X-Forwarded-Proto: https from every address in trustedProxies. If that covers more than your proxy — a whole pod network, a private /16 — any pod or machine in it can claim https and have a password, a token or an SSH key accepted over plain http.",
+			Remediation: "List only the address your reverse proxy connects from (a /32 or /128, or a small subnet nobody else is in) under trustedProxies in the chart's values; check which address Vinaire sees with the message Vinaire gives when it refuses a credential.",
+			Needs:       []string{"installation"},
+			Run: func(s *Snapshot) []Finding {
+				if s.Installation == nil {
+					return nil
+				}
+				var out []Finding
+				for _, p := range s.Installation.BroadTrustedProxies {
+					out = append(out, Finding{Kind: "Installation", Name: "vinaire", Detail: p})
+				}
+				return out
+			},
 		},
 		Check{
 			ID: "inst-cookie-insecure", Category: "This installation", Severity: Medium,

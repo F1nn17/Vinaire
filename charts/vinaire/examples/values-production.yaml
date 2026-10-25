@@ -36,6 +36,11 @@ cookie:
 # The ingress controller sets X-Forwarded-For, so the login throttle sees the real client.
 trustForwardedFor: true
 
+# TLS ends at the ingress controller, so name it: the address it connects to Vinaire from (the refusal Vinaire gives when
+# a password is sent without this names the address it saw). Not the pod network, not a private /16.
+# trustedProxies:
+#   - <ingress controller address>/32
+
 ingress:
   enabled: true
   className: <nginx|traefik|...>

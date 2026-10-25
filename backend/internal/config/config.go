@@ -133,6 +133,9 @@ type Config struct {
 	// first X-Forwarded-For address instead of the connection's peer. Set it only
 	// behind a proxy you control that sets the header.
 	TrustForwardedFor bool
+	// TrustedProxies (TRUSTED_PROXIES, addresses or CIDRs separated by commas): the reverse proxies whose
+	// X-Forwarded-Proto: https is believed (Roadmap Phase 96). Empty: nobody — only Vinaire's own TLS counts.
+	TrustedProxies string
 
 	// DiscoveryKubeconfigPaths (DISCOVERY_KUBECONFIG_PATHS, comma-separated)
 	// are extra kubeconfig files local discovery should look at, besides
@@ -217,6 +220,7 @@ func Load() Config {
 		SessionTokenTTL:          parseDuration(os.Getenv("SESSION_TOKEN_TTL")),
 		SessionStore:             getEnv("SESSION_STORE", "memory"),
 		TrustForwardedFor:        os.Getenv("TRUST_FORWARDED_FOR") == "true",
+		TrustedProxies:           os.Getenv("TRUSTED_PROXIES"),
 		DiscoveryKubeconfigPaths: splitCSV(os.Getenv(envDiscoveryPaths)),
 	}
 }

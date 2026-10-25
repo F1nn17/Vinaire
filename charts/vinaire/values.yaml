@@ -177,6 +177,16 @@ sessionTokenTTL: 30m
 # login throttle then counts the real client address instead of the proxy's.
 trustForwardedFor: false
 
+# The reverse proxies whose "X-Forwarded-Proto: https" Vinaire believes (Roadmap Phase 96): addresses or CIDRs, the
+# address the proxy connects to Vinaire FROM — not its public name. Empty (the default) believes nobody: then only a TLS
+# connection to Vinaire itself counts as https, and a password, a token or an SSH key sent through a proxy that ends
+# TLS is refused ("may only be sent over HTTPS") — the refusal names the address Vinaire saw, which is what to list here.
+# List the proxy's own address (a /32, or a small subnet nobody else is in), not a whole pod or private network: any
+# address in the list can claim https, and the proxy must overwrite the header, not pass the client's through.
+#   trustedProxies:
+#     - 10.42.0.15/32
+trustedProxies: []
+
 # Optional, independent proxies to an already-running observability
 # stack (Vinaire never installs or evaluates these itself) — see
 # Settings -> Справка -> "Метрики, логи, алерты" for what each one

@@ -83,6 +83,16 @@ deliberate "no", not a missing feature, and it stays a no unless the owner decid
 (an explicit allow-list of group → role pairs in the operator's configuration, never in a request; roles limited to the chart's
 own; every grant audited; removal on leaving the group) and a new entry in AGENTS.md's list of what may write.
 
+## Trusted proxies: nobody by default (decided 2026-10-25, Roadmap Phase 96)
+
+- Vinaire believes `X-Forwarded-Proto: https` only from an address listed in `trustedProxies` (`TRUSTED_PROXIES`), and the list is
+  **empty by default**. Not the private ranges: in a cluster they cover every pod, and any of them could forge the header and have
+  a password or a token accepted over plain http. The price is that someone behind a TLS-ending proxy must name it once; the
+  refusal says which address Vinaire saw, and the chart's NOTES, the README and Settings → Security say the rest.
+- Entries are addresses or CIDRs; `0.0.0.0/0` and `::/0` are refused at start, ranges wider than a /24 (IPv4) or /64 (IPv6) are
+  logged and reported by the "This installation" checks. An empty list is a safe state, not a finding.
+- Only credentials use it. HSTS is still sent on the header alone (a browser ignores it over http).
+
 ## Working with agents
 
 - Work through phases one after another in a session until the context fills, then continue in a new one. Each phase ends with a commit, a CHANGELOG.md entry and a short summary (done / checked / left).

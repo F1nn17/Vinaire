@@ -36,6 +36,12 @@ Vinaire {{ .Chart.AppVersion }} (chart {{ .Chart.Version }}) is installing.
    !! after entering a token. Either serve it over HTTPS (ingress.tls), or — for a
    !! local trial only — install with --set cookie.secure=false.
 {{- end }}
+{{- if and .Values.ingress.enabled .Values.ingress.tls (not .Values.trustedProxies) }}
+
+   !! The ingress ends TLS, so Vinaire sees plain HTTP from it. Until you name the ingress controller under
+   !! trustedProxies, Vinaire refuses a password, a token or an SSH key it is sent ("may only be sent over HTTPS");
+   !! the refusal says which address to list. Not needed for signing in with a pasted token.
+{{- end }}
 {{- if not .Values.cookie.secure }}
 
    !! cookie.secure is false: the session cookie also travels over plain HTTP.

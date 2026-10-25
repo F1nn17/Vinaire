@@ -141,6 +141,10 @@ spec:
             - name: TRUST_FORWARDED_FOR
               value: "true"
             {{- end }}
+            {{- if .Values.trustedProxies }}
+            - name: TRUSTED_PROXIES
+              value: {{ join "," .Values.trustedProxies | quote }}
+            {{- end }}
             {{- if .Values.keycloak.serviceAccountSignIn.enabled }}
             - name: OIDC_USER_NAMESPACE
               value: {{ include "vinaire.userNamespace" . | quote }}
