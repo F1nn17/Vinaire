@@ -236,6 +236,17 @@ jobs:
           k3d cluster create vinaire-e2e --agents 0 --wait --timeout 180s
           k3d image import vinaire:ci -c vinaire-e2e
 
+      - name: Wait until the cluster's API answers discovery (aggregated APIs included)
+        run: |
+          # k3d's --wait only waits for the node; Helm and kubectl list EVERY API group first, and while an aggregated
+          # API (metrics-server) is still starting that call fails with "the server is currently unable to handle the request".
+          for i in $(seq 1 60); do
+            if kubectl api-resources > /dev/null 2>&1; then exit 0; fi
+            sleep 3
+          done
+          kubectl get apiservices | grep -v True || true
+          echo "::error::the cluster's API never became fully available"; exit 1
+
       - name: Start Keycloak on the cluster network's gateway address
         run: |
           gw=$(docker network inspect k3d-vinaire-e2e -f '{{(index .IPAM.Config 0).Gateway}}')
@@ -368,6 +379,17 @@ jobs:
 
       - name: Create a cluster
         run: k3d cluster create vinaire-upgrade --agents 0 --no-lb --wait --timeout 180s
+
+      - name: Wait until the cluster's API answers discovery (aggregated APIs included)
+        run: |
+          # k3d's --wait only waits for the node; Helm and kubectl list EVERY API group first, and while an aggregated
+          # API (metrics-server) is still starting that call fails with "the server is currently unable to handle the request".
+          for i in $(seq 1 60); do
+            if kubectl api-resources > /dev/null 2>&1; then exit 0; fi
+            sleep 3
+          done
+          kubectl get apiservices | grep -v True || true
+          echo "::error::the cluster's API never became fully available"; exit 1
 
       - name: Upgrade each earlier release to this checkout
         run: |
