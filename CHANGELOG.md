@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The Ingress page shows what the Ingress does (Roadmap Phase 89).** Opening an Ingress from Routing used to show only its kind, namespace and labels. It now shows the class and the address the controller gave it, a table of routes (host, path and its type, the Service and port it goes to — a link to that Service — and whether the host is served over HTTPS), the TLS block (hosts and the Secret, a link to it) or a plain "no TLS" with what to add, the default backend and the annotations. Each host and backend has a Copy button, a host has an Open link, and "Edit (YAML)" opens the YAML tab, whose apply is the generic one — no new way to write. It reads only what the page already read, as you.
+
 ## [1.3.1] - 2026-10-25
 
 ### Documentation

@@ -1077,7 +1077,8 @@ npm run format:check
 npm run build
 ```
 
-`go test ./...` in `backend/` runs the unit tests, the route and codebase rule tests, the documentation checks (`TestDocs…`) and the seeds
+`npm run test:unit` in `frontend/` runs the unit tests of the pure logic in `src/lib/*.test.ts` (Node's own test runner with type stripping; keep such logic free of
+the `@/` alias and of React so it can be tested). `go test ./...` in `backend/` runs the unit tests, the route and codebase rule tests, the documentation checks (`TestDocs…`) and the seeds
 of every fuzz target; the fuzz targets themselves run in the `Security` workflow. Roadmap Phase 23 added a real integration/e2e suite, run against an
 actual disposable cluster rather than mocked client-go:
 
