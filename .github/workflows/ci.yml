@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install k3d
-        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+        run: .github/scripts/install-tools.sh k3d
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
@@ -223,7 +223,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install k3d
-        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+        run: .github/scripts/install-tools.sh k3d
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
@@ -375,7 +375,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install k3d
-        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+        run: .github/scripts/install-tools.sh k3d
 
       - name: Create a cluster
         run: k3d cluster create vinaire-upgrade --agents 0 --no-lb --wait --timeout 180s

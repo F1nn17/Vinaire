@@ -207,3 +207,58 @@ func TestEveryChartTemplateFillsInTheDefaultsFirst(t *testing.T) {
 		}
 	}
 }
+
+// Roadmap Phase 97: CI runs only what was reviewed. A workflow must not pipe a download into a shell, fetch an
+// install script from a moving branch, or install a tool at "latest" — versions (and, for downloaded binaries, sha256)
+// live in .github/tool-versions.env and are installed by .github/scripts/install-tools.sh.
+func TestWorkflowsInstallNothingUnpinned(t *testing.T) {
+	files, err := filepath.Glob("../.github/workflows/*.yml")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no workflows found: %v", err)
+	}
+	banned := []struct {
+		re  *regexp.Regexp
+		why string
+	}{
+		{regexp.MustCompile(`\|\s*(sudo\s+)?(ba)?sh\b`), "pipes a download into a shell"},
+		{regexp.MustCompile(`@latest\b`), "installs a tool at @latest"},
+		{regexp.MustCompile(`raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(main|master|HEAD)/`), "fetches a file from a moving branch"},
+		{regexp.MustCompile(`get-helm-3`), "uses the unpinned Helm install script"},
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(strings.ReplaceAll(string(b), "\r\n", "\n"), "\n") {
+			code := strings.TrimSpace(line)
+			if strings.HasPrefix(code, "#") {
+				continue
+			}
+			for _, r := range banned {
+				if r.re.MatchString(line) {
+					t.Errorf("%s:%d %s: %s", filepath.Base(f), i+1, r.why, code)
+				}
+			}
+		}
+	}
+}
+
+// The versions the installer script reads must all be there, and a downloaded binary must have its hash.
+func TestToolVersionsFileHasWhatTheInstallerNeeds(t *testing.T) {
+	b, err := os.ReadFile("../.github/tool-versions.env")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.ReplaceAll(string(b), "\r\n", "\n")
+	for _, key := range []string{"K3D_VERSION", "HELM_VERSION", "GOVULNCHECK_VERSION", "GOSEC_VERSION"} {
+		if !regexp.MustCompile(`(?m)^` + key + `=[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(text) {
+			t.Errorf("%s is missing or isn't a plain version", key)
+		}
+	}
+	for _, key := range []string{"K3D_SHA256_LINUX_AMD64", "HELM_SHA256_LINUX_AMD64"} {
+		if !regexp.MustCompile(`(?m)^` + key + `=[0-9a-f]{64}$`).MatchString(text) {
+			t.Errorf("%s is missing or isn't a sha256", key)
+		}
+	}
+}

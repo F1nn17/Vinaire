@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **CI installs only pinned tools (Roadmap Phase 97).** k3d and Helm were installed by scripts fetched from a moving branch, and `govulncheck` and `gosec` at `@latest`. Now `.github/tool-versions.env` fixes every version, k3d and Helm are downloaded as release binaries and checked against the sha256 written there (`.github/scripts/install-tools.sh`; a mismatch refuses to install), the Go scanners are installed at a fixed version, and a test (`TestWorkflowsInstallNothingUnpinned`) fails the build if a workflow pipes a download into a shell, fetches from a branch or uses `@latest`.
+
 ### Fixed
 
 - **"PVC near capacity" on the Overview shows real data (Roadmap Phase 90).** The card was a stub that said "Not available yet" whatever the cluster held. It now reads how full the volume claims are from the cluster's Prometheus (the kubelet's `kubelet_volume_stats_*`, as you) and says which of three things is true: some claims are at or above 80% (counted, fullest first), none is ("N of M measured, all below 80%"), or nobody can tell — with the reason (no Prometheus, Prometheus didn't answer, or the kubelet reports no usage for those volumes, which it doesn't for some storage such as k3s's local-path). It never shows a made-up zero.
