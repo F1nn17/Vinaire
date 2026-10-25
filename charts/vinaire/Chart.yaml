@@ -5,8 +5,8 @@ description: >-
   explicit, and always-audited set of write actions (see the project's
   AGENTS.md for the exact list).
 type: application
-version: 1.3.0
-appVersion: "1.3.0"
+version: 1.3.1
+appVersion: "1.3.1"
 home: https://github.com/F1nn17/Vinaire
 sources:
   - https://github.com/F1nn17/Vinaire

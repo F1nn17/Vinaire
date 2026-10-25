@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-25
+
 ### Documentation
 
 - **The documentation was audited against the code, and is now checked.** The README (and its Russian twin) described three roles when the chart ships seven, listed an upgrade note from 0.3.0, and said nothing of the login theme, session renewal or the version display; the in-app help said the API server must always trust Keycloak (not so in the ServiceAccount mode) and that Vinaire talks to Keycloak over https only; `docs/security.md` had stale counts and no row for the installation checks; the threat model, the review package, the gap analysis and the releasing notes lagged the same way. All corrected, with the two known gaps (`X-Forwarded-Proto`, renewal with several replicas) now stated as residual risks. Three new tests fail the build when a link goes nowhere, when the docs name a chart value that `values.yaml` lacks, or an environment variable nothing reads; and `AGENTS.md` now says every phase updates and checks its documentation.
@@ -21,9 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A Keycloak session survives a slow Keycloak, and no longer loses its refresh token (Roadmap Phase 94).** Two defects in the renewal of 1.3.0: (1) one 15-second deadline covered both the call to Keycloak and the minting of the new Kubernetes credential, so a Keycloak that never answered used up the time the second call needed and a person was signed out although the one-hour grace period had barely begun; each call has its own deadline now, and a renewal no longer dies with the request that happened to start it. (2) Keycloak rotates the refresh token on every use, but when the Kubernetes credential could not be minted the new token was dropped along with the unsaved session, and the next renewal presented the spent one — `invalid_grant`, session over; the rotated token is now always saved.
 - **A background job's owner no longer depends on the display name (Roadmap Phase 93).** Who may watch an install or a node-provisioning job was decided by `user:<preferred_username>`, so two people with the same name in different realms (or one person after a rename) got the same key, although the identity everywhere else has been issuer + subject since 1.2.3. The key is now a hash of issuer and subject (a pasted token: a hash of the token); the session-revoke audit line carries the person's name separately. A job still running when Vinaire is updated is no longer shown to its author — start it again.
 - **`helm upgrade --reuse-values` no longer fails after a release that lacks a newer value (Roadmap Phase 92).** Upgrading 1.2.3 to 1.3.0 stopped with `nil pointer evaluating interface {}.create`: `--reuse-values` replaces the new chart's defaults with the old release's values, so a key added since (`rbac.reader.create`) was missing and the template read it. Every template now first fills in, in place, only the keys that are **absent** with the chart's defaults (`files/defaults.yaml`, an exact copy of `values.yaml` that a test keeps in step); a value you set — `false`, `0` or empty included — is never replaced, and a fresh install renders exactly as before (checked: identical output). CI has a new job that installs the oldest and the latest earlier release from their tags and upgrades each to the checkout with `--reuse-values`.
+
 ### Added
 
 - **The version of Vinaire is shown (Roadmap Phase 88).** The user menu (the round button in the top bar) and the Settings header say which release is running ("Vinaire 1.3.0"). The chart sets `VINAIRE_VERSION` to the image tag; without it (a run from source) it says "dev". It comes with the existing `GET /api/v1/auth/me`, so there is no new route and the version is not shown before sign-in.
+
 ## [1.3.0] - 2026-10-24
 
 ### Fixed
