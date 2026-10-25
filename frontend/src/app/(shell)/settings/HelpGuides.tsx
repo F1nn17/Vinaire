@@ -241,8 +241,12 @@ export function RolesHelp() {
         <div className="overflow-hidden rounded-md border border-border">
           {[
             [
+              "<имя>-reader",
+              "Только смотреть: все страницы, которые лишь читают, и логи подов. Без Secret, без терминала, без проброса порта и без каких-либо изменений. Подходит, чтобы показать кластер, не рискуя им.",
+            ],
+            [
               "<имя>-viewer",
-              "Просмотр всего, что показывает Vinaire, плюс набор фиксированных действий: перезапуск, масштабирование, пауза, откат, удаление пода и деплоймента, логи, терминал, проброс порта.",
+              "Рабочая роль. Просмотр всего, что показывает Vinaire, плюс набор фиксированных действий: перезапуск, масштабирование, пауза, откат, удаление пода и деплоймента, логи, терминал, проброс порта. НЕ только чтение: читает Secret и открывает терминал в любом поде.",
             ],
             [
               "<имя>-installer",
@@ -255,6 +259,10 @@ export function RolesHelp() {
             [
               "<имя>-rbac-admin",
               "Управление доступом: создать и удалить RoleBinding и ClusterRoleBinding, спросить «что может X». Роли не создаются — выдаются только существующие; Kubernetes не даст выдать то, чего нет у вас самих (кроме ролей этого чарта — на них есть право bind). Работает вместе с viewer.",
+            ],
+            [
+              "<имя>-lifecycle-admin",
+              "Резервные копии, восстановление и обновление версии того, что поставлено из образа (страница Instances): дампы и снимки, расписание, восстановление в новый экземпляр. Работает вместе с viewer.",
             ],
             [
               "<имя>-admin",
@@ -284,7 +292,9 @@ export function RolesHelp() {
         <Code>{`# 1. ServiceAccount для вашего входа
 kubectl create serviceaccount me -n vinaire
 
-# 2. Просмотр и действия
+# 2. Только смотреть (reader) — ИЛИ работать в полную силу (viewer)
+kubectl create clusterrolebinding me-vinaire-reader \\
+  --clusterrole=vinaire-reader --serviceaccount=vinaire:me
 kubectl create clusterrolebinding me-vinaire-viewer \\
   --clusterrole=vinaire-viewer --serviceaccount=vinaire:me
 
@@ -296,7 +306,11 @@ kubectl create clusterrolebinding me-vinaire-installer \\
 kubectl create clusterrolebinding me-vinaire-node-admin \\
   --clusterrole=vinaire-node-admin --serviceaccount=vinaire:me
 
-# 5. Настройки самого Vinaire — кластеры, GitOps (по желанию)
+# 5. Резервные копии и обновление версии поставленного из образа (по желанию)
+kubectl create clusterrolebinding me-vinaire-lifecycle-admin \\
+  --clusterrole=vinaire-lifecycle-admin --serviceaccount=vinaire:me
+
+# 5b. Настройки самого Vinaire — кластеры, GitOps (по желанию)
 kubectl create clusterrolebinding me-vinaire-admin \\
   --clusterrole=vinaire-admin --serviceaccount=vinaire:me
 
@@ -320,7 +334,8 @@ kubectl auth can-i create networkpolicies.networking.k8s.io \\
         <H>Что нужно для чего</H>
         <div className="overflow-hidden rounded-md border border-border">
           {[
-            ["Смотреть ресурсы, логи", "viewer"],
+            ["Только смотреть, ничего не меняя", "reader"],
+            ["Смотреть ресурсы, логи", "reader или viewer"],
             ["Перезапуск, масштабирование, откат", "viewer"],
             ["Терминал, проброс порта", "viewer (pods/exec, pods/portforward)"],
             [
@@ -329,6 +344,11 @@ kubectl auth can-i create networkpolicies.networking.k8s.io \\
             ],
             ["Установить приложение из Marketplace", "viewer + installer"],
             ["Добавить кластер, настроить GitOps", "viewer + admin"],
+            [
+              "Резервная копия, восстановление, обновление версии экземпляра",
+              "viewer + lifecycle-admin",
+            ],
+            ["Выдать права другим (привязки ролей)", "viewer + rbac-admin"],
             ["Добавить ноду по SSH", "право create на nodes"],
             [
               "Cordon, drain, метки и taints, удалить ноду",

@@ -37,6 +37,16 @@ Why one workflow instead of "tag, and a tag starts the release": a tag created b
 `GITHUB_TOKEN` does **not** start other workflows. Creating the tag in the release workflow itself needs no
 extra token or GitHub App. Pushing a `v*` tag by hand still works and does the same.
 
+## What guards the version
+
+- **The chart's defaults and `--reuse-values`.** Helm replaces the new chart's defaults with the old release's values when an
+  upgrade uses `--reuse-values`, so every template first fills in the keys that are *absent* from the release's values
+  (`vinaire.defaults`, from `charts/vinaire/files/defaults.yaml`). That file is an exact copy of `values.yaml`: **when you change
+  `values.yaml`, copy it** (`cp charts/vinaire/values.yaml charts/vinaire/files/defaults.yaml`); a test fails if they differ.
+  The `chart-upgrade` job of CI installs the oldest and the latest earlier release and upgrades each with `--reuse-values`.
+- **The tools CI installs** (k3d, Helm, govulncheck, gosec) are pinned in `.github/tool-versions.env`, k3d and Helm with the
+  sha256 of the binary; to update one, change the version (and the hash) there — see the file's header.
+
 ## Checking a release
 
 ```bash

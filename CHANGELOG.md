@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **The documentation was audited against the code, and is now checked.** The README (and its Russian twin) described three roles when the chart ships seven, listed an upgrade note from 0.3.0, and said nothing of the login theme, session renewal or the version display; the in-app help said the API server must always trust Keycloak (not so in the ServiceAccount mode) and that Vinaire talks to Keycloak over https only; `docs/security.md` had stale counts and no row for the installation checks; the threat model, the review package, the gap analysis and the releasing notes lagged the same way. All corrected, with the two known gaps (`X-Forwarded-Proto`, renewal with several replicas) now stated as residual risks. Three new tests fail the build when a link goes nowhere, when the docs name a chart value that `values.yaml` lacks, or an environment variable nothing reads; and `AGENTS.md` now says every phase updates and checks its documentation.
+
 ### Security
 
 - **CI installs only pinned tools (Roadmap Phase 97).** k3d and Helm were installed by scripts fetched from a moving branch, and `govulncheck` and `gosec` at `@latest`. Now `.github/tool-versions.env` fixes every version, k3d and Helm are downloaded as release binaries and checked against the sha256 written there (`.github/scripts/install-tools.sh`; a mismatch refuses to install), the Go scanners are installed at a fixed version, and a test (`TestWorkflowsInstallNothingUnpinned`) fails the build if a workflow pipes a download into a shell, fetches from a branch or uses `@latest`.
