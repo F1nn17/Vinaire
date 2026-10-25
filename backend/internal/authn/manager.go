@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"golang.org/x/sync/singleflight"
 	"time"
 )
 
@@ -54,6 +56,7 @@ const defaultTokenSessionTTL = time.Hour
 type Manager struct {
 	Mode           Mode
 	Sessions       Store
+	renewals       singleflight.Group // one renewal of a session at a time in this process (renew.go)
 	CookieSecure   bool
 	CookieSameSite http.SameSite
 	FrontendURL    string

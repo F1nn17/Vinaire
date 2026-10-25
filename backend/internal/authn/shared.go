@@ -31,6 +31,11 @@ type KV interface {
 	// Put and Remove touch exactly one key.
 	Put(ctx context.Context, key string, sealed []byte) error
 	Remove(ctx context.Context, key string) error
+	// Claim takes the lease named key for holder until ttl has passed, and says whether it is held now: false when someone
+	// else's unexpired lease is there. It is atomic (a version check on the Secret), which Put is not. Release gives it
+	// back, only if holder still holds it. (Roadmap Phase 95)
+	Claim(ctx context.Context, key, holder string, ttl time.Duration) (bool, error)
+	Release(ctx context.Context, key, holder string) error
 }
 
 // ErrStoreUnavailable is returned when the shared store can't be written to.
@@ -63,6 +68,7 @@ type storedSession struct {
 type SharedStore struct {
 	kv     KV
 	sealer Sealer
+	holder string // this process, for the renewal leases
 
 	mu       sync.Mutex
 	snap     map[string]*Session // by key
@@ -73,7 +79,7 @@ type SharedStore struct {
 
 // NewSharedStore builds the store; call StartJanitor to let it tidy up.
 func NewSharedStore(kv KV, sealer Sealer) *SharedStore {
-	return &SharedStore{kv: kv, sealer: sealer, snap: map[string]*Session{}}
+	return &SharedStore{kv: kv, sealer: sealer, snap: map[string]*Session{}, holder: NewSessionID()[:16]}
 }
 
 func storeKey(id string) string {
@@ -338,4 +344,35 @@ func (s *SharedStore) StartJanitor(ctx context.Context) {
 			cancel()
 		}
 	}()
+}
+
+// A renewal of one session must not run on two replicas at once (Roadmap Phase 95): the identity provider rotates the
+// refresh token on every use and treats a second use of the spent one as theft — it can end the person's session at the
+// provider itself. Inside one process a singleflight prevents it; between replicas this lease does. It is a key of the
+// same Secret, "l-<hash of the session id>", written with a version check, so the one that gets it is the only one that
+// may present the refresh token.
+
+func leaseKey(id string) string { return "l-" + storeKey(id)[2:] }
+
+// AcquireRenewal tries to become the only replica renewing this session. release must be called when done.
+func (s *SharedStore) AcquireRenewal(id string, ttl time.Duration) (release func(), acquired bool, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	ok, err := s.kv.Claim(ctx, leaseKey(id), s.holder, ttl)
+	if err != nil || !ok {
+		return func() {}, false, err
+	}
+	return func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		if err := s.kv.Release(ctx, leaseKey(id), s.holder); err != nil {
+			slog.Warn("shared session store: couldn't release a renewal lease (it expires by itself)", "error", err)
+		}
+	}, true, nil
+}
+
+// Fresh is the session as the store holds it now, not as this replica last saw it.
+func (s *SharedStore) Fresh(id string) (*Session, bool) {
+	s.refresh(0)
+	return s.lookup(storeKey(id), id)
 }

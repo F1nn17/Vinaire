@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -72,5 +75,82 @@ func (b *SessionBackend) Remove(ctx context.Context, key string) error {
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
+	return err
+}
+
+// A lease is a plain key "holder|unix-expiry" (nothing secret in it), taken with a merge patch that carries the Secret's
+// resourceVersion: the API server refuses it if anything in the Secret changed since it was read, so two replicas can
+// never both take the same free lease. A refused patch is re-read and tried again.
+const claimAttempts = 6
+
+func parseLease(v []byte) (holder string, until time.Time) {
+	h, e, ok := strings.Cut(string(v), "|")
+	if !ok {
+		return "", time.Time{}
+	}
+	n, err := strconv.ParseInt(e, 10, 64)
+	if err != nil {
+		return "", time.Time{}
+	}
+	return h, time.Unix(n, 0)
+}
+
+func (b *SessionBackend) Claim(ctx context.Context, key, holder string, ttl time.Duration) (bool, error) {
+	for i := 0; i < claimAttempts; i++ {
+		sec, err := b.s.clientset.CoreV1().Secrets(b.s.namespace).Get(ctx, sessionsSecretName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			// no Secret yet: nobody has a session, but make it so the claim has somewhere to live
+			if perr := b.Put(ctx, key, []byte(fmt.Sprintf("%s|%d", holder, time.Now().Add(ttl).Unix()))); perr != nil {
+				return false, perr
+			}
+			return true, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("get %s secret: %w", sessionsSecretName, err)
+		}
+		if h, until := parseLease(sec.Data[key]); h != "" && h != holder && until.After(time.Now()) {
+			return false, nil
+		}
+		value := []byte(fmt.Sprintf("%s|%d", holder, time.Now().Add(ttl).Unix()))
+		if err := b.patchAt(ctx, sec.ResourceVersion, key, value); err == nil {
+			return true, nil
+		} else if !apierrors.IsConflict(err) {
+			return false, err
+		}
+	}
+	return false, nil // never got a quiet moment: someone else is busy with this Secret — not ours to take
+}
+
+func (b *SessionBackend) Release(ctx context.Context, key, holder string) error {
+	for i := 0; i < claimAttempts; i++ {
+		sec, err := b.s.clientset.CoreV1().Secrets(b.s.namespace).Get(ctx, sessionsSecretName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if h, _ := parseLease(sec.Data[key]); h != holder {
+			return nil // not ours any more (it expired and someone else took it): leave it
+		}
+		if err := b.patchAt(ctx, sec.ResourceVersion, key, nil); err == nil || apierrors.IsNotFound(err) {
+			return nil
+		} else if !apierrors.IsConflict(err) {
+			return err
+		}
+	}
+	return nil // it lapses by itself
+}
+
+// patchAt is patch that fails with a Conflict unless the Secret is still at resourceVersion rv.
+func (b *SessionBackend) patchAt(ctx context.Context, rv, key string, value any) error {
+	body, err := json.Marshal(map[string]any{
+		"metadata": map[string]any{"resourceVersion": rv},
+		"data":     map[string]any{key: value},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = b.s.clientset.CoreV1().Secrets(b.s.namespace).Patch(ctx, sessionsSecretName, types.MergePatchType, body, metav1.PatchOptions{})
 	return err
 }
