@@ -64,9 +64,16 @@ type Session struct {
 // OwnerKey is a stable identifier for "who is this" that is safe to compare and
 // store (it never contains the token itself) — used to scope long-running jobs
 // (Roadmap Phase 30) to the identity that started them.
+//
+// A person who signed in through an identity provider is who the provider says: issuer + subject (Roadmap Phase 82
+// made that the identity everywhere else; Phase 93 here). It must NOT be the display name — a preferred_username can
+// be changed, and two realms can hold two different people of the same name, who would then share a key and so
+// each other's background jobs. The key is a hash, so it also says nothing about the person; the audit trail names
+// them separately. A pasted token is told apart by a hash of the token.
 func (s *Session) OwnerKey() string {
-	if s.Username != "" {
-		return "user:" + s.Username
+	if s.Issuer != "" && s.Subject != "" {
+		sum := sha256.Sum256([]byte(s.Issuer + "\x00" + s.Subject))
+		return "oidc:" + hex.EncodeToString(sum[:8])
 	}
 	sum := sha256.Sum256([]byte(s.K8sToken))
 	return "token:" + hex.EncodeToString(sum[:8])
