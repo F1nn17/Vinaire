@@ -89,7 +89,7 @@ For each: the code, the property to try to break, and what the tests already pro
   generous. Review the roles the chart ships (`charts/vinaire/templates/clusterrole.yaml`).
 * **The browser side beyond the CSP/XSS checks:** a manual pass over `dangerouslySetInnerHTML`-free rendering
   of cluster data, the Monaco/xterm integrations and the `postMessage`-free design.
-* **Renewal with several replicas and the `X-Forwarded-Proto` header** are known gaps with fixes planned (Roadmap Phases 95 and 96); see "Known residual risks" in [security.md](./security.md).
+* **The `X-Forwarded-Proto` header** is a known gap with a fix planned (Roadmap Phase 96); see "Known residual risks" in [security.md](./security.md).
 * **Race conditions and logic across handlers:** session creation vs. revocation; the order of the
   token/OIDC switch; the registry's read-modify-write; the apply dry-run → write gap.
 * **Denial of service:** per-identity write limits exist; the read side, WebSocket counts and the

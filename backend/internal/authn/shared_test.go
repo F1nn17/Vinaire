@@ -15,6 +15,8 @@ type fakeKV struct {
 	mu   sync.Mutex
 	data map[string][]byte
 	fail bool
+	// failClaim makes only Claim fail (Phase 95)
+	failClaim bool
 }
 
 func newFakeKV() *fakeKV { return &fakeKV{data: map[string][]byte{}} }

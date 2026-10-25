@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"golang.org/x/oauth2"
-	"golang.org/x/sync/singleflight"
 )
 
 // Renewing a session (Roadmap Phase 84).
@@ -51,7 +50,24 @@ type TokenRenewer interface {
 	RenewToken(ctx context.Context, id Identity) (BrokeredToken, error)
 }
 
-var renewals singleflight.Group
+// (one group per Manager — that is, per replica: the lease below is what keeps two replicas apart)
+
+// RenewalCoordinator is implemented by a session store that several replicas share (Roadmap Phase 95): it lets one of
+// them be the only one renewing a session, and lets the others see the result instead of presenting a spent refresh token.
+type RenewalCoordinator interface {
+	AcquireRenewal(id string, ttl time.Duration) (release func(), acquired bool, err error)
+	Fresh(id string) (*Session, bool)
+}
+
+// vars so that a test can shorten them
+var (
+	// renewLeaseTTL outlives one renewal (two calls with a deadline each) and then lapses by itself, so a replica that dies
+	// half-way does not block the session for long.
+	renewLeaseTTL = 2*renewTimeout + 10*time.Second
+	// renewWait is how long a replica waits for another one's renewal before carrying on with the credential it has.
+	renewWait     = 20 * time.Second
+	renewWaitStep = 150 * time.Millisecond
+)
 
 // needsRenewal says whether a session should be renewed now.
 func needsRenewal(s *Session, now time.Time, lead time.Duration) bool {
@@ -68,7 +84,7 @@ func (m *Manager) renewIfDue(ctx context.Context, sess *Session) (*Session, bool
 	if !needsRenewal(sess, time.Now(), m.renewLead()) {
 		return sess, true
 	}
-	v, _, _ := renewals.Do(sess.ID, func() (any, error) {
+	v, _, _ := m.renewals.Do(sess.ID, func() (any, error) {
 		// another request may have renewed it while this one waited its turn
 		if cur, ok := m.Sessions.Get(sess.ID); ok {
 			if !needsRenewal(cur, time.Now(), m.renewLead()) {
@@ -78,6 +94,9 @@ func (m *Manager) renewIfDue(ctx context.Context, sess *Session) (*Session, bool
 		} else {
 			return (*Session)(nil), nil
 		}
+		if coord, ok := m.Sessions.(RenewalCoordinator); ok {
+			return m.renewCoordinated(ctx, coord, sess), nil
+		}
 		return m.renew(ctx, sess), nil
 	})
 	out, _ := v.(*Session)
@@ -85,6 +104,42 @@ func (m *Manager) renewIfDue(ctx context.Context, sess *Session) (*Session, bool
 		return nil, false
 	}
 	return out, true
+}
+
+// renewCoordinated renews a session that other replicas may be renewing too: only the replica that holds the lease
+// presents the refresh token; the others wait for its result. nil means the session has ended.
+func (m *Manager) renewCoordinated(ctx context.Context, coord RenewalCoordinator, sess *Session) *Session {
+	release, got, err := coord.AcquireRenewal(sess.ID, renewLeaseTTL)
+	if err != nil {
+		// the store can't be reached, so a rotated refresh token could not be saved either: don't rotate it
+		slog.Warn("session renewal: couldn't coordinate with the other replicas — trying again on a later request", "error", err)
+		return sess
+	}
+	if !got {
+		// another replica is on it: wait for the renewed session rather than present a token it is about to spend
+		deadline := time.Now().Add(renewWait)
+		for time.Now().Before(deadline) {
+			time.Sleep(renewWaitStep)
+			cur, ok := coord.Fresh(sess.ID)
+			if !ok {
+				return nil // it ended (or the other replica ended it)
+			}
+			if !needsRenewal(cur, time.Now(), m.renewLead()) {
+				return cur
+			}
+		}
+		return sess // the other replica is slow or gone: carry on with the credential we have
+	}
+	defer release()
+	// we hold the lease; another replica may have renewed this session just before we got it
+	cur, ok := coord.Fresh(sess.ID)
+	if !ok {
+		return nil
+	}
+	if !needsRenewal(cur, time.Now(), m.renewLead()) {
+		return cur
+	}
+	return m.renew(ctx, cur)
 }
 
 // renew does the work; nil means the session has been ended.

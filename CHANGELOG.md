@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two replicas no longer fight over one Keycloak session (Roadmap Phase 95).** With `replicaCount > 1` and a Keycloak that rotates refresh tokens, two replicas could renew the same session at the same moment: one presented a refresh token the other had just spent, Keycloak refused it (and may treat the reuse as theft), and the person was signed out. Renewal now takes a lease in the shared session Secret (a version check on the Secret — no extra rights needed): only the replica that holds it presents the refresh token, the others wait for its result and use it; if the lease can't be taken the token is simply not rotated and the next request tries again. A lease whose holder died lapses by itself after about 40 seconds. A single replica is not affected.
+
 ### Added
 
 - **A Keycloak that is already running can get Vinaire's sign-in theme (Roadmap Phase 91).** If the sign-in page showed only the name "Vinaire" and everything else was Keycloak's own look, the theme was simply not in that Keycloak (a Keycloak installed before the theme existed has none): the setup then skips it, and used to say so only in a small line. Settings → Sign-in now finds the Keycloak in this cluster and has a button, "Add the theme to this Keycloak", that creates the theme's ConfigMap and mounts it into the Keycloak (one restart), as you, through the generic YAML create and update; after it, run the setup again and the realm switches to the theme. A skipped theme is shown in warning colour with what to do. The theme itself was rebuilt on PatternFly's own colour variables, so the inputs, buttons, links, errors and the other Keycloak pages follow, in both dark and light; checked on Keycloak 26.0, 26.5 and 26.7.
