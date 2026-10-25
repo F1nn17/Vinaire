@@ -60,6 +60,8 @@ type DashboardSummaryResponse struct {
 	// node-exporter's filesystem series, else only the size (what the nodes report as ephemeral
 	// storage) with Used empty. nil when neither is known.
 	Disk *ResourceUsage `json:"disk,omitempty"`
+	// PVC is the "PVC near capacity" card (Roadmap Phase 90); nil when the claims can't be listed.
+	PVC *PVCCapacitySummary `json:"pvc,omitempty"`
 }
 
 // DashboardSummary handles GET /api/v1/dashboard/summary — aggregates
@@ -105,6 +107,7 @@ func (h *Handler) DashboardSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	resp.CPU, resp.Memory = h.clusterResourceUsage(r.Context(), clientset, h.metricsFor(r, cluster))
 	resp.Disk = h.clusterDiskUsage(r.Context(), cluster.Name, clientset)
+	resp.PVC = h.clusterPVCCapacity(r.Context(), cluster.Name, clientset)
 
 	// A discarding ResponseWriter: resolveDynamic writes its own HTTP error
 	// on failure, but an ArgoCD-detection hiccup should only make this one

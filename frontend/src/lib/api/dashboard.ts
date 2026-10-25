@@ -5,11 +5,49 @@ import type {
   StatCardData,
 } from "@/lib/types";
 import { apiFetch } from "./http";
+import { t } from "@/lib/i18n/translate";
 
-// Real endpoints (Roadmap Phase 18, CPU/Memory wired up as a follow-up).
-// PVC-near-capacity stays an explicit "not available yet" stub — Phase 13
-// built the real data source, but wiring it into the Dashboard is still
-// out of scope (see ROADMAP.md's Phase 18 outcome note).
+// Real endpoints (Roadmap Phase 18, CPU/Memory wired up as a follow-up). The PVC card was a
+// "not available yet" stub until Roadmap Phase 90: the backend now reads the kubelet's volume
+// numbers and says whether some claims are near their size, none is, or nobody can tell.
+function pvcCard(pvc: DashboardSummary["pvc"]): StatCardData {
+  const title = "PVC near capacity";
+  if (!pvc)
+    return { title, dotColor: "warn", value: null, caption: "Not available" };
+  if (pvc.state === "nodata") {
+    return {
+      title,
+      dotColor: "warn",
+      value: null,
+      caption: t("{n} claims, usage unknown — {reason}", {
+        n: pvc.total,
+        reason: t(pvc.reason ?? "no data"),
+      }),
+    };
+  }
+  if (pvc.state === "near") {
+    return {
+      title,
+      dotColor: "err",
+      value: pvc.count,
+      caption: pvc.sample.join(", "),
+    };
+  }
+  return {
+    title,
+    dotColor: "ok",
+    value: 0,
+    caption:
+      pvc.total === 0
+        ? "No claims"
+        : t("{n} of {m} measured, all below {p}%", {
+            n: pvc.measured,
+            m: pvc.total,
+            p: pvc.threshold,
+          }),
+  };
+}
+
 export async function getDashboard(): Promise<DashboardData> {
   const [summary, events] = await Promise.all([
     apiFetch<DashboardSummary>("/api/v1/dashboard/summary"),
@@ -32,12 +70,7 @@ export async function getDashboard(): Promise<DashboardData> {
           ? summary.podsDownSample.join(", ")
           : "All pods healthy",
     },
-    {
-      title: "PVC near capacity",
-      dotColor: "warn",
-      value: null,
-      caption: "Not available yet",
-    },
+    pvcCard(summary.pvc),
   ];
 
   return {

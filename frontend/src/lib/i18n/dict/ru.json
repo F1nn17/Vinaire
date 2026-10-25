@@ -2127,5 +2127,13 @@
  "Vinaire has no NetworkPolicy of its own": "У Vinaire нет собственной NetworkPolicy",
  "Without one, any pod in the cluster can reach Vinaire and Vinaire can reach anything. Vinaire holds credentials and can run commands in pods, so it is worth limiting.": "Без неё любой под кластера может обратиться к Vinaire, а Vinaire — к чему угодно. Vinaire хранит данные доступа и умеет выполнять команды в подах, поэтому его стоит ограничить.",
  "Turn on networkPolicy.enabled in the chart's values (your CNI must enforce NetworkPolicy) and list who may reach Vinaire under networkPolicy.ingressFrom.": "Включите networkPolicy.enabled в values чарта (ваш CNI должен применять NetworkPolicy) и перечислите, кому можно обращаться к Vinaire, в networkPolicy.ingressFrom.",
- "The last group, “This installation”, is about how Vinaire itself was set up — it reads Vinaire's own settings, not the cluster, and only warns: it changes no default.": "Последняя группа, «Эта установка», о том, как настроен сам Vinaire: она читает его собственные настройки, а не кластер, и только предупреждает — ничего не меняет по умолчанию."
+ "The last group, “This installation”, is about how Vinaire itself was set up — it reads Vinaire's own settings, not the cluster, and only warns: it changes no default.": "Последняя группа, «Эта установка», о том, как настроен сам Vinaire: она читает его собственные настройки, а не кластер, и только предупреждает — ничего не меняет по умолчанию.",
+ "Not available": "Недоступно",
+ "No claims": "Нет claim'ов",
+ "{n} claims, usage unknown — {reason}": "{n} claim'ов, заполненность неизвестна — {reason}",
+ "{n} of {m} measured, all below {p}%": "измерено {n} из {m}, все ниже {p}%",
+ "no data": "нет данных",
+ "no Prometheus to ask": "некого спросить: нет Prometheus",
+ "Prometheus didn't answer": "Prometheus не ответил",
+ "the kubelet reports no usage for these volumes (it doesn't for some storage, such as k3s's local-path)": "kubelet не сообщает заполненность этих томов (для части хранилищ, например local-path в k3s, он этого не делает)"
 }

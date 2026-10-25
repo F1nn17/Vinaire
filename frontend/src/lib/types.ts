@@ -573,6 +573,16 @@ export type DashboardSummary = {
   memory: { used: string; limit: string; pct: number } | null;
   // the nodes' root disks added together; `used` is empty when only the size is known
   disk?: { used: string; limit: string; pct: number } | null;
+  // the "PVC near capacity" card (Roadmap Phase 90); absent when the claims can't be listed
+  pvc?: {
+    state: "near" | "ok" | "nodata";
+    threshold: number;
+    total: number;
+    measured: number;
+    count: number;
+    sample: string[];
+    reason?: string;
+  } | null;
 };
 
 export type DashboardData = {
