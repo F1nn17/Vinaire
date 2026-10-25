@@ -34,13 +34,15 @@ jobs:
       # Fails when a dependency this code actually calls has a known vulnerability.
       - name: govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          . ../.github/tool-versions.env
+          go install "golang.org/x/vuln/cmd/govulncheck@v${GOVULNCHECK_VERSION}"
           govulncheck ./...
       # Medium and above only; every accepted finding carries a `#nosec <rule> -- <why>`
       # next to the code, so a new one has to be argued for in the diff.
       - name: gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          . ../.github/tool-versions.env
+          go install "github.com/securego/gosec/v2/cmd/gosec@v${GOSEC_VERSION}"
           gosec -quiet -severity medium -confidence medium -exclude-dir=integration ./...
       # Includes the security tests: namespace-scoped stream, permission gate, login
       # throttle, CSP, canary-in-logs, codebase rules (no InsecureIgnoreHostKey...).
@@ -113,7 +115,7 @@ jobs:
         with:
           fetch-depth: 0 # every commit, not just the tip
       # The release binary, checked against the project's published checksums —
-      # `go install ...@latest` depended on sum.golang.org answering, which it
+      # `go install ...@version` depended on sum.golang.org answering, which it
       # sometimes doesn't, and an unpinned `latest` isn't what a security gate should run.
       - name: gitleaks
         run: |
@@ -148,8 +150,7 @@ jobs:
 
       - name: Install k3d and Helm
         run: |
-          curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          .github/scripts/install-tools.sh k3d helm
       - name: Install the chart on a disposable cluster
         run: |
           # the cluster's own load balancer publishes port 80 as localhost:8080 — a stable
