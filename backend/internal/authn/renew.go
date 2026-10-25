@@ -35,9 +35,12 @@ const (
 	RenewableTokenTTL = 30 * time.Minute
 	// RenewGrace is how long a session may go on without the provider having confirmed the person.
 	RenewGrace = time.Hour
-	// renewTimeout bounds one renewal; a stuck provider must not hang the request that triggered it.
-	renewTimeout = 15 * time.Second
 )
+
+// renewTimeout bounds each of the two calls of a renewal — the one to the identity provider and the one that obtains
+// the new Kubernetes credential — separately: a stuck provider must not hang the request that triggered it, and
+// must not use up the time the second call needs either. A variable so that a test can make it short.
+var renewTimeout = 15 * time.Second
 
 // ErrAccountGone is what a TokenRenewer returns when the person's Kubernetes account no longer exists.
 var ErrAccountGone = errors.New("the person's Kubernetes account no longer exists")
@@ -90,12 +93,16 @@ func (m *Manager) renew(ctx context.Context, sess *Session) *Session {
 	if oc == nil {
 		return sess // the sign-in was switched off: nothing to ask; the credential just runs out
 	}
-	ctx, cancel := context.WithTimeout(ctx, renewTimeout)
+	// A renewal belongs to the session, not to the request that happened to start it: if that request goes away
+	// half-way, a refresh token the provider has already rotated must still be kept (below), so the work is not
+	// cancelled with it. Each outward call gets its own deadline.
+	ctx = context.WithoutCancel(ctx)
+	provCtx, cancel := context.WithTimeout(ctx, renewTimeout)
 	defer cancel()
 
 	next := *sess
 	validated := false
-	tok, err := oc.oauth2Config.TokenSource(oc.ctx(ctx), &oauth2.Token{RefreshToken: sess.RefreshToken}).Token()
+	tok, err := oc.oauth2Config.TokenSource(oc.ctx(provCtx), &oauth2.Token{RefreshToken: sess.RefreshToken}).Token()
 	switch {
 	case err == nil:
 		validated = true
@@ -104,7 +111,7 @@ func (m *Manager) renew(ctx context.Context, sess *Session) *Session {
 		}
 		raw, _ := tok.Extra("id_token").(string)
 		if raw != "" {
-			idToken, verr := oc.verifier.Verify(oc.ctx(ctx), raw)
+			idToken, verr := oc.verifier.Verify(oc.ctx(provCtx), raw)
 			if verr != nil || idToken.Subject != sess.Subject || idToken.Issuer != sess.Issuer {
 				m.end(sess, "the identity provider answered for someone else, or with a token that doesn't verify")
 				return nil
@@ -133,16 +140,18 @@ func (m *Manager) renew(ctx context.Context, sess *Session) *Session {
 	if broker := m.IdentityBroker(); broker != nil {
 		renewer, ok := broker.(TokenRenewer)
 		if !ok {
-			return &next
+			return m.keep(sess, &next, validated)
 		}
-		bt, rerr := renewer.RenewToken(ctx, Identity{Issuer: sess.Issuer, Subject: sess.Subject, Username: sess.Username, TokenTTL: m.tokenTTL()})
+		kctx, kcancel := context.WithTimeout(ctx, renewTimeout)
+		defer kcancel()
+		bt, rerr := renewer.RenewToken(kctx, Identity{Issuer: sess.Issuer, Subject: sess.Subject, Username: sess.Username, TokenTTL: m.tokenTTL()})
 		if rerr != nil {
 			if errors.Is(rerr, ErrAccountGone) {
 				m.end(sess, "the person's Kubernetes account was deleted")
 				return nil
 			}
 			slog.Warn("session renewal: couldn't get a new Kubernetes credential — the current one stays until it runs out", "error", rerr)
-			return &next
+			return m.keep(sess, &next, validated)
 		}
 		next.K8sToken, next.TokenExpiresAt, next.KubernetesUser = bt.Token, bt.Expiry, bt.KubernetesUser
 	} else if !validated {
@@ -154,6 +163,20 @@ func (m *Manager) renew(ctx context.Context, sess *Session) *Session {
 		return sess
 	}
 	return &next
+}
+
+// keep is for a renewal that did not produce a new Kubernetes credential: the session goes on with the one it has. If
+// the provider answered, though, it has ROTATED the refresh token — the old one is spent — so the new one is saved now;
+// returning it unsaved would lose it, and the next renewal would be refused with invalid_grant and end the session.
+func (m *Manager) keep(old, next *Session, providerAnswered bool) *Session {
+	if !providerAnswered {
+		return next
+	}
+	if err := m.Sessions.Update(next); err != nil {
+		slog.Warn("session renewal: couldn't save the rotated refresh token", "error", err)
+		return old
+	}
+	return next
 }
 
 // end removes a session whose renewal failed for good. The reason goes to the log without anything that
