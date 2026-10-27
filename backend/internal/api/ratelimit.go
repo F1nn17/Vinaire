@@ -45,12 +45,7 @@ func (rl *WriteRateLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		identity := "anonymous"
 		if sess, ok := authn.FromContext(r.Context()); ok {
-			switch {
-			case sess.Username != "":
-				identity = sess.Username
-			case sess.ID != "":
-				identity = sess.ID
-			}
+			identity = rateIdentity(sess)
 		}
 
 		if !rl.limiterFor(identity).Allow() {
@@ -59,4 +54,17 @@ func (rl *WriteRateLimiter) Middleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// rateIdentity is who a write counts against. OwnerKey is the one definition of "who is this" (issuer + subject, or the
+// pasted token): a name is not — two people with one preferred_username under different realms must not share, or spend,
+// one limit (Roadmap Phase 101). A session with neither a subject nor a token (no sign-in at all) falls back to its id.
+func rateIdentity(sess *authn.Session) string {
+	switch {
+	case sess.Subject != "" || sess.K8sToken != "":
+		return sess.OwnerKey()
+	case sess.ID != "":
+		return sess.ID
+	}
+	return "anonymous"
 }

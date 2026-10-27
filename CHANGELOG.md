@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **The write rate limit counts people, not names (Phase 101).** It was keyed by user name, so two people with the same `preferred_username` under different realms shared (and could exhaust) one limit. It now uses the session's owner key (issuer + subject, or the pasted token).
+
+### Fixed
 - **A revoked session could come back (Phase 100).** With shared sessions (`SESSION_STORE=secret`), ending a session on one replica while
   another was renewing it could write the session back, and the request being renewed was still served. Renewal now writes only if
   the session is still in the store (a version-checked patch, `PutIfPresent`), and a session that ended meanwhile stays ended.
