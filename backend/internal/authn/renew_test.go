@@ -131,6 +131,7 @@ type renewingBroker struct {
 	gone             atomic.Bool
 	failRenew        atomic.Bool // the Kubernetes call that mints the new credential fails
 	lastTTL          atomic.Int64
+	onRenew          atomic.Pointer[func()] // runs while a renewal is under way (after the provider, before the save)
 }
 
 func (b *renewingBroker) token(prefix string, n int32, ttl time.Duration) BrokeredToken {
@@ -152,6 +153,9 @@ func (b *renewingBroker) RenewToken(ctx context.Context, id Identity) (BrokeredT
 	}
 	if b.failRenew.Load() {
 		return BrokeredToken{}, errors.New("the Kubernetes API did not answer")
+	}
+	if f := b.onRenew.Load(); f != nil {
+		(*f)()
 	}
 	return b.token("renewed", b.renewals.Add(1), id.TokenTTL), nil
 }

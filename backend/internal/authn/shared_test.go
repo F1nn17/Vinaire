@@ -42,6 +42,18 @@ func (f *fakeKV) Put(_ context.Context, k string, v []byte) error {
 	f.data[k] = append([]byte(nil), v...)
 	return nil
 }
+func (f *fakeKV) PutIfPresent(_ context.Context, k string, v []byte) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.fail {
+		return false, errors.New("api down")
+	}
+	if _, ok := f.data[k]; !ok {
+		return false, nil
+	}
+	f.data[k] = append([]byte(nil), v...)
+	return true, nil
+}
 func (f *fakeKV) Remove(_ context.Context, k string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

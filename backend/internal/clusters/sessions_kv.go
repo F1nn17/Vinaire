@@ -69,6 +69,32 @@ func (b *SessionBackend) Put(ctx context.Context, key string, sealed []byte) err
 	return err
 }
 
+// PutIfPresent replaces one session only if its key is still in the Secret: the patch carries the resourceVersion it was
+// read at, so a key removed in between (a revoke on another replica) makes it a Conflict, which is read again — and the
+// key is then missing. Roadmap Phase 100.
+func (b *SessionBackend) PutIfPresent(ctx context.Context, key string, sealed []byte) (bool, error) {
+	for i := 0; i < claimAttempts; i++ {
+		sec, err := b.s.clientset.CoreV1().Secrets(b.s.namespace).Get(ctx, sessionsSecretName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("get %s secret: %w", sessionsSecretName, err)
+		}
+		if _, ok := sec.Data[key]; !ok {
+			return false, nil
+		}
+		err = b.patchAt(ctx, sec.ResourceVersion, key, sealed)
+		if err == nil {
+			return true, nil
+		}
+		if !apierrors.IsConflict(err) {
+			return false, err
+		}
+	}
+	return false, fmt.Errorf("the %s secret kept changing; couldn't save the session", sessionsSecretName)
+}
+
 // Remove deletes one session; a Secret that isn't there is not an error.
 func (b *SessionBackend) Remove(ctx context.Context, key string) error {
 	err := b.patch(ctx, key, nil)

@@ -116,3 +116,59 @@ func TestAConflictIsReadAgainAndTheLeaseThatWasTakenInTheMeantimeIsRespected(t *
 		t.Fatalf("conflicts: %d", conflicts)
 	}
 }
+
+// Roadmap Phase 100: a session that was revoked must not be brought back by a write that was already under way.
+func TestPutIfPresentNeverCreatesAKeyAndSurvivesAConflictThatRemovedIt(t *testing.T) {
+	ctx := context.Background()
+	cs := fake.NewSimpleClientset()
+	a := backend(cs)
+	if ok, err := a.PutIfPresent(ctx, "s-aaa", []byte("x")); err != nil || ok { // no Secret at all
+		t.Fatalf("without a Secret: %v %v", ok, err)
+	}
+	if err := a.Put(ctx, "s-bbb", []byte("other")); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := a.PutIfPresent(ctx, "s-aaa", []byte("x")); err != nil || ok {
+		t.Fatalf("a key that is not there: %v %v", ok, err)
+	}
+	if snap, _ := a.Snapshot(ctx); len(snap) != 1 || snap["s-aaa"] != nil {
+		t.Fatalf("the missing key was created: %v", snap)
+	}
+	if err := a.Put(ctx, "s-aaa", []byte("old")); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := a.PutIfPresent(ctx, "s-aaa", []byte("new")); err != nil || !ok {
+		t.Fatalf("a key that is there: %v %v", ok, err)
+	}
+	if snap, _ := a.Snapshot(ctx); string(snap["s-aaa"]) != "new" || string(snap["s-bbb"]) != "other" {
+		t.Fatalf("snapshot: %v", snap)
+	}
+
+	// another replica revokes the session between our read and our write: the write is refused as a Conflict, and when the
+	// read is repeated the key is gone, so nothing is written
+	gvr := schema.GroupVersionResource{Version: "v1", Resource: "secrets"}
+	revoked := false
+	cs.PrependReactor("patch", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		if revoked {
+			return false, nil, nil
+		}
+		revoked = true
+		obj, err := cs.Tracker().Get(gvr, "vinaire", sessionsSecretName)
+		if err != nil {
+			t.Error(err)
+			return false, nil, nil
+		}
+		sec := obj.(*corev1.Secret).DeepCopy()
+		delete(sec.Data, "s-aaa")
+		if err := cs.Tracker().Update(gvr, sec, "vinaire"); err != nil {
+			t.Error(err)
+		}
+		return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "secrets"}, sessionsSecretName, fmt.Errorf("the object has been modified"))
+	})
+	if ok, err := a.PutIfPresent(ctx, "s-aaa", []byte("renewed")); err != nil || ok {
+		t.Fatalf("a revoked session was written back: %v %v", ok, err)
+	}
+	if snap, _ := a.Snapshot(ctx); snap["s-aaa"] != nil {
+		t.Fatalf("the revoked session is back: %v", snap)
+	}
+}
