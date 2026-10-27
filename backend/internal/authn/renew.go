@@ -214,6 +214,10 @@ func (m *Manager) renew(ctx context.Context, sess *Session) *Session {
 		return &next
 	}
 	if err := m.Sessions.Update(&next); err != nil {
+		if errors.Is(err, ErrNoSession) { // revoked (or ended) while it was being renewed: it stays ended
+			slog.Info("session renewal: the session was ended meanwhile; the renewed credential is dropped")
+			return nil
+		}
 		slog.Warn("session renewal: couldn't save the renewed session", "error", err)
 		return sess
 	}
@@ -228,6 +232,9 @@ func (m *Manager) keep(old, next *Session, providerAnswered bool) *Session {
 		return next
 	}
 	if err := m.Sessions.Update(next); err != nil {
+		if errors.Is(err, ErrNoSession) {
+			return nil
+		}
 		slog.Warn("session renewal: couldn't save the rotated refresh token", "error", err)
 		return old
 	}

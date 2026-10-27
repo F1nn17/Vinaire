@@ -30,6 +30,10 @@ type KV interface {
 	Snapshot(ctx context.Context) (map[string][]byte, error)
 	// Put and Remove touch exactly one key.
 	Put(ctx context.Context, key string, sealed []byte) error
+	// PutIfPresent is Put that never creates: it writes only if the key is in the store at that moment (a version check
+	// on the Secret, so a key removed between the read and the write is not brought back) and says whether it was.
+	// A session that was revoked while it was being renewed must stay revoked. (Roadmap Phase 100)
+	PutIfPresent(ctx context.Context, key string, sealed []byte) (present bool, err error)
 	Remove(ctx context.Context, key string) error
 	// Claim takes the lease named key for holder until ttl has passed, and says whether it is held now: false when someone
 	// else's unexpired lease is there. It is atomic (a version check on the Secret), which Put is not. Release gives it
@@ -202,21 +206,23 @@ func encodeSession(sess *Session) ([]byte, error) {
 // look at the store.
 func (s *SharedStore) Update(sess *Session) error {
 	key := storeKey(sess.ID)
-	s.mu.Lock()
-	_, known := s.snap[key]
-	s.mu.Unlock()
-	if !known {
-		return ErrNoSession
-	}
 	blob, err := encodeSession(sess)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	if err := s.kv.Put(ctx, key, s.sealer.Seal(blob)); err != nil {
+	// The store decides, not this replica's snapshot: another replica may have revoked the session a moment ago.
+	present, err := s.kv.PutIfPresent(ctx, key, s.sealer.Seal(blob))
+	if err != nil {
 		slog.Warn("shared session store: couldn't save a renewed session", "error", err)
 		return ErrStoreUnavailable
+	}
+	if !present {
+		s.mu.Lock()
+		delete(s.snap, key)
+		s.mu.Unlock()
+		return ErrNoSession
 	}
 	stored := *sess
 	stored.ID = ""

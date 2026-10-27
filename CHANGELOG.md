@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A revoked session could come back (Phase 100).** With shared sessions (`SESSION_STORE=secret`), ending a session on one replica while
+  another was renewing it could write the session back, and the request being renewed was still served. Renewal now writes only if
+  the session is still in the store (a version-checked patch, `PutIfPresent`), and a session that ended meanwhile stays ended.
+
 ### Added
 - **One button for Keycloak's sign-in look (Phase 99).** Settings → Sign-in now checks which theme the realm's sign-in page really
   serves (a read of the public page, no password) and, when it is not the Vinaire one, offers *Update the look of the sign-in page*:

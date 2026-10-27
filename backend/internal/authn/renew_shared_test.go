@@ -223,3 +223,33 @@ func TestWhenTheLeaseCannotBeTakenTheRefreshTokenIsNotRotated(t *testing.T) {
 		t.Fatalf("after the store came back: %v %d %+v", ok, r.ctl.refreshCalls.Load(), s)
 	}
 }
+
+// Roadmap Phase 100: an administrator ends a session on one replica while another is renewing it.
+func TestRevokeDuringRenewalMustNotRestoreTheSession(t *testing.T) {
+	r := newReplicas(t)
+	r.due(t)
+	revoked := false
+	hook := func() { // replica B's administrator ends the session while A is between the provider and the save
+		if revoked {
+			return
+		}
+		revoked = true
+		if !r.b.Sessions.(*SharedStore).Revoke(Ref(r.id)) {
+			t.Error("the revoke found no session")
+		}
+	}
+	r.brokerA.onRenew.Store(&hook)
+	if s, ok := r.a.Authenticate(r.request()); ok {
+		t.Fatalf("the request that was being renewed was served by a revoked session: %+v", s)
+	}
+	for _, m := range []*Manager{r.a, r.b} {
+		if _, ok := m.Authenticate(r.request()); ok {
+			t.Fatal("a replica still accepts the revoked session — the renewal brought it back")
+		}
+	}
+	for k := range r.kv.data {
+		if strings.HasPrefix(k, "s-") {
+			t.Fatalf("the revoked session is in the store again: %s", k)
+		}
+	}
+}
