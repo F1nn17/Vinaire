@@ -262,3 +262,17 @@ func TestToolVersionsFileHasWhatTheInstallerNeeds(t *testing.T) {
 		}
 	}
 }
+
+// "Who is this" is Session.OwnerKey (issuer + subject, or the pasted token), never a user name: two people can share a
+// preferred_username under different realms. A name may be shown and audited, but not used as a map key or an identity
+// (Roadmap Phase 101).
+func TestAUserNameIsNeverUsedAsAKeyOrAnIdentity(t *testing.T) {
+	bad := regexp.MustCompile(`\[\s*\w+\.Username\s*\]|(identity|owner|key)\w*\s*:?=\s*\w+\.Username\b`)
+	for path, lines := range goSources(t) {
+		for i, line := range lines {
+			if c := code(line); bad.MatchString(c) {
+				t.Errorf("%s:%d uses a user name as a key or identity: %s", path, i+1, strings.TrimSpace(c))
+			}
+		}
+	}
+}
