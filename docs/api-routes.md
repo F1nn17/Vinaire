@@ -15,7 +15,9 @@ named, with the reason, in `backend/router_test.go`.
 | GET | `/api/v1/auth/config` | no | — |
 | DELETE | `/api/v1/auth/keycloak` | yes | yes |
 | GET | `/api/v1/auth/keycloak` | yes | — |
+| POST | `/api/v1/auth/keycloak/login-theme` | yes | yes |
 | POST | `/api/v1/auth/keycloak/setup` | yes | yes |
+| GET | `/api/v1/auth/keycloak/theme-check` | yes | — |
 | PUT | `/api/v1/auth/keycloak/token-login` | yes | yes |
 | POST | `/api/v1/auth/login` | no | no |
 | POST | `/api/v1/auth/logout` | no | no |

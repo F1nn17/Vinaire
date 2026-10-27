@@ -17,6 +17,7 @@ import { FirstAdminCommands } from "./FirstAdminCommands";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { KeycloakInstall, type InstalledKeycloak } from "./KeycloakInstall";
 import { themeConfigMapYaml, themeZip } from "@/lib/keycloakTheme";
+import { KeycloakLook } from "./KeycloakLook";
 import { KeycloakThemeInstall } from "./KeycloakThemeInstall";
 import { TypeToConfirmModal } from "@/components/ui/TypeToConfirmModal";
 
@@ -154,6 +155,10 @@ export function KeycloakSetup() {
           </div>
 
           {result && <Done result={result} />}
+
+          {status.configured && status.active && status.available && (
+            <KeycloakLook />
+          )}
 
           <SessionsList />
 

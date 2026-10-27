@@ -386,6 +386,13 @@ flow.
   is disabled in Keycloak is at most one credential lifetime. Keycloak groups are **deliberately not mapped to roles** (owner's decision of 2026-10-24, Phase 87 — a
   ServiceAccount token carries none, and honouring them would make Vinaire grant rights on its own authority; see
   docs/decisions.md — don't add it quietly; roles are bound per account) and back-channel logout (Keycloak telling Vinaire at once).
+- "Update the look of the sign-in page" (Roadmap Phase 99, `internal/keycloak/theme.go`, `app/(shell)/settings/KeycloakLook.tsx`) adds
+  one Keycloak admin call and one read, both about the **saved** realm — a request never names a Keycloak or a realm:
+  `GET /api/v1/auth/keycloak/theme-check` (right `get` on `auth.vinaire.io`) loads the realm's public sign-in page through the guarded
+  client and reads the theme names from its resource paths (`FuzzThemeNames`: only `[A-Za-z0-9._-]`); `POST
+  /api/v1/auth/keycloak/login-theme` (right `update`, secure transport) takes the administrator's login for **one token request**, then
+  does only what the setup's theme step does (`ensureLoginTheme`) — no client, user or Vinaire setting changes; audited
+  `keycloak-login-theme[-failed]`. The theme reaches a Keycloak in the cluster through Phase 25's generic YAML apply, as the caller.
 - Keycloak's sign-in page in Vinaire's look (Roadmap Phase 85b, `keycloak/theme/vinaire`, `frontend/src/lib/keycloakTheme.ts`,
   `internal/keycloak/setup.go` `ensureLoginTheme`) — the way to make the sign-in feel like Vinaire's own (a Vinaire-side username/password form was built and **withdrawn** — the password would pass through Vinaire, and the password grant is deprecated in OAuth 2.1; don't bring it back), and **no new route**: a login
   *theme* (Keycloak's own `keycloak.v2` re-coloured, English + Russian; only styles — Keycloak's forms, passkeys, 2-step codes and password

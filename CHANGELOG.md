@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **One button for Keycloak's sign-in look (Phase 99).** Settings → Sign-in now checks which theme the realm's sign-in page really
+  serves (a read of the public page, no password) and, when it is not the Vinaire one, offers *Update the look of the sign-in page*:
+  it adds the theme to a Keycloak that runs in the cluster, waits for it to come back and switches the realm to the theme with the
+  administrator's login (used for one request, never kept; *Use the password Vinaire generated* fills it in for a Keycloak Vinaire
+  installed). New routes `GET /api/v1/auth/keycloak/theme-check` and `POST /api/v1/auth/keycloak/login-theme`; the latter is audited as
+  `keycloak-login-theme`.
+
 ## [1.4.0] - 2026-10-25
 
 ### Changed

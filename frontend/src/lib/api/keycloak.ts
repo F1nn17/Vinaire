@@ -130,3 +130,36 @@ export function useWhoAmI() {
     revalidateOnFocus: false,
   });
 }
+
+// Which sign-in theme the realm's page really serves (Roadmap Phase 99): a read of a public page, no password.
+export type ThemeCheck = {
+  checked: boolean;
+  active: boolean;
+  themes?: string[];
+  error?: string;
+  realm?: string;
+};
+
+export function useKeycloakThemeCheck(enabled: boolean) {
+  return useSWR(
+    enabled ? "keycloak-theme-check" : null,
+    () => apiFetch<ThemeCheck>("/api/v1/auth/keycloak/theme-check"),
+    { revalidateOnFocus: false },
+  );
+}
+
+export function getKeycloakThemeCheck(): Promise<ThemeCheck> {
+  return apiFetch<ThemeCheck>("/api/v1/auth/keycloak/theme-check");
+}
+
+// Switch the saved realm to the Vinaire theme with the administrator's login (used once, never kept).
+export function applyKeycloakLoginTheme(req: {
+  adminUser: string;
+  adminPassword: string;
+}): Promise<{ status: string; realm: string }> {
+  return apiFetch("/api/v1/auth/keycloak/login-theme", {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify(req),
+  });
+}

@@ -226,6 +226,91 @@ func (h *Handler) KeycloakStatus(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, st)
 }
 
+// KeycloakThemeCheckResult is GET /api/v1/auth/keycloak/theme-check (Roadmap Phase 99).
+type KeycloakThemeCheckResult struct {
+	// Checked: the sign-in page was loaded and read; false with Error when it could not be.
+	Checked bool     `json:"checked"`
+	Active  bool     `json:"active"`
+	Themes  []string `json:"themes,omitempty"`
+	Error   string   `json:"error,omitempty"`
+	Realm   string   `json:"realm,omitempty"`
+}
+
+// KeycloakThemeCheck handles GET /api/v1/auth/keycloak/theme-check: which login theme the saved realm's sign-in page
+// really serves. A read of a public page, needing no password; the address is the saved one, never the request's.
+func (h *Handler) KeycloakThemeCheck(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "auth", "get") {
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	s, err := h.loadStoredOIDC(r.Context())
+	if err != nil || s == nil {
+		respondJSON(w, KeycloakThemeCheckResult{Error: "sign-in through Keycloak is not set up"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	pt, err := keycloak.CheckPage(ctx, h.oidcHTTPClient(), s.Issuer, s.ClientID, s.RedirectURL)
+	if err != nil {
+		respondJSON(w, KeycloakThemeCheckResult{Realm: s.Realm, Error: truncate(err.Error(), 300)})
+		return
+	}
+	respondJSON(w, KeycloakThemeCheckResult{Checked: true, Active: pt.Active, Themes: pt.Themes, Realm: s.Realm})
+}
+
+type keycloakLoginThemeBody struct {
+	AdminRealm    string `json:"adminRealm"`
+	AdminUser     string `json:"adminUser"`
+	AdminPassword string `json:"adminPassword"`
+}
+
+// KeycloakLoginTheme handles POST /api/v1/auth/keycloak/login-theme: switch the saved realm to the Vinaire sign-in
+// theme with the administrator's login (used for this one request, never kept). Nothing else in Keycloak is touched
+// and Vinaire's own settings do not change; the Keycloak address and realm are the saved ones.
+func (h *Handler) KeycloakLoginTheme(w http.ResponseWriter, r *http.Request) {
+	if !h.requireVinaireRight(w, r, "auth", "update") {
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	if !h.authDocsAvailable(w) || !h.requireSecureTransportOrPrivate(w, r) {
+		return
+	}
+	var b keycloakLoginThemeBody
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&b); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		return
+	}
+	if b.AdminRealm == "" {
+		b.AdminRealm = "master"
+	}
+	pass := keycloak.NewSecret(b.AdminPassword)
+	b.AdminPassword = ""
+	s, err := h.loadStoredOIDC(r.Context())
+	if err != nil || s == nil || s.KeycloakURL == "" {
+		respondError(w, http.StatusConflict, "sign-in through Keycloak is not set up here yet — run the setup first")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	status, err := keycloak.ApplyLoginTheme(ctx, h.oidcHTTPClient(), s.KeycloakURL, b.AdminRealm, b.AdminUser, pass, s.Realm)
+	if err != nil {
+		h.auditLog(r, "keycloak-login-theme-failed", "", s.Realm, "keycloak", hostOf(s.KeycloakURL), "error", truncate(err.Error(), 300))
+		switch {
+		case errors.Is(err, keycloak.ErrInvalid):
+			respondError(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, keycloak.ErrAuth):
+			respondError(w, http.StatusUnauthorized, err.Error())
+		default:
+			respondError(w, http.StatusBadGateway, err.Error())
+		}
+		return
+	}
+	h.auditLog(r, "keycloak-login-theme", "", s.Realm, "keycloak", hostOf(s.KeycloakURL), "result", truncate(status, 120))
+	respondJSON(w, map[string]string{"status": status, "realm": s.Realm})
+}
+
 type keycloakSetupBody struct {
 	KeycloakURL   string `json:"keycloakUrl"`
 	AdminRealm    string `json:"adminRealm"`
