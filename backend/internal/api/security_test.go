@@ -194,6 +194,8 @@ func TestVinaireGateAllowsOnlyThoseWhoWereGranted(t *testing.T) {
 		"session revoke":       hs.h.RevokeSession,
 		"keycloak status":      hs.h.KeycloakStatus,
 		"keycloak setup":       hs.h.KeycloakSetup,
+		"keycloak theme check": hs.h.KeycloakThemeCheck,
+		"keycloak login theme": hs.h.KeycloakLoginTheme,
 		"keycloak token login": hs.h.KeycloakTokenLogin,
 		"keycloak disable":     hs.h.KeycloakDisable,
 	}

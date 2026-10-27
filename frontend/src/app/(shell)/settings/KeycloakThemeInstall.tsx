@@ -20,14 +20,14 @@ import { themeMounted, withThemeMounted } from "@/lib/keycloakThemeMount";
 // YAML create/update of Phase 25, as the signed-in user — no write path of its own. Keycloaks Vinaire installs after the
 // theme existed already have it.
 
-const KEYS: Record<string, string> = {
+export const KEYS: Record<string, string> = {
   StatefulSet: "apps/v1/statefulsets",
   Deployment: "apps/v1/deployments",
 };
 
-type Found = { namespace: string; name: string; kind: string };
+export type Found = { namespace: string; name: string; kind: string };
 
-async function writeConfigMap(namespace: string) {
+export async function writeConfigMap(namespace: string) {
   const yaml = themeConfigMapYaml(namespace);
   try {
     await withBackoff(() => createResource(yaml));
@@ -39,7 +39,7 @@ async function writeConfigMap(namespace: string) {
   }
 }
 
-async function mountTheme(f: Found): Promise<boolean> {
+export async function mountTheme(f: Found): Promise<boolean> {
   const key = KEYS[f.kind];
   const obj = await getResourceObject(key, f.namespace, f.name);
   const r = withThemeMounted(obj.yaml);

@@ -2160,5 +2160,21 @@
  "“Set up Keycloak sign-in” below again with the administrator's password: that step switches the realm to the theme.": "«Set up Keycloak sign-in» ниже ещё раз с паролем администратора: этот шаг переключит realm на тему.",
  "Keycloak found in this cluster — it needs the theme (the ConfigMap": "В этом кластере найден Keycloak — чтобы он показывал тему, она нужна (ConfigMap",
  ") to show it:": "):",
- "The sign-in page still has Keycloak's own look: this Keycloak doesn't have the Vinaire theme yet. Add it with the button above (or download it) and run this setup again.": "Страница входа пока выглядит как родная страница Keycloak: в этом Keycloak ещё нет темы Vinaire. Добавьте её кнопкой выше (или скачайте) и запустите эту настройку ещё раз."
+ "The sign-in page still has Keycloak's own look: this Keycloak doesn't have the Vinaire theme yet. Add it with the button above (or download it) and run this setup again.": "Страница входа пока выглядит как родная страница Keycloak: в этом Keycloak ещё нет темы Vinaire. Добавьте её кнопкой выше (или скачайте) и запустите эту настройку ещё раз.",
+ "The Keycloak sign-in page uses the Vinaire look.": "Страница входа Keycloak в стиле Vinaire.",
+ "Keycloak administrator": "Администратор Keycloak",
+ "Use the password Vinaire generated": "Взять пароль, созданный Vinaire",
+ "Update the look of the sign-in page": "Обновить вид страницы входа",
+ "Done — the sign-in page now uses the Vinaire look.": "Готово — страница входа теперь в стиле Vinaire.",
+ "The realm is switched, but the page still shows another theme: the Keycloak client may have a theme of its own (Clients → vinaire → Settings → Login theme: empty).": "Realm переключён, но страница всё ещё показывает другую тему: у клиента в Keycloak может быть своя тема (Clients → vinaire → Settings → Login theme: пусто).",
+ "Keycloak did not come back with the theme in time. Wait a minute and press the button again.": "Keycloak не вернулся с темой вовремя. Подождите минуту и нажмите кнопку ещё раз.",
+ "Switching the sign-in page to the Vinaire look…": "Переключаю страницу входа на стиль Vinaire…",
+ "Waiting for Keycloak to come back with the theme…": "Жду, пока Keycloak вернётся с темой…",
+ "Checking the sign-in page…": "Проверяю страницу входа…",
+ "Couldn't read the generated password: ": "Не удалось прочитать созданный пароль: ",
+ "The Keycloak sign-in page still has Keycloak's own look": "Страница входа Keycloak пока в родном стиле Keycloak",
+ "One button brings the Vinaire look to it: the theme is put next to Keycloak (it restarts once), then the realm": "Одна кнопка приводит её к стилю Vinaire: тема кладётся рядом с Keycloak (он перезапустится один раз), затем realm",
+ "is switched to it. The administrator's password is used for that one request and not kept.": "переключается на неё. Пароль администратора используется для этого одного запроса и не сохраняется.",
+ " Keycloak does not run in this cluster, so the theme has to be installed there by hand (zip or ConfigMap in the setup form below) — then this button switches the realm.": " Keycloak не работает в этом кластере, поэтому тему нужно поставить в него вручную (zip или ConfigMap в форме настройки ниже) — после этого кнопка переключит realm.",
+ "Vinaire could not read Keycloak's sign-in page to see its look": "Vinaire не смог прочитать страницу входа Keycloak, чтобы увидеть её вид"
 }
