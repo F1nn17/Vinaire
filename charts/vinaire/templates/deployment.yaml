@@ -80,6 +80,9 @@ spec:
               value: {{ .Values.audit.persistence.enabled | default false | quote }}
             - name: INSTALL_NETWORK_POLICY
               value: {{ .Values.networkPolicy.enabled | default false | quote }}
+            # ... and whether that policy lets any source in (ingressFrom empty)
+            - name: INSTALL_NETWORK_POLICY_OPEN
+              value: {{ and .Values.networkPolicy.enabled (not .Values.networkPolicy.ingressFrom) | default false | quote }}
             {{- $store := include "vinaire.sessionStore" . }}
             {{- if and (eq $store "memory") (gt (int .Values.replicaCount) 1) }}
             {{- fail "replicaCount > 1 needs sessions.store=secret (or auto): sessions kept in a pod's memory can't be shared between replicas" }}

@@ -93,6 +93,17 @@ own; every grant audited; removal on leaving the group) and a new entry in AGENT
   logged and reported by the "This installation" checks. An empty list is a safe state, not a finding.
 - Only credentials use it. HSTS is still sent on the header alone (a browser ignores it over http).
 
+## NetworkPolicy and a Keycloak on plain http (decided 2026-10-27, Roadmap Phase 103)
+
+- With `networkPolicy.enabled` **and** `keycloak.allowHttpPrivateNetwork` the chart adds one egress rule: TCP port 80 to the three
+  RFC 1918 ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16). Without both switches there is no such rule; a public address and
+  169.254.0.0/16 are never in it; 100.64.0.0/10 (NetBird/Tailscale) is not either - name it under `extraEgress` if Keycloak is there.
+- **The rule opens port 80 of every private address, not just the Keycloak** - the docs say so. `networkPolicy.httpKeycloakEgress:
+  false` removes it so the operator can name the Keycloak's own address under `extraEgress` (the stricter mode).
+- A Keycloak *inside* the cluster is reached through a Service, and whether an address rule matches that traffic depends on the CNI
+  (and the port seen is the pod's, often 8080). That case is **not verified** here; use `extraEgress` with a namespaceSelector.
+- Also: the policy with an empty `ingressFrom` lets any source in - "This installation" now says so.
+
 ## Working with agents
 
 - Work through phases one after another in a session until the context fills, then continue in a new one. Each phase ends with a commit, a CHANGELOG.md entry and a short summary (done / checked / left).

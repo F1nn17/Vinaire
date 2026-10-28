@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **NetworkPolicy and a Keycloak on plain http (Phase 103).** With `networkPolicy.enabled` and `keycloak.allowHttpPrivateNetwork` the
+  chart now also lets Vinaire out to TCP port 80 of 10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16 (before, a policy cut Vinaire off
+  from such a Keycloak). **This opens port 80 of every private address, not only the Keycloak**; set
+  `networkPolicy.httpKeycloakEgress: false` and name the Keycloak under `extraEgress` to be stricter. Public addresses and 169.254.0.0/16 are
+  never included. A Keycloak inside the cluster behind a Service is CNI-dependent and not verified - use `extraEgress`.
+- "This installation" warns when the NetworkPolicy is on but `networkPolicy.ingressFrom` is empty (any source may reach Vinaire).
+
+### Changed
 - **Incompatible: `trustForwardedFor` now needs `trustedProxies` (Phase 102).** The login throttle used to believe the first
   `X-Forwarded-For` entry from any client, so a client that reached Vinaire directly could pick its own address and walk around the
   per-address counter. Now `X-Forwarded-For` is believed only from the proxies named under `trustedProxies`, and read from the

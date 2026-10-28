@@ -295,6 +295,14 @@ networkPolicy:
   ingressFrom: []
   # SSH provisioning (Add node / Add cluster over SSH) needs port 22 outbound.
   allowSSH: false
+  # Roadmap Phase 103. With keycloak.allowHttpPrivateNetwork on (Keycloak over plain http), the policy also lets Vinaire
+  # out to TCP port 80 of the three private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) - and ONLY those: never
+  # a public address, never 169.254.0.0/16. This opens port 80 of EVERY private address, not just the Keycloak. Set
+  # this false to name the Keycloak yourself under extraEgress (its address and port), which is stricter. A Keycloak
+  # inside this cluster is reached through its Service: whether a rule for addresses matches that traffic depends on
+  # the CNI (and the port seen is the pod's, often 8080, not the Service's 80) - for that case use extraEgress with a
+  # namespaceSelector and the pod's port instead.
+  httpKeycloakEgress: true
   # Anything else Vinaire must reach, e.g. Prometheus on a non-443 port:
   #   extraEgress:
   #     - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]

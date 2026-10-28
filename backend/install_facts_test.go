@@ -44,3 +44,16 @@ func TestWideTrustedProxyRangesAreReportedButAProxysOwnAddressIsNot(t *testing.T
 		t.Fatalf("%v", i.BroadTrustedProxies)
 	}
 }
+
+func TestAnOpenNetworkPolicyIsAFactOnlyWhenThePolicyIsOn(t *testing.T) {
+	t.Setenv("INSTALL_AUDIT_PERSISTENT", "true")
+	t.Setenv("INSTALL_NETWORK_POLICY", "true")
+	t.Setenv("INSTALL_NETWORK_POLICY_OPEN", "true")
+	if i := installationFacts(config.Config{}, trustedproxy.Set{}); !i.NetworkPolicyOpen {
+		t.Fatalf("%+v", i)
+	}
+	t.Setenv("INSTALL_NETWORK_POLICY", "false")
+	if i := installationFacts(config.Config{}, trustedproxy.Set{}); i.NetworkPolicyOpen {
+		t.Fatalf("an open flag without a policy: %+v", i)
+	}
+}

@@ -103,3 +103,15 @@ func TestAForwardedForSwitchWithoutAProxyIsReported(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestAPolicyThatLetsAnySourceInIsReported(t *testing.T) {
+	good := Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", Chart: true, AuditOnVolume: true, NetworkPolicy: true}
+	if r := find(RunAll(instSnap(&good)), "inst-networkpolicy-open"); r.Status != Pass {
+		t.Fatalf("%+v", r)
+	}
+	open := good
+	open.NetworkPolicyOpen = true
+	if r := find(RunAll(instSnap(&open)), "inst-networkpolicy-open"); r.Status != Fail {
+		t.Fatalf("%+v", r)
+	}
+}

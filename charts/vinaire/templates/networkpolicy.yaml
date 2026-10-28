@@ -47,6 +47,20 @@ spec:
       ports:
         - {port: 22, protocol: TCP}
     {{- end }}
+    {{- if .Values.keycloak.allowHttpPrivateNetwork }}
+    # Roadmap Phase 103: a Keycloak reached over plain http (keycloak.allowHttpPrivateNetwork) is on port 80 of a private
+    # address. Only the three RFC 1918 ranges, only TCP/80 — NOT just the Keycloak: every private address answering on
+    # port 80 is reachable from Vinaire while this is on. Never a public address, never 169.254.0.0/16. To allow only the
+    # Keycloak itself, set networkPolicy.httpKeycloakEgress=false and name it under networkPolicy.extraEgress.
+    {{- if .Values.networkPolicy.httpKeycloakEgress }}
+    - to:
+        - ipBlock: {cidr: 10.0.0.0/8}
+        - ipBlock: {cidr: 172.16.0.0/12}
+        - ipBlock: {cidr: 192.168.0.0/16}
+      ports:
+        - {port: 80, protocol: TCP}
+    {{- end }}
+    {{- end }}
     {{- with .Values.networkPolicy.extraEgress }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
