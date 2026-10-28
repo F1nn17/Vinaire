@@ -91,6 +91,12 @@ type Store interface {
 	Delete(id string)
 }
 
+// StrictDeleter is a Store whose deletion can fail visibly (a store shared between replicas). A person's logout uses it:
+// the server-side session is reported ended only when the deletion is saved (Roadmap Phase 109).
+type StrictDeleter interface {
+	DeleteStrict(id string) error
+}
+
 // MemoryStore is a process-local Store. Sessions are lost on restart —
 // acceptable for now; there is no persistence requirement in Phase 10.
 type MemoryStore struct {

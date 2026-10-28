@@ -277,6 +277,20 @@ func (s *SharedStore) Delete(id string) {
 	}
 }
 
+// DeleteStrict ends a session for every replica and returns ErrStoreUnavailable if the Secret did not take the change;
+// the session then stays valid (and known here), so signing out can be tried again.
+func (s *SharedStore) DeleteStrict(id string) error {
+	key := storeKey(id)
+	if err := s.remove(key); err != nil {
+		slog.Warn("shared session store: couldn't end a session at sign-out", "error", err)
+		return ErrStoreUnavailable
+	}
+	s.mu.Lock()
+	delete(s.snap, key)
+	s.mu.Unlock()
+	return nil
+}
+
 // remove deletes the key from the shared Secret and returns the error if that did not happen.
 func (s *SharedStore) remove(key string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)

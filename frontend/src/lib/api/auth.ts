@@ -40,10 +40,12 @@ export async function loginWithToken(token: string): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
-  await fetch(`${API_BASE}/api/v1/auth/logout`, {
+  const res = await fetch(`${API_BASE}/api/v1/auth/logout`, {
     method: "POST",
     credentials: "include",
   });
+  // shared sessions: the server says no until it has really ended the session (Roadmap Phase 109)
+  if (!res.ok) throw new ApiError(res.status, "sign-out failed");
 }
 
 // The browser navigates here directly (not a fetch) — Keycloak's own login

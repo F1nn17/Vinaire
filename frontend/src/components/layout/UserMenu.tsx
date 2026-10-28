@@ -10,6 +10,7 @@ import { useWhoAmI } from "@/lib/api/keycloak";
 // ServiceAccount tokens have no human name attached anyway).
 export function UserMenu() {
   const [open, setOpen] = useState(false);
+  const [signOutError, setSignOutError] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const { data: me } = useWhoAmI();
 
@@ -24,7 +25,14 @@ export function UserMenu() {
   }, []);
 
   async function handleSignOut() {
-    await logout();
+    setSignOutError(false);
+    try {
+      await logout();
+    } catch {
+      // the server could not end the session: say so instead of pretending, and let the person try again
+      setSignOutError(true);
+      return;
+    }
     window.location.href = "/login";
   }
 
@@ -64,6 +72,12 @@ export function UserMenu() {
           >
             Sign out
           </button>
+          {signOutError && (
+            <div className="px-3 pb-2 text-[11px] text-err">
+              Could not end the session on the server — you are still signed in.
+              Try again.
+            </div>
+          )}
         </div>
       )}
     </div>

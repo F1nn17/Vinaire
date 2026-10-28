@@ -379,7 +379,16 @@ func (m *Manager) HandleTokenLogin(w http.ResponseWriter, r *http.Request) {
 // ModeDisabled (which has no session to log out of).
 func (m *Manager) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookie); err == nil {
-		m.Sessions.Delete(cookie.Value)
+		if sd, ok := m.Sessions.(StrictDeleter); ok {
+			// shared sessions: "signed out" is said only once no replica can honour the cookie any more; the browser keeps
+			// the cookie meanwhile so the person can press Sign out again
+			if err := sd.DeleteStrict(cookie.Value); err != nil {
+				respondError(w, http.StatusServiceUnavailable, "could not end the session on the server — you are still signed in; try again")
+				return
+			}
+		} else {
+			m.Sessions.Delete(cookie.Value)
+		}
 	}
 	m.clearSessionCookie(w)
 	respondJSON(w, map[string]string{"status": "ok"})

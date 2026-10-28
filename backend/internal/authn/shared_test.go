@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -265,5 +267,47 @@ func TestARevokedSessionStopsWorkingOnOtherReplicasWithinTheStatedBound(t *testi
 			t.Fatalf("the revoked session still works on another replica after %v", snapshotTTL+500*time.Millisecond)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// Roadmap Phase 109: a person's sign-out is "ok" only when the shared Secret really lost the session.
+func TestLogoutFailsWhenSharedStoreCannotPersistDeletion(t *testing.T) {
+	fast(t)
+	kv := newFakeKV()
+	shared := NewSharedStore(kv, fakeSealer{})
+	m := newTestManager(t, func(context.Context, string) error { return nil })
+	m.Sessions = shared
+	id := NewSessionID()
+	_ = shared.Create(&Session{ID: id, K8sToken: "t", Username: "bob", ExpiresAt: time.Now().Add(time.Hour)})
+	logout := func() *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/api/v1/auth/logout", nil)
+		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: id})
+		w := httptest.NewRecorder()
+		m.HandleLogout(w, r)
+		return w
+	}
+	kv.mu.Lock()
+	kv.failRemove = true
+	kv.mu.Unlock()
+	w := logout()
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("the store refused the deletion but sign-out answered %d", w.Code)
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == sessionCookie && c.MaxAge < 0 {
+			t.Error("the cookie was cleared although the session is still valid")
+		}
+	}
+	if _, ok := shared.Get(id); !ok {
+		t.Fatal("the session is gone although the deletion was not saved")
+	}
+	kv.mu.Lock()
+	kv.failRemove = false
+	kv.mu.Unlock()
+	if w := logout(); w.Code != 200 {
+		t.Fatalf("the retry: %d", w.Code)
+	}
+	if _, ok := shared.Get(id); ok {
+		t.Error("the session still works after a confirmed sign-out")
 	}
 }
