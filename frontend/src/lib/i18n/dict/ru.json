@@ -2167,6 +2167,8 @@
  "Update the look of the sign-in page": "Обновить вид страницы входа",
  "Which Keycloak does Vinaire sign in with? It will be restarted once.": "Через какой Keycloak входит Vinaire? Он будет один раз перезапущен.",
  "Choose…": "Выберите…",
+ "None of these — my Keycloak is outside this cluster": "Ни один — мой Keycloak вне этого кластера",
+ "Could not end the session on the server — you are still signed in. Try again.": "Не удалось завершить сеанс на сервере — вы всё ещё в системе. Повторите.",
  "Will be changed:": "Будет изменён:",
  "(restarts once). Other Keycloaks in the cluster are left alone.": "(один перезапуск). Остальные Keycloak в кластере не затрагиваются.",
  "Done — the sign-in page now uses the Vinaire look.": "Готово — страница входа теперь в стиле Vinaire.",

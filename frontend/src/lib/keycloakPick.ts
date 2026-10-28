@@ -37,9 +37,11 @@ export type Pick = {
   // what the person may choose from (empty when target is certain)
   choices: KeycloakInstance[];
   // how the target was decided
-  reason: "issuer" | "only-one" | "choose" | "none";
+  reason: "issuer" | "choose" | "none";
 };
 
+// A Keycloak is chosen for the person only when the saved issuer points at it. A single Keycloak that merely happens to run in
+// the cluster is NOT assumed to be the one: Vinaire may sign in through an external Keycloak (Roadmap Phase 109).
 export function pickKeycloak(
   found: KeycloakInstance[],
   issuer: string | undefined,
@@ -49,8 +51,6 @@ export function pickKeycloak(
   const matched = found.filter((f) => matchesIssuer(f, host));
   if (matched.length === 1)
     return { target: matched[0], choices: [], reason: "issuer" };
-  if (matched.length === 0 && found.length === 1)
-    return { target: found[0], choices: [], reason: "only-one" };
   return {
     target: null,
     choices: matched.length > 1 ? matched : found,

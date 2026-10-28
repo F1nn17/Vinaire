@@ -49,7 +49,8 @@ export function KeycloakLook() {
     (f) => `${f.namespace}/${f.name}` === chosenKey,
   );
   const target = pick.target ?? chosen ?? null;
-  const needsChoice = found.length > 0 && !target;
+  // "outside" = the person says Vinaire's Keycloak is not one of these: only the realm is switched, nothing is mounted
+  const needsChoice = found.length > 0 && !target && chosenKey !== "outside";
 
   const [user, setUser] = useState("admin");
   const [pass, setPass] = useState("");
@@ -177,6 +178,9 @@ export function KeycloakLook() {
             className="w-72 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs"
           >
             <option value="">Choose…</option>
+            <option value="outside">
+              None of these — my Keycloak is outside this cluster
+            </option>
             {pick.choices.map((f) => (
               <option
                 key={`${f.namespace}/${f.name}`}

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Signing out is confirmed only when the session is really ended (Phase 109).** With `sessions.store: secret`, *Sign out* used to answer
+  "ok" and clear the cookie even when the Kubernetes API refused to delete the session, so a copy of the cookie could still work on
+  another replica. Now the answer is `503`, the cookie stays and the menu says "you are still signed in — try again".
+- **"Update the look of the sign-in page" never assumes a Keycloak (Phase 109).** A single Keycloak found in the cluster is no longer
+  picked unless the saved issuer points at it; otherwise you choose it, or "None of these — my Keycloak is outside this cluster".
 - **The chart upgrade test covers every release since 1.3 (Phase 108).** CI used to upgrade from the oldest and the newest earlier
   release only. It now also upgrades from each release since 1.3.0 with `--reuse-values`, and once more with NetworkPolicy, an http
   Keycloak and `trustedProxies` switched on.

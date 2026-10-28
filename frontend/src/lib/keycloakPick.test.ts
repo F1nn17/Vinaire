@@ -22,10 +22,12 @@ test("two Keycloaks and a public issuer: nothing is chosen for the person", () =
   assert.deepEqual(p.choices, [dev, prod]);
 });
 
-test("a single Keycloak is the target but still named", () => {
+test("a single Keycloak that the issuer does not point at is not assumed", () => {
   const p = pickKeycloak([dev], "https://sso.example.com/realms/vinaire");
-  assert.deepEqual(p.target, dev);
-  assert.equal(p.reason, "only-one");
+  assert.equal(p.target, null);
+  assert.deepEqual(p.choices, [dev]);
+  assert.equal(p.reason, "choose");
+  assert.equal(pickKeycloak([dev], undefined).target, null);
 });
 
 test("no Keycloak, no target; a bad issuer matches nothing", () => {
