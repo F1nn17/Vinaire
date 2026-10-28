@@ -64,7 +64,16 @@ func (h *Handler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 			owner, who = s.Owner, s.Username
 		}
 	}
-	if len(ref) < 8 || len(ref) > 16 || !lister.Revoke(ref) {
+	if len(ref) < 8 || len(ref) > 16 {
+		respondError(w, http.StatusNotFound, "no such session")
+		return
+	}
+	found, err := lister.Revoke(ref)
+	if err != nil {
+		respondError(w, http.StatusServiceUnavailable, "the session could not be ended — the shared session store did not accept the change; it is still valid, try again")
+		return
+	}
+	if !found {
 		respondError(w, http.StatusNotFound, "no such session")
 		return
 	}

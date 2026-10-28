@@ -12,9 +12,10 @@ import (
 
 // the shared Secret, as two replicas see it
 type fakeKV struct {
-	mu   sync.Mutex
-	data map[string][]byte
-	fail bool
+	mu         sync.Mutex
+	data       map[string][]byte
+	fail       bool
+	failRemove bool
 	// failClaim makes only Claim fail (Phase 95)
 	failClaim bool
 }
@@ -57,6 +58,9 @@ func (f *fakeKV) PutIfPresent(_ context.Context, k string, v []byte) (bool, erro
 func (f *fakeKV) Remove(_ context.Context, k string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.failRemove {
+		return errors.New("api down")
+	}
 	delete(f.data, k)
 	return nil
 }
@@ -174,10 +178,10 @@ func TestListAndRevokeNeverExposeTheSession(t *testing.T) {
 	if strings.Contains(list[0].Ref+list[0].Owner, id) || strings.Contains(list[0].Owner, "TOKEN-X") {
 		t.Error("the list leaks the id or the token")
 	}
-	if b.Revoke("short") {
+	if ok, _ := b.Revoke("short"); ok {
 		t.Error("a too-short reference matched")
 	}
-	if !b.Revoke(list[0].Ref) {
+	if ok, err := b.Revoke(list[0].Ref); !ok || err != nil {
 		t.Fatal("revoke found nothing")
 	}
 	if _, ok := a.Get(id); ok {
@@ -193,10 +197,41 @@ func TestMemoryStoreListsAndRevokes(t *testing.T) {
 	if len(l) != 1 || l[0].Ref != Ref(id) {
 		t.Fatalf("%+v", l)
 	}
-	if !m.Revoke(l[0].Ref) {
+	if ok, err := m.Revoke(l[0].Ref); !ok || err != nil {
 		t.Error("revoke")
 	}
 	if _, ok := m.Get(id); ok {
 		t.Error("still there")
+	}
+}
+
+// Roadmap Phase 105: an administrator is never told a session is gone while the shared Secret still holds it.
+func TestRevokeFailsWhenSharedStoreCannotPersistDeletion(t *testing.T) {
+	fast(t)
+	kv := newFakeKV()
+	a, b := NewSharedStore(kv, fakeSealer{}), NewSharedStore(kv, fakeSealer{})
+	id := NewSessionID()
+	_ = a.Create(&Session{ID: id, K8sToken: "t", Username: "bob", ExpiresAt: time.Now().Add(time.Hour)})
+	ref := b.List()[0].Ref
+	kv.mu.Lock()
+	kv.failRemove = true
+	kv.mu.Unlock()
+	if ok, err := b.Revoke(ref); ok || !errors.Is(err, ErrStoreUnavailable) {
+		t.Fatalf("a revoke the store refused was reported as done: %v %v", ok, err)
+	}
+	if _, ok := a.Get(id); !ok {
+		t.Fatal("the session vanished although the deletion was not saved")
+	}
+	if len(b.List()) != 1 {
+		t.Error("the replica that failed to revoke forgot the session")
+	}
+	kv.mu.Lock()
+	kv.failRemove = false
+	kv.mu.Unlock()
+	if ok, err := b.Revoke(ref); !ok || err != nil {
+		t.Fatalf("the retry: %v %v", ok, err)
+	}
+	if _, ok := a.Get(id); ok {
+		t.Error("the revoked session still works on another replica")
 	}
 }

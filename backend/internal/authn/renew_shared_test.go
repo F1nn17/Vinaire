@@ -234,7 +234,7 @@ func TestRevokeDuringRenewalMustNotRestoreTheSession(t *testing.T) {
 			return
 		}
 		revoked = true
-		if !r.b.Sessions.(*SharedStore).Revoke(Ref(r.id)) {
+		if ok, err := r.b.Sessions.(*SharedStore).Revoke(Ref(r.id)); !ok || err != nil {
 			t.Error("the revoke found no session")
 		}
 	}
