@@ -10,8 +10,10 @@ import { revealSecretKey } from "@/lib/api/secrets";
 import {
   applyKeycloakLoginTheme,
   getKeycloakThemeCheck,
+  useKeycloakStatus,
   useKeycloakThemeCheck,
 } from "@/lib/api/keycloak";
+import { pickKeycloak } from "@/lib/keycloakPick";
 import { themeMounted } from "@/lib/keycloakThemeMount";
 import {
   KEYS,
@@ -39,6 +41,16 @@ export function KeycloakLook() {
     .filter((i) => KEYS[i.kind])
     .map((i) => ({ namespace: i.namespace, name: i.name, kind: i.kind }));
 
+  const status = useKeycloakStatus();
+  // Only the Keycloak Vinaire signs in with is touched (Phase 106): matched by the saved issuer, or chosen by the person
+  const pick = pickKeycloak(found, status.data?.issuer);
+  const [chosenKey, setChosenKey] = useState("");
+  const chosen = pick.choices.find(
+    (f) => `${f.namespace}/${f.name}` === chosenKey,
+  );
+  const target = pick.target ?? chosen ?? null;
+  const needsChoice = found.length > 0 && !target;
+
   const [user, setUser] = useState("admin");
   const [pass, setPass] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,7 +64,8 @@ export function KeycloakLook() {
   async function fillGeneratedPassword() {
     setError(null);
     try {
-      const f = found[0];
+      const f = target;
+      if (!f) return;
       setPass(await revealSecretKey(f.namespace, f.name, "admin-password"));
     } catch (e) {
       setError(
@@ -67,7 +80,7 @@ export function KeycloakLook() {
     setDone(null);
     try {
       // 1. the theme next to a Keycloak that runs here and does not have it yet
-      for (const f of found) {
+      for (const f of target ? [target] : []) {
         const obj = await getResourceObject(KEYS[f.kind], f.namespace, f.name);
         if (themeMounted(obj.yaml)) continue;
         setStep(`Adding the theme to ${f.namespace}/${f.name}…`);
@@ -153,6 +166,37 @@ export function KeycloakLook() {
         {found.length === 0 &&
           " Keycloak does not run in this cluster, so the theme has to be installed there by hand (zip or ConfigMap in the setup form below) — then this button switches the realm."}
       </div>
+      {pick.choices.length > 0 && (
+        <label className="flex flex-col gap-1 text-[11px] text-text-faint">
+          Which Keycloak does Vinaire sign in with? It will be restarted once.
+          <select
+            value={chosenKey}
+            onChange={(e) => setChosenKey(e.target.value)}
+            disabled={busy}
+            aria-label="Keycloak to update"
+            className="w-72 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs"
+          >
+            <option value="">Choose…</option>
+            {pick.choices.map((f) => (
+              <option
+                key={`${f.namespace}/${f.name}`}
+                value={`${f.namespace}/${f.name}`}
+              >
+                {f.namespace}/{f.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {target && (
+        <div className="text-xs text-text-muted">
+          Will be changed:{" "}
+          <span className="font-mono">
+            {target.namespace}/{target.name}
+          </span>{" "}
+          (restarts once). Other Keycloaks in the cluster are left alone.
+        </div>
+      )}
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-[11px] text-text-faint">
           Keycloak administrator
@@ -176,7 +220,7 @@ export function KeycloakLook() {
             className="w-56 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs"
           />
         </label>
-        {found.length > 0 && (
+        {target && (
           <button
             type="button"
             onClick={() => void fillGeneratedPassword()}
@@ -189,7 +233,7 @@ export function KeycloakLook() {
         <button
           type="button"
           onClick={() => void update()}
-          disabled={busy || !user || !pass}
+          disabled={busy || !user || !pass || needsChoice}
           className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
         >
           {busy ? "Working…" : "Update the look of the sign-in page"}
