@@ -129,6 +129,12 @@ type Config struct {
 	// are lost on a restart) or "secret" (sealed, in a Secret of Vinaire's own namespace,
 	// shared by every replica and surviving restarts — Roadmap Phase 48; in-cluster only).
 	SessionStore string
+	// SessionStaleLimit (SESSION_STALE_LIMIT, a Go duration like 1m; Roadmap Phase 111): with SESSION_STORE=secret, how long a
+	// replica that can no longer read the sessions' Secret keeps admitting the sessions it last saw. Empty or 0: for as
+	// long as the outage lasts (availability first; a session revoked meanwhile on another replica is honoured here until
+	// the API is back). A value (at least a few seconds) fails closed: past it every session is refused on this replica
+	// until the Secret can be read again, so a revoke is honoured within the 3 s refresh plus this limit even in an outage.
+	SessionStaleLimit time.Duration
 	// TrustForwardedFor (TRUST_FORWARDED_FOR=true): the login throttle counts the
 	// first X-Forwarded-For address instead of the connection's peer. Set it only
 	// behind a proxy you control that sets the header.
@@ -219,6 +225,7 @@ func Load() Config {
 		SessionMaxTTL:            parseDuration(os.Getenv("SESSION_MAX_TTL")),
 		SessionTokenTTL:          parseDuration(os.Getenv("SESSION_TOKEN_TTL")),
 		SessionStore:             getEnv("SESSION_STORE", "memory"),
+		SessionStaleLimit:        parseDuration(os.Getenv("SESSION_STALE_LIMIT")),
 		TrustForwardedFor:        os.Getenv("TRUST_FORWARDED_FOR") == "true",
 		TrustedProxies:           os.Getenv("TRUSTED_PROXIES"),
 		DiscoveryKubeconfigPaths: splitCSV(os.Getenv(envDiscoveryPaths)),

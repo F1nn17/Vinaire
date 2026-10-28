@@ -167,6 +167,41 @@ func TestStoreDownKeepsTheLastView(t *testing.T) {
 	}
 }
 
+// With a stale limit the replica that can't read the Secret stops admitting sessions once its last good view is older
+// than the limit — a session revoked meanwhile on another replica is then not honoured past the stated bound — and
+// admits them again, unchanged, as soon as a read succeeds. Without a limit the last view is kept (the test above).
+func TestStaleLimitFailsClosedDuringAnOutageAndRecovers(t *testing.T) {
+	fast(t)
+	kv := newFakeKV()
+	s := NewSharedStore(kv, fakeSealer{})
+	s.SetStaleLimit(150 * time.Millisecond)
+	id := NewSessionID()
+	_ = s.Create(&Session{ID: id, K8sToken: "t", ExpiresAt: time.Now().Add(time.Hour)})
+	if _, ok := s.Get(id); !ok {
+		t.Fatal("a healthy store must admit the session")
+	}
+	kv.fail = true
+	time.Sleep(40 * time.Millisecond)
+	if _, ok := s.Get(id); !ok {
+		t.Error("an outage shorter than the limit must keep the last view")
+	}
+	time.Sleep(250 * time.Millisecond)
+	if _, ok := s.Get(id); ok {
+		t.Fatal("an outage longer than the limit must refuse the session (fail closed)")
+	}
+	kv.fail = false
+	deadline := time.Now().Add(2 * time.Second) // the retry runs in the background
+	for {
+		if _, ok := s.Get(id); ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the session must work again once the store can be read — nothing was deleted")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestListAndRevokeNeverExposeTheSession(t *testing.T) {
 	fast(t)
 	kv := newFakeKV()

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`sessions.staleLimit` — sessions can fail closed while the Kubernetes API is unreachable (Phase 111).** A replica that cannot read
+  the shared sessions' Secret used to go on admitting the sessions it last saw for as long as the outage lasted, so a session revoked
+  meanwhile elsewhere was honoured there. With `sessions.staleLimit: 1m` (`SESSION_STALE_LIMIT`) it refuses every session past that
+  limit until the Secret can be read again (nothing is deleted). Default unchanged (empty).
+- **A failure drill with two real pods (Phase 111, `scripts/chaos-ha.sh`, a CI job).** A login on one pod works on the other, a pod is
+  deleted and nobody signs in again, a pod is cut off from the API and recovers without a new login.
+
+### Fixed
+- **During an API outage a request no longer waits out the API's timeout (Phase 111).** The drill showed every request on a cut-off
+  replica hanging 10 s or more; after the first failed read, retries now run in the background.
+
 ### Changed
 - **Signing out is confirmed only when the session is really ended (Phase 109).** With `sessions.store: secret`, *Sign out* used to answer
   "ok" and clear the cookie even when the Kubernetes API refused to delete the session, so a copy of the cookie could still work on

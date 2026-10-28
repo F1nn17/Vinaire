@@ -56,6 +56,11 @@
           "type": "string",
           "enum": ["auto", "memory", "secret"],
           "description": "Where sessions live: memory (one replica, lost on restart), secret (sealed, shared by replicas) or auto."
+        },
+        "staleLimit": {
+          "type": "string",
+          "pattern": "^$|^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "Empty, or a Go duration (e.g. 1m): how long a replica that cannot read the sessions Secret keeps admitting the sessions it last saw."
         }
       }
     },

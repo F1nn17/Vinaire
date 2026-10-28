@@ -104,6 +104,18 @@ own; every grant audited; removal on leaving the group) and a new entry in AGENT
   (and the port seen is the pod's, often 8080). That case is **not verified** here; use `extraEgress` with a namespaceSelector.
 - Also: the policy with an empty `ingressFrom` lets any source in - "This installation" now says so.
 
+## Shared sessions during an API outage (Roadmap Phase 111)
+
+- A replica that cannot read the sessions' Secret keeps using its last view by default (`sessions.staleLimit` empty): the owner's
+  choice of availability over strict revocation, since a short API outage should not sign everyone out. The cost is stated: a session
+  revoked meanwhile on another replica is honoured there until the API is back, so the "at most 5 s" bound holds only while the
+  API answers.
+- An operator who needs the bound through an outage sets `sessions.staleLimit` (`SESSION_STALE_LIMIT`, e.g. `1m`): past it the replica
+  fails closed (every session refused, none deleted) until a read succeeds. Whether to make a limit the default for an "enterprise"
+  profile is left to the owner; it is not done.
+- Not covered by the drill: a renewal of a Keycloak-issued token during an outage (the unit tests cover the one-hour grace and the
+  lease, not two pods and a real Keycloak together).
+
 ## Working with agents
 
 - Work through phases one after another in a session until the context fills, then continue in a new one. Each phase ends with a commit, a CHANGELOG.md entry and a short summary (done / checked / left).

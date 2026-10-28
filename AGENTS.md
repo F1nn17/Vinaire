@@ -310,7 +310,8 @@ flow.
   refuses to start without a key), one key per session named by the SHA-256 of the id. A
   leader-election Lease (`vinaire-leader`) keeps scheduled GitOps polling to one replica.
   `GET /api/v1/auth/sessions` and `DELETE /api/v1/auth/sessions/{ref}` (right `auth.vinaire.io`,
-  audited `session-revoke`) list and end sessions; the list never carries a cookie or token.
+  audited `session-revoke`) list and end sessions; the list never carries a cookie or token. A replica that can't read the Secret keeps its last view unless
+  `SESSION_STALE_LIMIT` is set, which makes it refuse every session past the limit until a read succeeds (Phase 111, fail closed; nothing is deleted).
 - Key provider and credential rotation (Roadmap Phase 49, `internal/keyprovider`,
   `internal/clusters/keyring.go`): `KEY_PROVIDER=vault` keeps the store's data key only *wrapped* by a
   Vault/OpenBao Transit key (configuration from the environment, never from a request; https unless
