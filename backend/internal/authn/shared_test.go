@@ -235,3 +235,35 @@ func TestRevokeFailsWhenSharedStoreCannotPersistDeletion(t *testing.T) {
 		t.Error("the revoked session still works on another replica")
 	}
 }
+
+// Roadmap Phase 107: how long another replica may still honour a revoked session is a stated, tested bound — not "some
+// seconds". It is snapshotTTL; docs/security names it (at most 5 s in normal operation).
+func TestARevokedSessionStopsWorkingOnOtherReplicasWithinTheStatedBound(t *testing.T) {
+	if snapshotTTL > 5*time.Second {
+		t.Fatalf("snapshotTTL is %v: the documented revoke bound (5 s) no longer holds — change docs/security with it", snapshotTTL)
+	}
+	old := snapshotTTL
+	snapshotTTL = 300 * time.Millisecond
+	t.Cleanup(func() { snapshotTTL = old })
+	kv := newFakeKV()
+	a, b := NewSharedStore(kv, fakeSealer{}), NewSharedStore(kv, fakeSealer{})
+	id := NewSessionID()
+	_ = a.Create(&Session{ID: id, K8sToken: "t", Username: "bob", ExpiresAt: time.Now().Add(time.Hour)})
+	if _, ok := b.Get(id); !ok { // B has read the shared view now
+		t.Fatal("the session is not known to the second replica")
+	}
+	ref := a.List()[0].Ref
+	if ok, err := a.Revoke(ref); !ok || err != nil {
+		t.Fatalf("revoke: %v %v", ok, err)
+	}
+	deadline := time.Now().Add(snapshotTTL + 500*time.Millisecond)
+	for {
+		if _, ok := b.Get(id); !ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the revoked session still works on another replica after %v", snapshotTTL+500*time.Millisecond)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **How fast a revoked session stops working is now stated and tested (Phase 107).** With shared sessions another replica may honour
+  a revoked session until it reloads the Secret: 3 s, never more than 5 s in normal operation (docs/security). A test fails if the
+  cache time is raised past that. Revocation stays bounded, not instantaneous.
+
 ### Fixed
 - **"Update the look of the sign-in page" changes one Keycloak (Phase 106).** It used to mount the theme into every Keycloak found
   in the cluster (each one restarts). Now it picks the one the saved issuer points at (an in-cluster address), or the only one
