@@ -5,9 +5,10 @@ import (
 	"encoding/hex"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/f1nn17/vinaire/backend/internal/trustedproxy"
 )
 
 // Login throttling (Roadmap Phase 36). A failed login is counted against the
@@ -50,17 +51,13 @@ func tokenKey(token string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// clientIP is the address a login is counted against: the connection's peer,
-// or — only when the deployment says a trusted proxy sets it
-// (TRUST_FORWARDED_FOR) — the first X-Forwarded-For entry. Trusting that header
-// without a proxy in front would let anyone pick their own "address".
-func clientIP(r *http.Request, trustForwarded bool) string {
-	if trustForwarded {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			if first := strings.TrimSpace(strings.Split(xff, ",")[0]); net.ParseIP(first) != nil {
-				return first
-			}
-		}
+// clientIP is the address a login is counted against: the connection's peer, or — only when the deployment says a proxy
+// sets it (TRUST_FORWARDED_FOR) AND names that proxy (TRUSTED_PROXIES) — the client address read from X-Forwarded-For
+// by trustedproxy.Set.ClientIP. With the switch on and no proxy named the header is ignored (fail-safe, Roadmap Phase
+// 102): trusting it from anyone lets a client pick its own "address" and walk around the per-address counter.
+func clientIP(r *http.Request, trustForwarded bool, proxies trustedproxy.Set) string {
+	if trustForwarded && !proxies.Empty() {
+		return proxies.ClientIP(r)
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

@@ -114,8 +114,10 @@ kubectl create clusterrolebinding alice-admin  --clusterrole=<fullname>-admin  -
 - **Don't expose Vinaire directly to the internet.** Reach it over a VPN (WireGuard, NetBird,
   Tailscale). If it must be public, only behind HTTPS with a real certificate (cert-manager),
   `cookie.secure: true`, and ideally behind an additional authenticating proxy.
-- Set `trustForwardedFor: true` **only** when a proxy you control sets `X-Forwarded-For`;
-  otherwise the login throttle counts the proxy's address for everyone.
+- Set `trustForwardedFor: true` **only** when a proxy you control sets `X-Forwarded-For`, and name that proxy under
+  `trustedProxies`: the header is read from the right through the listed proxies and ignored from every other
+  address, and with `trustedProxies` empty it is ignored altogether (the throttle then counts the proxy's address for
+  everyone — "This installation" warns about it). Kept true by `TestClientIPIsReadFromTheRightThroughNamedProxies`.
 - Keep `CLUSTER_STORE_KEY` out of the repository and the image; rotate it by setting the new
   key and moving the old one to `CLUSTER_STORE_KEY_PREVIOUS`, then restart once.
 - Grant the `-admin` role to as few people as possible: it can register a cluster whose

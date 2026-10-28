@@ -27,6 +27,7 @@ func installationFacts(cfg config.Config, proxies trustedproxy.Set) *securityche
 		SessionStore:        cfg.SessionStore,
 		HTTPKeycloakAllowed: os.Getenv("OIDC_ALLOW_HTTP_PRIVATE_NETWORK") == "true",
 		BroadTrustedProxies: proxies.Broad(),
+		ForwardedForIgnored: cfg.TrustForwardedFor && proxies.Empty(),
 	}
 	for _, name := range devOptOuts {
 		if os.Getenv(name) == "true" {

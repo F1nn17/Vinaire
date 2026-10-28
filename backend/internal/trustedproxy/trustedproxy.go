@@ -141,6 +141,35 @@ func lastToken(values []string) string {
 	return strings.ToLower(strings.TrimSpace(v))
 }
 
+// ClientIP is the address of the client a request is really from (Roadmap Phase 102). Not from a trusted proxy: the
+// connection's own peer, whatever X-Forwarded-For says — any client can send that header. From a trusted proxy: the
+// X-Forwarded-For chain is read from the RIGHT, skipping the entries that are themselves trusted proxies (each hop
+// appended the address it received from), and the first other entry is the client. A chain that is empty, unreadable
+// or made only of proxies gives the peer. The first entry on the left is never believed: it is what the client wrote.
+func (s Set) ClientIP(r *http.Request) string {
+	peer := Peer(r.RemoteAddr)
+	if !s.Contains(r.RemoteAddr) {
+		return peer
+	}
+	var chain []string
+	for _, v := range r.Header.Values("X-Forwarded-For") {
+		for _, e := range strings.Split(v, ",") {
+			chain = append(chain, strings.TrimSpace(e))
+		}
+	}
+	for i := len(chain) - 1; i >= 0; i-- {
+		a, err := netip.ParseAddr(chain[i])
+		if err != nil {
+			return peer // a hop wrote something that is not an address: don't guess
+		}
+		a = a.Unmap()
+		if !s.Contains(a.String()) {
+			return a.String()
+		}
+	}
+	return peer
+}
+
 // Peer is the host part of RemoteAddr, for a message that tells the operator which address to list.
 func Peer(remoteAddr string) string {
 	if ap, err := netip.ParseAddrPort(remoteAddr); err == nil {

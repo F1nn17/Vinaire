@@ -11,6 +11,8 @@ import (
 	"sync"
 
 	"golang.org/x/sync/singleflight"
+
+	"github.com/f1nn17/vinaire/backend/internal/trustedproxy"
 	"time"
 )
 
@@ -73,6 +75,9 @@ type Manager struct {
 	// address instead of the connection's peer — only for a deployment where a
 	// trusted proxy sets it.
 	TrustForwardedFor bool
+	// TrustedProxies: the proxies whose X-Forwarded-For is believed. TrustForwardedFor with no proxy listed counts the
+	// connection's own address (Roadmap Phase 102).
+	TrustedProxies trustedproxy.Set
 
 	limiter *loginLimiter
 	// oidc is the OIDC client: set at startup when Mode == ModeOIDC, or switched on
@@ -328,7 +333,7 @@ func (m *Manager) HandleTokenLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip, tkey := clientIP(r, m.TrustForwardedFor), tokenKey(req.Token)
+	ip, tkey := clientIP(r, m.TrustForwardedFor, m.TrustedProxies), tokenKey(req.Token)
 	if ok, wait := m.limiter.allowed(ip, tkey); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		respondError(w, http.StatusTooManyRequests, "too many failed logins — try again in a little while")

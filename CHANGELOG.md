@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Incompatible: `trustForwardedFor` now needs `trustedProxies` (Phase 102).** The login throttle used to believe the first
+  `X-Forwarded-For` entry from any client, so a client that reached Vinaire directly could pick its own address and walk around the
+  per-address counter. Now `X-Forwarded-For` is believed only from the proxies named under `trustedProxies`, and read from the
+  right. **If you have `trustForwardedFor: true` and an empty `trustedProxies`, the header is ignored after the upgrade**: failed logins are
+  counted by the address of the connection (behind one ingress that is its address, shared by everybody) until you name your proxy.
+  "This installation" in the security checks shows a warning for exactly that combination, and the log says so at start. The production
+  example now names a proxy. Private ranges are never trusted automatically.
+- The address Keycloak sends the browser back to (`publicOrigin`) believes `X-Forwarded-Proto` only from `trustedProxies` too.
+
 ### Fixed
 - **The write rate limit counts people, not names (Phase 101).** It was keyed by user name, so two people with the same `preferred_username` under different realms shared (and could exhaust) one limit. It now uses the session's owner key (issuer + subject, or the pasted token).
 

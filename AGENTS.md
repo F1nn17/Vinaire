@@ -493,6 +493,7 @@ records what was verified and how.
 - **Audit-log every mutating action** (who, what, which object — never the secret), including the
   background ones (`AuditBackground`) and long-lived sessions (start *and* end, as `exec` does).
 - **Changes to Vinaire's own configuration** call `requireVinaireRight` first.
+- **A forwarded header (`X-Forwarded-Proto`, `X-Forwarded-For`) is believed only from `trustedproxy.Set`** — never read directly from a request for a decision (Roadmap Phases 96 and 102). `trustForwardedFor` with an empty list is ignored.
 - **A new WebSocket endpoint** must use `originChecker` (a test fails the build otherwise); a new
   state-changing REST route is covered by `OriginGuard` automatically.
 - **Cluster data is untrusted input in the UI**: render as text; `dangerouslySetInnerHTML`, `innerHTML`,
