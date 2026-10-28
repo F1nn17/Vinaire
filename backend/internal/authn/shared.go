@@ -265,17 +265,23 @@ func (s *SharedStore) Create(sess *Session) error {
 	return nil
 }
 
-func (s *SharedStore) Delete(id string) { s.remove(storeKey(id)) }
-
-func (s *SharedStore) remove(key string) {
+// Delete is a person signing out: this replica forgets the session at once and the Secret is cleaned best-effort (the
+// janitor removes what is left at expiry). An administrator's revoke is stricter — see Revoke.
+func (s *SharedStore) Delete(id string) {
+	key := storeKey(id)
 	s.mu.Lock()
 	delete(s.snap, key)
 	s.mu.Unlock()
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	if err := s.kv.Remove(ctx, key); err != nil {
+	if err := s.remove(key); err != nil {
 		slog.Warn("shared session store: couldn't remove a session", "error", err)
 	}
+}
+
+// remove deletes the key from the shared Secret and returns the error if that did not happen.
+func (s *SharedStore) remove(key string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	return s.kv.Remove(ctx, key)
 }
 
 // SessionInfo describes one session for the administrator's list. It never carries the
@@ -301,7 +307,10 @@ func (s *SharedStore) List() []SessionInfo {
 	return out
 }
 
-func (s *SharedStore) Revoke(ref string) bool {
+// Revoke ends the session for every replica. It reports success only once the deletion is saved in the shared Secret:
+// when the API refuses, the session stays (here too) and ErrStoreUnavailable is returned, so nobody is told a session
+// is gone while another replica can still honour it.
+func (s *SharedStore) Revoke(ref string) (bool, error) {
 	s.refresh(0)
 	s.mu.Lock()
 	var key string
@@ -313,10 +322,16 @@ func (s *SharedStore) Revoke(ref string) bool {
 	}
 	s.mu.Unlock()
 	if key == "" {
-		return false
+		return false, nil
 	}
-	s.remove(key)
-	return true
+	if err := s.remove(key); err != nil {
+		slog.Warn("shared session store: couldn't revoke a session", "error", err)
+		return false, ErrStoreUnavailable
+	}
+	s.mu.Lock()
+	delete(s.snap, key)
+	s.mu.Unlock()
+	return true, nil
 }
 
 // StartJanitor removes expired sessions from the shared Secret every minute (any
