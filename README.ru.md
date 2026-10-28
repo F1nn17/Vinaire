@@ -38,7 +38,7 @@ Vinaire — веб-интерфейс для Kubernetes, сделанный с �
 На любом кластере, где есть `kubectl` и [Helm](https://helm.sh/docs/intro/install/):
 
 ```bash
-helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.4.0 \
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.4.1 \
   --namespace vinaire --create-namespace
 
 kubectl -n vinaire port-forward svc/vinaire 8080:8080      # затем откройте http://localhost:8080
@@ -53,7 +53,7 @@ HTTPS и OIDC — в разделе [Установка](#установка-hel
 Проверить перед запуском:
 
 ```bash
-cosign verify ghcr.io/f1nn17/vinaire:1.4.0 \
+cosign verify ghcr.io/f1nn17/vinaire:1.4.1 \
   --certificate-identity-regexp 'https://github.com/F1nn17/Vinaire/\.github/workflows/release\.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -445,6 +445,14 @@ trustedProxies:
 значений чарта по умолчанию и никогда не заменяет заданное вами. Обновление до **1.3.0** с ним падало с
 `nil pointer evaluating interface {}.create` — для этого одного шага используйте `--reset-then-reuse-values` (или
 передайте файл значений через `-f`). CI проверяет релизы, обновляя прежние с `--reuse-values`.
+
+**Обновление до 1.4.1 — две вещи, которые нужно проверить.** (1) Если вы включали `trustForwardedFor: true`, назовите
+свой прокси в `trustedProxies`: `X-Forwarded-For` теперь принимается только от перечисленных прокси, а при пустом списке
+игнорируется (неудачные входы считаются по адресу прокси, общему для всех; Settings → Security → «Эта установка»
+предупреждает). (2) Если вы используете `networkPolicy.enabled` вместе с `keycloak.allowHttpPrivateNetwork`, чарт теперь
+дополнительно открывает TCP-порт 80 в частные диапазоны 10/8, 172.16/12 и 192.168/16 — во все, а не только к Keycloak;
+строже — `networkPolicy.httpKeycloakEgress: false` и `networkPolicy.extraEgress`. На вкладке Sign-in появилась кнопка,
+которая одним шагом приводит страницу входа Keycloak к виду Vinaire.
 
 **Обновление до 1.4.0 — одно, что нужно проверить.** Если TLS заканчивается на вашем ingress или обратном прокси,
 пароль, токен или SSH-ключ, присланные через него, отклоняются, пока вы не добавите прокси в `trustedProxies`

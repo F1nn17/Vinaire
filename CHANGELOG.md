@@ -7,13 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **NetworkPolicy and a Keycloak on plain http (Phase 103).** With `networkPolicy.enabled` and `keycloak.allowHttpPrivateNetwork` the
-  chart now also lets Vinaire out to TCP port 80 of 10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16 (before, a policy cut Vinaire off
-  from such a Keycloak). **This opens port 80 of every private address, not only the Keycloak**; set
-  `networkPolicy.httpKeycloakEgress: false` and name the Keycloak under `extraEgress` to be stricter. Public addresses and 169.254.0.0/16 are
-  never included. A Keycloak inside the cluster behind a Service is CNI-dependent and not verified - use `extraEgress`.
-- "This installation" warns when the NetworkPolicy is on but `networkPolicy.ingressFrom` is empty (any source may reach Vinaire).
+## [1.4.1] - 2026-10-28
+
+### Added
+- **One button for Keycloak's sign-in look (Phase 99).** Settings → Sign-in now checks which theme the realm's sign-in page really
+  serves (a read of the public page, no password) and, when it is not the Vinaire one, offers *Update the look of the sign-in page*:
+  it adds the theme to a Keycloak that runs in the cluster, waits for it to come back and switches the realm to the theme with the
+  administrator's login (used for one request, never kept; *Use the password Vinaire generated* fills it in for a Keycloak Vinaire
+  installed). New routes `GET /api/v1/auth/keycloak/theme-check` and `POST /api/v1/auth/keycloak/login-theme`; the latter is audited as
+  `keycloak-login-theme`.
 
 ### Changed
 - **Incompatible: `trustForwardedFor` now needs `trustedProxies` (Phase 102).** The login throttle used to believe the first
@@ -24,22 +26,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "This installation" in the security checks shows a warning for exactly that combination, and the log says so at start. The production
   example now names a proxy. Private ranges are never trusted automatically.
 - The address Keycloak sends the browser back to (`publicOrigin`) believes `X-Forwarded-Proto` only from `trustedProxies` too.
-
-### Fixed
-- **The write rate limit counts people, not names (Phase 101).** It was keyed by user name, so two people with the same `preferred_username` under different realms shared (and could exhaust) one limit. It now uses the session's owner key (issuer + subject, or the pasted token).
+- **NetworkPolicy and a Keycloak on plain http (Phase 103).** With `networkPolicy.enabled` and `keycloak.allowHttpPrivateNetwork` the
+  chart now also lets Vinaire out to TCP port 80 of 10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16 (before, a policy cut Vinaire off
+  from such a Keycloak). **This opens port 80 of every private address, not only the Keycloak**; set
+  `networkPolicy.httpKeycloakEgress: false` and name the Keycloak under `extraEgress` to be stricter. Public addresses and 169.254.0.0/16 are
+  never included. A Keycloak inside the cluster behind a Service is CNI-dependent and not verified - use `extraEgress`.
+- "This installation" warns when the NetworkPolicy is on but `networkPolicy.ingressFrom` is empty (any source may reach Vinaire).
 
 ### Fixed
 - **A revoked session could come back (Phase 100).** With shared sessions (`SESSION_STORE=secret`), ending a session on one replica while
   another was renewing it could write the session back, and the request being renewed was still served. Renewal now writes only if
   the session is still in the store (a version-checked patch, `PutIfPresent`), and a session that ended meanwhile stays ended.
-
-### Added
-- **One button for Keycloak's sign-in look (Phase 99).** Settings → Sign-in now checks which theme the realm's sign-in page really
-  serves (a read of the public page, no password) and, when it is not the Vinaire one, offers *Update the look of the sign-in page*:
-  it adds the theme to a Keycloak that runs in the cluster, waits for it to come back and switches the realm to the theme with the
-  administrator's login (used for one request, never kept; *Use the password Vinaire generated* fills it in for a Keycloak Vinaire
-  installed). New routes `GET /api/v1/auth/keycloak/theme-check` and `POST /api/v1/auth/keycloak/login-theme`; the latter is audited as
-  `keycloak-login-theme`.
+- **The write rate limit counts people, not names (Phase 101).** It was keyed by user name, so two people with the same `preferred_username` under different realms shared (and could exhaust) one limit. It now uses the session's owner key (issuer + subject, or the pasted token).
 
 ## [1.4.0] - 2026-10-25
 
