@@ -276,3 +276,23 @@ func TestAUserNameIsNeverUsedAsAKeyOrAnIdentity(t *testing.T) {
 		}
 	}
 }
+
+// A forwarded header is believed only through internal/trustedproxy (Roadmap Phases 96 and 102). These files read one for a
+// reason that was reviewed: the private-network password guard (it asks of every hop, and is a guard against a mistake),
+// the message that names the address to list, and HSTS (harmless over http).
+func TestForwardedHeadersAreReadOnlyThroughTheTrustedProxyList(t *testing.T) {
+	reviewed := map[string]bool{
+		"internal/api/keycloak.go": true, "internal/api/provision.go": true, "security_headers.go": true,
+	}
+	read := regexp.MustCompile(`Header\.(Get|Values)\(\s*"X-Forwarded-(For|Proto)"`)
+	for path, lines := range goSources(t) {
+		if strings.HasPrefix(path, "internal/trustedproxy/") || reviewed[path] {
+			continue
+		}
+		for i, line := range lines {
+			if read.MatchString(code(line)) {
+				t.Errorf("%s:%d reads a forwarded header directly — use trustedproxy.Set", path, i+1)
+			}
+		}
+	}
+}

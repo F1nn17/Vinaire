@@ -14,6 +14,8 @@ import (
 
 	"github.com/f1nn17/vinaire/backend/internal/clusters"
 	"github.com/f1nn17/vinaire/backend/internal/oidcbroker"
+
+	"github.com/f1nn17/vinaire/backend/internal/trustedproxy"
 )
 
 type fakeDocs struct {
@@ -271,5 +273,27 @@ func TestRestoreOIDCPinsTheIssuerOfSettingsSavedBeforeAndKeepsItAcrossStarts(t *
 	_ = json.Unmarshal(docs.docs["auth-oidc"], &after)
 	if after.LegacyAdoptIssuer != issuer {
 		t.Fatalf("the pinned issuer moved to %q", after.LegacyAdoptIssuer)
+	}
+}
+
+// Roadmap Phase 102: the scheme of the address Keycloak sends the browser back to is not decided by a header any client
+// can write.
+func TestThePublicOriginBelievesForwardedProtoOnlyFromANamedProxy(t *testing.T) {
+	proxies, _, _ := trustedproxy.Parse("10.0.0.1")
+	h := &Handler{TrustedProxies: proxies}
+	mk := func(peer string) *http.Request {
+		r := httptest.NewRequest("POST", "http://vinaire.example/api/v1/auth/keycloak/setup", nil)
+		r.RemoteAddr = peer
+		r.Header.Set("X-Forwarded-Proto", "https")
+		return r
+	}
+	if got := h.publicOrigin(mk("10.0.0.1:1")); got != "https://vinaire.example" {
+		t.Errorf("from the named proxy: %s", got)
+	}
+	if got := h.publicOrigin(mk("198.51.100.9:1")); got != "http://vinaire.example" {
+		t.Errorf("a stranger's header was believed: %s", got)
+	}
+	if got := (&Handler{}).publicOrigin(mk("10.0.0.1:1")); got != "http://vinaire.example" {
+		t.Errorf("with nobody named: %s", got)
 	}
 }

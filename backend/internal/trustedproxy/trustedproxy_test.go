@@ -150,3 +150,40 @@ func FuzzParseTrustedProxies(f *testing.F) {
 		}
 	})
 }
+
+// Roadmap Phase 102: the client's address, read from the right through the proxies that are named.
+func TestClientIPIsReadFromTheRightThroughNamedProxies(t *testing.T) {
+	set, _, err := Parse("10.0.0.1, 10.0.0.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := func(peer string, xff ...string) *http.Request {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = peer
+		for _, v := range xff {
+			r.Header.Add("X-Forwarded-For", v)
+		}
+		return r
+	}
+	for name, tc := range map[string]struct {
+		r    *http.Request
+		want string
+	}{
+		"no header":                       {req("10.0.0.1:1"), "10.0.0.1"},
+		"one proxy":                       {req("10.0.0.1:1", "203.0.113.5"), "203.0.113.5"},
+		"two proxies":                     {req("10.0.0.2:1", "203.0.113.5, 10.0.0.1"), "203.0.113.5"},
+		"forged left entry":               {req("10.0.0.1:1", "9.9.9.9, 203.0.113.5"), "203.0.113.5"},
+		"forged entry in an earlier line": {req("10.0.0.1:1", "9.9.9.9", "203.0.113.5"), "203.0.113.5"},
+		"only proxies":                    {req("10.0.0.1:1", "10.0.0.2"), "10.0.0.1"},
+		"garbage hop":                     {req("10.0.0.1:1", "203.0.113.5, nonsense"), "10.0.0.1"},
+		"a stranger sends it directly":    {req("198.51.100.7:1", "1.1.1.1"), "198.51.100.7"},
+		"mapped ipv6 client":              {req("10.0.0.1:1", "::ffff:203.0.113.5"), "203.0.113.5"},
+	} {
+		if got := set.ClientIP(tc.r); got != tc.want {
+			t.Errorf("%s: got %s, want %s", name, got, tc.want)
+		}
+	}
+	if got := (Set{}).ClientIP(req("10.0.0.1:1", "1.1.1.1")); got != "10.0.0.1" {
+		t.Errorf("an empty set believed a header: %s", got)
+	}
+}

@@ -21,6 +21,8 @@ type Installation struct {
 	StoreUnencrypted    bool     // the cluster registry is kept unencrypted
 	// BroadTrustedProxies: entries of trustedProxies wider than one small subnet (Roadmap Phase 96)
 	BroadTrustedProxies []string
+	// ForwardedForIgnored: trustForwardedFor is on but no trusted proxy is named, so X-Forwarded-For is ignored (Roadmap Phase 102)
+	ForwardedForIgnored bool
 }
 
 func installationCheck(test func(i *Installation) (detail string, flagged bool)) func(*Snapshot) []Finding {
@@ -72,6 +74,16 @@ func init() {
 			Needs:       []string{"installation"},
 			Run: installationCheck(func(i *Installation) (string, bool) {
 				return "the registry's Secret is not encrypted", i.StoreUnencrypted
+			}),
+		},
+		Check{
+			ID: "inst-forwardedfor-ignored", Category: "This installation", Severity: Low,
+			Title:       "X-Forwarded-For is ignored, so everyone behind a proxy shares one login limit",
+			Description: "trustForwardedFor is on, but no proxy is named under trustedProxies, so Vinaire does not believe the header (any client could write it) and counts failed logins by the address of the connection. Behind one ingress that is the ingress's address: everybody shares one per-address limit, and a few failed logins can lock the rest out for a while.",
+			Remediation: "Name your reverse proxy's own address under trustedProxies in the chart's values (the address Vinaire sees it connect from), or set trustForwardedFor to false if you have no proxy.",
+			Needs:       []string{"installation"},
+			Run: installationCheck(func(i *Installation) (string, bool) {
+				return "trustForwardedFor=true with an empty trustedProxies", i.ForwardedForIgnored
 			}),
 		},
 		Check{

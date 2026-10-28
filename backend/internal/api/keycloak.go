@@ -348,14 +348,14 @@ type KeycloakSetupResult struct {
 // publicOrigin is the scheme://host the browser reached Vinaire on — what Keycloak
 // must send the browser back to. The browser's own Origin header is the best
 // witness (the origin guard has already checked it); else the request's host.
-func publicOrigin(r *http.Request) string {
+func (h *Handler) publicOrigin(r *http.Request) string {
 	if o := r.Header.Get("Origin"); o != "" && o != "null" {
 		if u, err := url.Parse(o); err == nil && u.Host != "" && (u.Scheme == "https" || u.Scheme == "http") {
 			return u.Scheme + "://" + u.Host
 		}
 	}
 	scheme := "http"
-	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+	if h.TrustedProxies.IsHTTPS(r) {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host
@@ -390,7 +390,7 @@ func (h *Handler) KeycloakSetup(w http.ResponseWriter, r *http.Request) {
 	if b.ClientID == "" {
 		b.ClientID = "vinaire"
 	}
-	origin := publicOrigin(r)
+	origin := h.publicOrigin(r)
 	redirect := origin + "/api/v1/auth/oidc/callback"
 	p := keycloak.Params{
 		BaseURL: b.KeycloakURL, AdminRealm: b.AdminRealm, AdminUser: b.AdminUser, AdminPass: keycloak.NewSecret(b.AdminPassword),

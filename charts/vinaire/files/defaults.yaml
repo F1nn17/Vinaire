@@ -174,7 +174,10 @@ sessionMaxTTL: 12h
 sessionTokenTTL: 30m
 
 # Set true ONLY when a proxy you control (the ingress) sets X-Forwarded-For: the
-# login throttle then counts the real client address instead of the proxy's.
+# login throttle then counts the real client address instead of the proxy's. It takes effect ONLY together with
+# trustedProxies below (Roadmap Phase 102): the header is read from the right, through the proxies listed there, and
+# ignored from every other address. With trustedProxies empty it is ignored altogether and logins are counted by
+# connection address — behind one ingress that means everybody shares one per-address limit.
 trustForwardedFor: false
 
 # The reverse proxies whose "X-Forwarded-Proto: https" Vinaire believes (Roadmap Phase 96): addresses or CIDRs, the

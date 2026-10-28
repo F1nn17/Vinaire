@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/f1nn17/vinaire/backend/internal/trustedproxy"
 )
 
 func jwtExpiring(t *testing.T, at time.Time) string {
@@ -177,18 +179,36 @@ func TestLoginThrottlePerAddress(t *testing.T) {
 	}
 }
 
-func TestClientIPOnlyTrustsForwardedForWhenTold(t *testing.T) {
+func TestClientIPOnlyTrustsForwardedForFromANamedProxy(t *testing.T) {
+	proxy, _, _ := trustedproxy.Parse("10.0.0.1")
+	none := trustedproxy.Set{}
 	r := httptest.NewRequest(http.MethodPost, "/", nil)
 	r.RemoteAddr = "10.0.0.1:5555"
-	r.Header.Set("X-Forwarded-For", "203.0.113.50, 10.0.0.1")
-	if got := clientIP(r, false); got != "10.0.0.1" {
-		t.Errorf("untrusted: %s", got)
+	r.Header.Set("X-Forwarded-For", "203.0.113.50")
+	if got := clientIP(r, false, proxy); got != "10.0.0.1" {
+		t.Errorf("switch off: %s", got)
 	}
-	if got := clientIP(r, true); got != "203.0.113.50" {
-		t.Errorf("trusted: %s", got)
+	if got := clientIP(r, true, proxy); got != "203.0.113.50" {
+		t.Errorf("a named proxy: %s", got)
+	}
+	// Phase 102: the switch on and nobody named — the header is ignored, the connection's address counts
+	if got := clientIP(r, true, none); got != "10.0.0.1" {
+		t.Errorf("no proxy named: %s", got)
+	}
+	// a client that reaches Vinaire directly cannot choose its address
+	d := httptest.NewRequest(http.MethodPost, "/", nil)
+	d.RemoteAddr = "198.51.100.9:4000"
+	d.Header.Set("X-Forwarded-For", "1.2.3.4")
+	if got := clientIP(d, true, proxy); got != "198.51.100.9" {
+		t.Errorf("a direct client forged its address: %s", got)
+	}
+	// behind the proxy, what the client wrote on the left is not believed: the proxy appended the real one on the right
+	r.Header.Set("X-Forwarded-For", "6.6.6.6, 203.0.113.50")
+	if got := clientIP(r, true, proxy); got != "203.0.113.50" {
+		t.Errorf("a forged left entry was believed: %s", got)
 	}
 	r.Header.Set("X-Forwarded-For", "not-an-ip")
-	if got := clientIP(r, true); got != "10.0.0.1" {
+	if got := clientIP(r, true, proxy); got != "10.0.0.1" {
 		t.Errorf("a garbage header must fall back to the peer: %s", got)
 	}
 }

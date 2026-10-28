@@ -91,3 +91,15 @@ func TestAWideTrustedProxyRangeIsReported(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestAForwardedForSwitchWithoutAProxyIsReported(t *testing.T) {
+	good := Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", Chart: true, AuditOnVolume: true, NetworkPolicy: true}
+	if r := find(RunAll(instSnap(&good)), "inst-forwardedfor-ignored"); r.Status != Pass {
+		t.Fatalf("%+v", r)
+	}
+	bad := good
+	bad.ForwardedForIgnored = true
+	if r := find(RunAll(instSnap(&bad)), "inst-forwardedfor-ignored"); r.Status != Fail {
+		t.Fatalf("%+v", r)
+	}
+}

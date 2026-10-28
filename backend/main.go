@@ -188,6 +188,10 @@ func main() {
 		slog.Warn("TRUSTED_PROXIES names a wide range: any address in it can claim https with a forged X-Forwarded-Proto. List your proxy's own address.", "range", w)
 	}
 	workloadsHandler.TrustedProxies = proxies
+	auth.TrustedProxies = proxies // before the server starts: the login throttle reads X-Forwarded-For only from these
+	if cfg.TrustForwardedFor && proxies.Empty() {
+		slog.Warn("TRUST_FORWARDED_FOR is on but TRUSTED_PROXIES is empty: X-Forwarded-For is ignored and logins are counted per connection address. List your proxy in trustedProxies.")
+	}
 	workloadsHandler.Install = installationFacts(cfg, proxies)
 	workloadsHandler.Version = versionFromEnv()
 	if os.Getenv("OIDC_ALLOW_HTTP_PRIVATE_NETWORK") == "true" {
