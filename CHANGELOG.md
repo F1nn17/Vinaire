@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **The chart upgrade test covers every release since 1.3 (Phase 108).** CI used to upgrade from the oldest and the newest earlier
+  release only. It now also upgrades from each release since 1.3.0 with `--reuse-values`, and once more with NetworkPolicy, an http
+  Keycloak and `trustedProxies` switched on.
 - **How fast a revoked session stops working is now stated and tested (Phase 107).** With shared sessions another replica may honour
   a revoked session until it reloads the Secret: 3 s, never more than 5 s in normal operation (docs/security). A test fails if the
   cache time is raised past that. Revocation stays bounded, not instantaneous.
