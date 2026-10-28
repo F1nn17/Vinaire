@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Ending a session is reported only when it is saved (Phase 105).** With `sessions.store: secret`, *Revoke* used to answer "ok" even
+  when the Kubernetes API refused to delete the session from the shared Secret, so another replica could still honour it. Now the
+  answer is `503` ("still valid, try again") and nothing is forgotten locally until the deletion is saved.
+
 ## [1.4.1] - 2026-10-28
 
 ### Added
