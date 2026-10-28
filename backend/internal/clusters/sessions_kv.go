@@ -12,6 +12,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 )
 
 // sessionsSecretName is the Secret the shared session store lives in (Roadmap Phase
@@ -22,6 +23,13 @@ const sessionsSecretName = "vinaire-sessions"
 // session, changed with a merge patch of that key alone, so replicas never overwrite
 // each other. Values arrive already sealed.
 type SessionBackend struct{ s *SecretStore }
+
+// NewSessionBackend is the shared-session backend over any clientset and namespace. The server builds its backend through
+// SecretStore.SessionBackend (which requires the store's key); this is for the integration tests, which put two stores
+// on one real Secret (Roadmap Phase 110).
+func NewSessionBackend(cs kubernetes.Interface, namespace string) *SessionBackend {
+	return &SessionBackend{s: &SecretStore{clientset: cs, namespace: namespace}}
+}
 
 // SessionBackend returns the shared-session backend, and the cipher that seals it.
 // ok is false when the store has no encryption key: a session holds a Kubernetes
