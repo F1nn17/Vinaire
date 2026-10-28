@@ -122,6 +122,11 @@ kubectl create clusterrolebinding alice-admin  --clusterrole=<fullname>-admin  -
   key and moving the old one to `CLUSTER_STORE_KEY_PREVIOUS`, then restart once.
 - Grant the `-admin` role to as few people as possible: it can register a cluster whose
   credentials Vinaire will then hold.
+- With `keycloak.allowHttpPrivateNetwork` and `networkPolicy.enabled` the chart opens TCP port 80 to **all** of 10.0.0.0/8,
+  172.16.0.0/12 and 192.168.0.0/16 so Vinaire can reach a Keycloak on http - not only the Keycloak. For the stricter setting
+  use `networkPolicy.httpKeycloakEgress: false` and name the Keycloak under `networkPolicy.extraEgress`. A policy with an empty
+  `ingressFrom` lets any source in ("This installation" warns). Rendering of both cases is kept by
+  `TestTheNetworkPolicyOpensPort80ToPrivateRangesOnlyForAnHTTPKeycloak`; a Keycloak inside the cluster behind a Service is not verified.
 - Turn on `networkPolicy.enabled` if your CNI enforces it (inbound only from the ingress,
   outbound only to DNS, 443/6443 and — if you provision over SSH — 22, never the metadata
   address), and keep the audit log: either set `audit.persistence.enabled: true` (a volume for the

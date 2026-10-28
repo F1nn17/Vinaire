@@ -15,6 +15,8 @@ type Installation struct {
 	Chart         bool
 	AuditOnVolume bool // the audit log is on a persistent volume
 	NetworkPolicy bool // the chart's NetworkPolicy is on
+	// NetworkPolicyOpen: it is on but ingressFrom is empty, so it lets any source in (Roadmap Phase 103)
+	NetworkPolicyOpen bool
 
 	HTTPKeycloakAllowed bool     // OIDC_ALLOW_HTTP_PRIVATE_NETWORK
 	DevOptOuts          []string // names of the development-only switches that are on
@@ -141,6 +143,16 @@ func init() {
 			Needs:       []string{"installation"},
 			Run: installationCheck(func(i *Installation) (string, bool) {
 				return "sessions.store=memory", i.SessionStore == "memory" && i.AuthMode != "disabled"
+			}),
+		},
+		Check{
+			ID: "inst-networkpolicy-open", Category: "This installation", Severity: Low,
+			Title:       "The NetworkPolicy lets any source reach Vinaire",
+			Description: "networkPolicy.enabled is on but networkPolicy.ingressFrom is empty, so the policy opens Vinaire's port to every source that can reach the pod: it limits what Vinaire may reach, not who may reach Vinaire.",
+			Remediation: "List who may reach Vinaire under networkPolicy.ingressFrom in the chart's values, e.g. the ingress controller's namespace.",
+			Needs:       []string{"installation"},
+			Run: installationCheck(func(i *Installation) (string, bool) {
+				return "networkPolicy.ingressFrom is empty", i.NetworkPolicyOpen
 			}),
 		},
 		Check{

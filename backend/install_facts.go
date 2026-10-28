@@ -38,6 +38,7 @@ func installationFacts(cfg config.Config, proxies trustedproxy.Set) *securityche
 		inst.Chart = true
 		inst.AuditOnVolume = v == "true"
 		inst.NetworkPolicy = os.Getenv("INSTALL_NETWORK_POLICY") == "true"
+		inst.NetworkPolicyOpen = inst.NetworkPolicy && os.Getenv("INSTALL_NETWORK_POLICY_OPEN") == "true"
 	}
 	return inst
 }

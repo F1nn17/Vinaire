@@ -252,6 +252,7 @@
         "enabled": { "type": "boolean" },
         "ingressFrom": { "type": "array" },
         "allowSSH": { "type": "boolean" },
+        "httpKeycloakEgress": { "type": "boolean" },
         "extraEgress": { "type": "array" }
       }
     }
