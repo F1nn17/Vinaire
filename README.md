@@ -439,6 +439,12 @@ GitOps poller, sets client-IP affinity on the Service and adds a PodDisruptionBu
 `rbac.clusterManagement.create: true` and an encryption key (`CLUSTER_STORE_KEY`, or the managed
 `vinaire-clusters-key`). Settings → Sign-in lists the signed-in sessions and can end them.
 
+A replica that cannot reach the Kubernetes API keeps admitting the sessions it last saw, so a session revoked meanwhile on
+another replica is honoured there until the API is back. Where a revoke must hold even through an outage, set
+`sessions.staleLimit` (for example `1m`): past it that replica refuses every session until it can read the Secret again
+(nobody is deleted; the price is that a longer outage signs everyone out of that replica). The failure drill with two real pods is
+`scripts/chaos-ha.sh`.
+
 #### Upgrading
 
 `helm upgrade --install` is the same command for a first install and every upgrade; what each release changes is in

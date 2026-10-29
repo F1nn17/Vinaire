@@ -92,6 +92,10 @@ spec:
             {{- end }}
             - name: SESSION_STORE
               value: {{ $store | quote }}
+            {{- if and (eq $store "secret") (.Values.sessions.staleLimit) }}
+            - name: SESSION_STALE_LIMIT
+              value: {{ .Values.sessions.staleLimit | quote }}
+            {{- end }}
             {{- if gt (int .Values.replicaCount) 1 }}
             - name: LEADER_ELECTION
               value: "true"

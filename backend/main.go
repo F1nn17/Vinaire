@@ -117,6 +117,7 @@ func main() {
 			os.Exit(1)
 		}
 		shared := authn.NewSharedStore(backend, sealer)
+		shared.SetStaleLimit(cfg.SessionStaleLimit)
 		shared.StartJanitor(ctx)
 		auth.UseStore(shared)
 		slog.Info("sessions are kept in a sealed Secret, shared by every replica")

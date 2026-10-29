@@ -77,8 +77,25 @@ type SharedStore struct {
 	mu       sync.Mutex
 	snap     map[string]*Session // by key
 	snapAt   time.Time
+	lastOK   time.Time // the last time the Secret was read successfully
+	failing  bool      // the last read failed: further reads happen in the background, never in a request
+	reading  bool      // such a background read is under way
 	forcedAt time.Time
+	// staleLimit: how long the last good view may keep admitting sessions while the Secret can't be read. Zero: no
+	// limit (availability first). (Roadmap Phase 111)
+	staleLimit time.Duration
 	warnedAt time.Time
+}
+
+// SetStaleLimit makes the store fail closed: once the Secret has not been read for longer than d, no session from the
+// shared view is admitted until a read succeeds again (the sessions are not deleted — they work again afterwards). It is
+// the answer to "a replica cut off from the API keeps honouring a session another replica has revoked": with a limit the
+// revoke bound holds even through an outage, at the price of everyone being signed out of that replica while it lasts.
+// Zero (the default) keeps the last view for as long as the outage lasts. Call it before the store is used.
+func (s *SharedStore) SetStaleLimit(d time.Duration) {
+	s.mu.Lock()
+	s.staleLimit = d
+	s.mu.Unlock()
 }
 
 // NewSharedStore builds the store; call StartJanitor to let it tidy up.
@@ -121,21 +138,45 @@ func (s *SharedStore) decode(sealed []byte, now time.Time) (*Session, bool) {
 
 // refresh reloads the shared view if it is older than max (a failed reload keeps the
 // old view and tries again soon, so the store being down can't turn every request into
-// an API call).
+// an API call). Once a read has failed, the next ones run in the background and a request
+// goes on with the view it has: a request must not wait out the API's timeout while the API
+// is unreachable (measured with two real pods: every request hung 10 s or more) — the first
+// failing read is the only one a request pays for. (Roadmap Phase 111)
 func (s *SharedStore) refresh(max time.Duration) {
 	s.mu.Lock()
 	if time.Since(s.snapAt) < max {
 		s.mu.Unlock()
 		return
 	}
+	if s.failing {
+		if s.reading {
+			s.mu.Unlock()
+			return
+		}
+		s.reading = true
+		s.snapAt = time.Now()
+		s.mu.Unlock()
+		go func() {
+			s.load()
+			s.mu.Lock()
+			s.reading = false
+			s.mu.Unlock()
+		}()
+		return
+	}
 	s.snapAt = time.Now()
 	s.mu.Unlock()
+	s.load()
+}
 
+// load reads the Secret and replaces the view; on an error it keeps the old one.
+func (s *SharedStore) load() {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	raw, err := s.kv.Snapshot(ctx)
 	if err != nil {
 		s.mu.Lock()
+		s.failing = true
 		if time.Since(s.warnedAt) > time.Minute {
 			s.warnedAt = time.Now()
 			slog.Warn("shared session store: couldn't read it — using the last view", "error", err)
@@ -155,6 +196,8 @@ func (s *SharedStore) refresh(max time.Duration) {
 	}
 	s.mu.Lock()
 	s.snap = next
+	s.lastOK = now
+	s.failing = false
 	s.mu.Unlock()
 }
 
@@ -183,6 +226,9 @@ func (s *SharedStore) lookup(key, id string) (*Session, bool) {
 	defer s.mu.Unlock()
 	sess, ok := s.snap[key]
 	if !ok || time.Now().After(sess.ExpiresAt) {
+		return nil, false
+	}
+	if s.staleLimit > 0 && time.Since(s.lastOK) > s.staleLimit {
 		return nil, false
 	}
 	out := *sess

@@ -44,6 +44,14 @@ keyProvider:
 # PodDisruptionBudget.
 sessions:
   store: auto
+  # With store: secret — how long a replica that can no longer read the sessions' Secret (the Kubernetes API is
+  # unreachable from it) keeps admitting the sessions it saw last (Roadmap Phase 111). Empty (the default): for as long
+  # as the outage lasts — availability first, but a session revoked meanwhile on another replica is honoured here until
+  # the API is back. A Go duration (e.g. 1m) fails closed: past it this replica refuses every session until the Secret
+  # can be read again (nobody is deleted — they work again afterwards), so a revoke holds within about 3 s plus this
+  # limit even through an outage. Choose it for a deployment where a revoke must be reliable; the price is that an API
+  # outage longer than the limit signs everyone out of the affected replica.
+  staleLimit: ""
 
 # The audit log (Roadmap Phase 76). By default it is written to an emptyDir: it survives a restart of
 # the container but not the pod being replaced, so ship the container's stdout to your log system too
