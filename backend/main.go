@@ -54,6 +54,10 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: &logLevel})))
 
 	cfg := config.Load()
+	if cfg.SessionStaleLimitErr != "" {
+		slog.Error("invalid configuration", "error", cfg.SessionStaleLimitErr)
+		os.Exit(1)
+	}
 	if err := config.ValidateCORSOrigins(cfg.CORSAllowedOrigins); err != nil {
 		slog.Error("invalid configuration", "error", err)
 		os.Exit(1)

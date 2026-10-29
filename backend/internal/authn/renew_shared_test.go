@@ -253,3 +253,52 @@ func TestRevokeDuringRenewalMustNotRestoreTheSession(t *testing.T) {
 		}
 	}
 }
+
+// Roadmap Phase 112: the API becomes unreachable from the renewing replica AFTER the provider has rotated the refresh
+// token and before the renewed session is saved. The stored copy still holds the spent token, so unless the new one is
+// saved the next renewal (on any replica) is refused by a provider that rotates, and the person must sign in again.
+func partitionAfterRotation(t *testing.T, heal time.Duration) (*replicas, bool) {
+	t.Helper()
+	old := renewSaveBackoff
+	renewSaveBackoff = []time.Duration{20 * time.Millisecond, 40 * time.Millisecond, 80 * time.Millisecond, 160 * time.Millisecond}
+	t.Cleanup(func() { renewSaveBackoff = old })
+	r := newReplicas(t)
+	r.due(t)
+	hook := func() {
+		r.kv.mu.Lock()
+		r.kv.fail = true
+		r.kv.mu.Unlock()
+		if heal > 0 {
+			time.AfterFunc(heal, func() { r.kv.mu.Lock(); r.kv.fail = false; r.kv.mu.Unlock() })
+		}
+	}
+	r.brokerA.onRenew.Store(&hook)
+	r.a.Authenticate(r.request())
+	r.brokerA.onRenew.Store(nil)
+	r.kv.mu.Lock()
+	r.kv.fail = false
+	r.kv.mu.Unlock()
+	r.due(t) // make the next replica find it due again, whatever was stored
+	_, ok := r.b.Authenticate(r.request())
+	return r, ok
+}
+
+func TestABriefPartitionAfterTheProviderRotatedTheTokenDoesNotEndTheSession(t *testing.T) {
+	// the API is back within the renewal's retries: the rotated refresh token is saved, the other replica carries on
+	r, okB := partitionAfterRotation(t, 100*time.Millisecond)
+	if !okB {
+		t.Fatalf("a blip of the API ended the session (provider asked %d times)", r.ctl.refreshCalls.Load())
+	}
+}
+
+func TestALongPartitionAfterTheProviderRotatedTheTokenEndsTheSessionAndNothingWorse(t *testing.T) {
+	// not healed within the retries: the rotated token is lost with the replica's memory. This pins the known cost
+	// (the person signs in again) so a change to it is a decision: the session is ended, never kept on a spent token.
+	r, okB := partitionAfterRotation(t, 0)
+	if okB {
+		t.Fatal("the other replica served a session whose refresh token the provider had already rotated away")
+	}
+	if _, ok := r.a.Sessions.Get(r.id); ok {
+		t.Fatal("the ended session is still in the store")
+	}
+}

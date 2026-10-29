@@ -25,6 +25,7 @@ func installationFacts(cfg config.Config, proxies trustedproxy.Set) *securityche
 		AuthMode:            cfg.AuthMode,
 		CookieSecure:        cfg.CookieSecure,
 		SessionStore:        cfg.SessionStore,
+		StaleLimitSeconds:   int(cfg.SessionStaleLimit.Seconds()),
 		HTTPKeycloakAllowed: os.Getenv("OIDC_ALLOW_HTTP_PRIVATE_NETWORK") == "true",
 		BroadTrustedProxies: proxies.Broad(),
 		ForwardedForIgnored: cfg.TrustForwardedFor && proxies.Empty(),

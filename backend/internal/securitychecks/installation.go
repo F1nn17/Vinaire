@@ -10,6 +10,8 @@ type Installation struct {
 	AuthMode     string // "token", "oidc" or "disabled"
 	CookieSecure bool
 	SessionStore string // "memory" or "secret"
+	// StaleLimitSeconds: SESSION_STALE_LIMIT, 0 when unset (Roadmap Phase 112). Only meaningful with the secret store.
+	StaleLimitSeconds int
 
 	// Chart: the Helm chart said how it was installed (INSTALL_* variables), so the next two fields are known.
 	Chart         bool
@@ -143,6 +145,16 @@ func init() {
 			Needs:       []string{"installation"},
 			Run: installationCheck(func(i *Installation) (string, bool) {
 				return "sessions.store=memory", i.SessionStore == "memory" && i.AuthMode != "disabled"
+			}),
+		},
+		Check{
+			ID: "inst-session-stale-unlimited", Category: "This installation", Severity: Low,
+			Title:       "A replica cut off from the Kubernetes API keeps honouring sessions without a time limit",
+			Description: "The shared session store has no sessions.staleLimit, so a replica that cannot read the sessions' Secret goes on admitting the sessions it last saw for as long as the outage lasts; a session revoked meanwhile on another replica is honoured there until the API is back. This is the availability-first default, not a fault.",
+			Remediation: "Set sessions.staleLimit (e.g. 1m) in the chart's values where a revoke must hold through an outage: past it the replica refuses every session until it can read the Secret again.",
+			Needs:       []string{"installation"},
+			Run: installationCheck(func(i *Installation) (string, bool) {
+				return "sessions.staleLimit is empty", i.SessionStore == "secret" && i.AuthMode != "disabled" && i.StaleLimitSeconds == 0
 			}),
 		},
 		Check{
