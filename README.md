@@ -442,8 +442,10 @@ GitOps poller, sets client-IP affinity on the Service and adds a PodDisruptionBu
 A replica that cannot reach the Kubernetes API keeps admitting the sessions it last saw, so a session revoked meanwhile on
 another replica is honoured there until the API is back. Where a revoke must hold even through an outage, set
 `sessions.staleLimit` (for example `1m`): past it that replica refuses every session until it can read the Secret again
-(nobody is deleted; the price is that a longer outage signs everyone out of that replica). The failure drill with two real pods is
-`scripts/chaos-ha.sh`.
+(nobody is deleted; the price is that a longer outage signs everyone out of that replica). The failure drills with two real pods are
+`scripts/chaos-ha.sh` (sessions) and `scripts/chaos-keycloak.sh` (a real Keycloak: the renewal of a session while one pod is cut off).
+The limit counts from a replica's last successful read of the sessions, which an idle replica makes only when a request arrives — so
+a replica that has had no traffic for longer than the limit refuses everyone if the API is down at that moment.
 
 #### Upgrading
 

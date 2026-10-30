@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **A drill of the renewal of a Keycloak session with two real pods and a real Keycloak (Phase 113, `scripts/chaos-keycloak.sh`, a CI
+  job).** A person signs in through Keycloak (the form is walked with curl), the credential comes due while one pod is cut off from
+  the API: that pod does not spend the refresh token and the session goes on, the other pod renews it (the realm rotates refresh
+  tokens), and after the cut is lifted and the original credential has run out the person still works on the cut pod. About 13
+  minutes; PR-only.
 - **"This installation" says when sessions have no stale limit (Phase 112).** With the shared session store and no `sessions.staleLimit`,
   the security checks show a low-severity note: this is the availability-first default, with what it costs and how to change it.
 - **`sessions.staleLimit` — sessions can fail closed while the Kubernetes API is unreachable (Phase 111).** A replica that cannot read

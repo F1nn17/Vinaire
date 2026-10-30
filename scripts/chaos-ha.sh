@@ -110,19 +110,23 @@ if [ -z "$NEW" ]; then bad "no replacement pod found"; else
 fi
 
 say "3. pod 2 is cut off from the Kubernetes API"
-# The cut is an iptables rule on the (k3d) node that drops everything pod 2 sends to the API server's port. It does not depend
-# on the CNI enforcing NetworkPolicy or on when it gets round to it (a NetworkPolicy also spares connections that already exist,
-# which is the one Vinaire holds), and an explicit DROP at the top of INPUT stops established connections as well. On k3d the
-# node is a container named like the node. The drill does not go on until the pod itself says it can't read the sessions.
+# The cut is an iptables rule on the (k3d) node. It does not depend on the CNI enforcing NetworkPolicy or on when it gets round to
+# it (a NetworkPolicy also spares connections that already exist, which is the one Vinaire holds), and a DROP stops established
+# connections as well. On k3d the node is a container named like the node. The drill does not go on until the pod itself says it
+# can't read the sessions.
 NODE=$(kubectl -n "$NS" get pod "$POD2" -o jsonpath='{.spec.nodeName}')
 POD2_IP=$(kubectl -n "$NS" get pod "$POD2" -o jsonpath='{.status.podIP}')
-# Everything the pod sends is dropped in the raw table's PREROUTING chain — the first place a packet is looked at, before
-# conntrack, NAT and kube-router's chains (a DROP in INPUT saw 0 packets on the CI runner: the pod's API traffic never took that
-# path). Probes and `kubectl port-forward` come from the node / the kubelet, not from the pod's address, so they are not
-# affected. Added with every iptables front-end the node has (the one that doesn't work on its kernel just fails).
+# What is dropped is what the pod sends to the Kubernetes API, in the raw table's PREROUTING chain — the first place a packet is
+# looked at, before conntrack, NAT and kube-router's chains (a DROP in INPUT saw 0 packets on the CI runner): to the ClusterIP
+# of the `kubernetes` Service (before NAT) and to the node's own address (after a DNAT, or a client that goes there directly).
+# NOT everything the pod sends: its replies to the kubelet's probes come from its address too, and dropping them makes the
+# liveness probe fail and the container restart — and a container that starts while the API is cut can't start at all.
+# Added with every iptables front-end the node has (the one that doesn't work on its kernel just fails).
+API_IP=$(kubectl get svc kubernetes -n default -o jsonpath='{.spec.clusterIP}')
+NODE_IP=$(kubectl get node "$NODE" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
 IPT=$(docker exec "$NODE" sh -c 'for c in iptables iptables-legacy iptables-nft; do command -v $c > /dev/null 2>&1 && echo $c; done')
-cut_on()  { local n=0; for c in $IPT; do docker exec "$NODE" $c -t raw -I PREROUTING 1 -s "$POD2_IP" -j DROP 2> /dev/null && n=$((n+1)); done; [ "$n" -gt 0 ]; }
-cut_off() { for c in $IPT; do docker exec "$NODE" $c -t raw -D PREROUTING -s "$POD2_IP" -j DROP > /dev/null 2>&1; done; }
+cut_on()  { local n=0; for c in $IPT; do for d in $API_IP $NODE_IP; do docker exec "$NODE" $c -t raw -I PREROUTING 1 -s "$POD2_IP" -d "$d" -j DROP 2> /dev/null && n=$((n+1)); done; done; [ "$n" -gt 0 ]; }
+cut_off() { for c in $IPT; do for d in $API_IP $NODE_IP; do docker exec "$NODE" $c -t raw -D PREROUTING -s "$POD2_IP" -d "$d" -j DROP > /dev/null 2>&1; done; done; }
 cut_on || { echo "could not add the iptables rule on $NODE"; exit 1; }
 trap 'cut_off; cleanup' EXIT
 cut_effective=no

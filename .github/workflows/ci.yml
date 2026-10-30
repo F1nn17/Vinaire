@@ -396,6 +396,45 @@ jobs:
         if: always()
         run: k3d cluster delete vinaire-chaos
 
+  # Roadmap Phase 113: the renewal of a Keycloak session with TWO REAL Vinaire pods and a REAL Keycloak while one pod is cut
+  # off from the API (scripts/chaos-keycloak.sh): a person signs in through Keycloak (curl walks the form), the credential
+  # (10 minutes, the shortest there is) comes due, the cut pod does not spend the refresh token, the healthy one renews it, the
+  # cut is lifted, and after the ORIGINAL credential has run out a call as the person still works on the cut pod. About 13
+  # minutes; PR-only.
+  ha-keycloak:
+    name: Keycloak renewal with two real pods (API cut, real refresh token)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k3d and Helm
+        run: .github/scripts/install-tools.sh k3d helm
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Build the image from this checkout
+        run: docker build -t vinaire:chaos .
+
+      - name: Create the cluster and load the image
+        run: |
+          k3d cluster create vinaire-chaos --agents 0 --no-lb --wait --timeout 180s
+          k3d image import vinaire:chaos -c vinaire-chaos
+
+      - name: Wait until the cluster's API answers steadily
+        run: .github/scripts/wait-for-cluster.sh
+
+      - name: Run the drill
+        run: IMAGE_REPO=vinaire IMAGE_TAG=chaos bash scripts/chaos-keycloak.sh
+
+      - name: Delete k3d cluster
+        if: always()
+        run: |
+          docker rm -f chaos-keycloak || true
+          k3d cluster delete vinaire-chaos
+
   # Roadmap Phase 92: an upgrade of a REAL earlier release must work, not only a fresh install. `helm upgrade
   # --reuse-values` replaces the new chart's defaults with the old release's values, so a key added since
   # (`rbac.reader.create` in 1.3.0) is absent and a template that reads it fails — which the fresh-install tests above
