@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **"This installation" says when sessions have no stale limit (Phase 112).** With the shared session store and no `sessions.staleLimit`,
+  the security checks show a low-severity note: this is the availability-first default, with what it costs and how to change it.
 - **`sessions.staleLimit` — sessions can fail closed while the Kubernetes API is unreachable (Phase 111).** A replica that cannot read
   the shared sessions' Secret used to go on admitting the sessions it last saw for as long as the outage lasted, so a session revoked
   meanwhile elsewhere was honoured there. With `sessions.staleLimit: 1m` (`SESSION_STALE_LIMIT`) it refuses every session past that
@@ -16,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deleted and nobody signs in again, a pod is cut off from the API and recovers without a new login.
 
 ### Fixed
+- **A mistyped `SESSION_STALE_LIMIT` no longer switches the protection off (Phase 112).** `60sec` used to be read as "no limit"; now
+  Vinaire refuses to start with a message (a value must be a Go duration of at least 10 s; empty or `0` is off).
+- **A short API outage no longer ends a Keycloak session at renewal (Phase 112).** If the provider had just rotated the refresh token and
+  the shared Secret could not be written, the new token was lost and the person had to sign in again. The save is now retried for
+  about 8 s. A longer outage still ends that session (tested and documented).
 - **During an API outage a request no longer waits out the API's timeout (Phase 111).** The drill showed every request on a cut-off
   replica hanging 10 s or more; after the first failed read, retries now run in the background.
 

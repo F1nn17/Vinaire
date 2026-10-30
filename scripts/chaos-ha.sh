@@ -4,8 +4,8 @@
 # It installs the chart with two replicas into a scratch namespace of the cluster kubectl points at, then:
 #   1. a login on pod 1 is accepted by pod 2;
 #   2. pod 1 is deleted: the session still works on pod 2 and on the pod that replaces pod 1 — nobody signs in again;
-#   3. pod 2 is cut off from the Kubernetes API (a NetworkPolicy that drops its egress, the existing connections
-#      included): within SESSION_STALE_LIMIT it keeps working, past it every session is refused (fail closed);
+#   3. pod 2 is cut off from the Kubernetes API (an iptables rule on the k3d node drops what it sends to the node,
+#      connections that already exist included): within SESSION_STALE_LIMIT it keeps working, past it every session is refused (fail closed);
 #      a session revoked on pod 1 during the cut is NOT honoured by pod 2 once the limit has passed;
 #   4. the cut is lifted: pod 2 admits the surviving session again without a new login, the revoked one stays dead.
 #
@@ -110,21 +110,33 @@ if [ -z "$NEW" ]; then bad "no replacement pod found"; else
 fi
 
 say "3. pod 2 is cut off from the Kubernetes API"
-kubectl -n "$NS" label pod "$POD2" chaos=isolated --overwrite > /dev/null
-kubectl -n "$NS" apply -f - > /dev/null <<EOF
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata: {name: chaos-isolate}
-spec:
-  podSelector: {matchLabels: {chaos: isolated}}
-  policyTypes: [Egress]
-  egress: []
-EOF
-# a NetworkPolicy only governs NEW connections: the one Vinaire already holds to the API would go on working. On k3d the
-# node is a container (named like the node), so forget the pod's tracked connections there and the policy bites.
+# The cut is an iptables rule on the (k3d) node that drops everything pod 2 sends to the API server's port. It does not depend
+# on the CNI enforcing NetworkPolicy or on when it gets round to it (a NetworkPolicy also spares connections that already exist,
+# which is the one Vinaire holds), and an explicit DROP at the top of INPUT stops established connections as well. On k3d the
+# node is a container named like the node. The drill does not go on until the pod itself says it can't read the sessions.
 NODE=$(kubectl -n "$NS" get pod "$POD2" -o jsonpath='{.spec.nodeName}')
 POD2_IP=$(kubectl -n "$NS" get pod "$POD2" -o jsonpath='{.status.podIP}')
-docker exec "$NODE" conntrack -D -s "$POD2_IP" > /dev/null 2>&1 || echo "   (could not clear connection tracking on $NODE — the cut may not take effect)"
+# Everything the pod sends is dropped in the raw table's PREROUTING chain — the first place a packet is looked at, before
+# conntrack, NAT and kube-router's chains (a DROP in INPUT saw 0 packets on the CI runner: the pod's API traffic never took that
+# path). Probes and `kubectl port-forward` come from the node / the kubelet, not from the pod's address, so they are not
+# affected. Added with every iptables front-end the node has (the one that doesn't work on its kernel just fails).
+IPT=$(docker exec "$NODE" sh -c 'for c in iptables iptables-legacy iptables-nft; do command -v $c > /dev/null 2>&1 && echo $c; done')
+cut_on()  { local n=0; for c in $IPT; do docker exec "$NODE" $c -t raw -I PREROUTING 1 -s "$POD2_IP" -j DROP 2> /dev/null && n=$((n+1)); done; [ "$n" -gt 0 ]; }
+cut_off() { for c in $IPT; do docker exec "$NODE" $c -t raw -D PREROUTING -s "$POD2_IP" -j DROP > /dev/null 2>&1; done; }
+cut_on || { echo "could not add the iptables rule on $NODE"; exit 1; }
+trap 'cut_off; cleanup' EXIT
+cut_effective=no
+for _ in $(seq 1 40); do
+  me $P2 "$KEEP" > /dev/null
+  if kubectl -n "$NS" logs "$POD2" 2>/dev/null | grep -q "couldn't read it"; then cut_effective=yes; break; fi
+  sleep 2
+done
+if [ "$cut_effective" = no ]; then
+  echo "   --- diagnostics: the pod was not cut off ($NODE, pod $POD2_IP, front-ends: $(echo $IPT))"
+  for c in $IPT; do docker exec "$NODE" $c -t raw -L PREROUTING -v -n --line-numbers 2>&1 | head -8; done
+  kubectl -n "$NS" logs "$POD2" --tail=15 2>&1
+fi
+check "the cut took effect (pod 2 reports it cannot read the sessions)" yes "$cut_effective"
 cut=$SECONDS
 # the session is revoked on a healthy pod while pod 2 cannot see it
 REF=$(printf %s "$VICTIM" | sha256sum | cut -c1-16)
@@ -148,7 +160,7 @@ fi
 check "past the limit the cut pod refuses even the surviving session (fail closed)" 401 "$(me $P2 "$KEEP")"
 
 say "4. the cut is lifted"
-kubectl -n "$NS" delete networkpolicy chaos-isolate > /dev/null
+cut_off
 t=$(until_code $P2 "$KEEP" 200 40)
 [ "$t" = timeout ] && bad "the surviving session did not come back on pod 2" || ok "the surviving session works on pod 2 again after ${t}s, without a new login"
 check "the revoked session stays refused on pod 2" 401 "$(me $P2 "$VICTIM")"

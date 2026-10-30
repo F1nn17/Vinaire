@@ -135,6 +135,9 @@ type Config struct {
 	// the API is back). A value (at least a few seconds) fails closed: past it every session is refused on this replica
 	// until the Secret can be read again, so a revoke is honoured within the 3 s refresh plus this limit even in an outage.
 	SessionStaleLimit time.Duration
+	// SessionStaleLimitErr: SESSION_STALE_LIMIT was set to something that is not a duration of at least MinSessionStaleLimit.
+	// main refuses to start on it: a typo must not quietly turn the protection off (Roadmap Phase 112).
+	SessionStaleLimitErr string
 	// TrustForwardedFor (TRUST_FORWARDED_FOR=true): the login throttle counts the
 	// first X-Forwarded-For address instead of the connection's peer. Set it only
 	// behind a proxy you control that sets the header.
@@ -199,6 +202,12 @@ func defaultFrontendURLFor(staticDir string) string {
 // Load reads configuration from the environment, falling back to defaults
 // that work out of the box for local development.
 func Load() Config {
+	staleLimit, staleLimitErr := time.Duration(0), ""
+	if d, err := ParseStaleLimit(os.Getenv("SESSION_STALE_LIMIT")); err != nil {
+		staleLimitErr = err.Error()
+	} else {
+		staleLimit = d
+	}
 	return Config{
 		Port:               getEnv(envPort, defaultPort),
 		KubeconfigPath:     os.Getenv(envKubeconfig),
@@ -225,7 +234,8 @@ func Load() Config {
 		SessionMaxTTL:            parseDuration(os.Getenv("SESSION_MAX_TTL")),
 		SessionTokenTTL:          parseDuration(os.Getenv("SESSION_TOKEN_TTL")),
 		SessionStore:             getEnv("SESSION_STORE", "memory"),
-		SessionStaleLimit:        parseDuration(os.Getenv("SESSION_STALE_LIMIT")),
+		SessionStaleLimit:        staleLimit,
+		SessionStaleLimitErr:     staleLimitErr,
 		TrustForwardedFor:        os.Getenv("TRUST_FORWARDED_FOR") == "true",
 		TrustedProxies:           os.Getenv("TRUSTED_PROXIES"),
 		DiscoveryKubeconfigPaths: splitCSV(os.Getenv(envDiscoveryPaths)),
@@ -255,6 +265,27 @@ func splitCSV(s string) []string {
 
 // parseDuration reads a Go duration, returning 0 (meaning "use the default") for
 // empty or invalid input.
+// MinSessionStaleLimit is the shortest SESSION_STALE_LIMIT accepted: the sessions' view is reloaded every 3 s, so a
+// shorter limit would refuse everyone between two reloads.
+const MinSessionStaleLimit = 10 * time.Second
+
+// ParseStaleLimit reads SESSION_STALE_LIMIT strictly: empty or "0" is off; anything else must be a Go duration of at
+// least MinSessionStaleLimit. Unlike parseDuration it never turns a malformed value into "off".
+func ParseStaleLimit(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("SESSION_STALE_LIMIT=%q is not a duration (write it like 60s or 1m)", s)
+	}
+	if d < MinSessionStaleLimit {
+		return 0, fmt.Errorf("SESSION_STALE_LIMIT=%q is shorter than %s", s, MinSessionStaleLimit)
+	}
+	return d, nil
+}
+
 func parseDuration(s string) time.Duration {
 	d, err := time.ParseDuration(strings.TrimSpace(s))
 	if err != nil || d < 0 {

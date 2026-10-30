@@ -41,6 +41,24 @@ const (
 // must not use up the time the second call needs either. A variable so that a test can make it short.
 var renewTimeout = 15 * time.Second
 
+// renewSaveBackoff is how long a renewal keeps trying to save a session whose refresh token the provider has just
+// rotated, while the store is unreachable (Roadmap Phase 112): the stored copy still holds the spent token, so losing
+// the new one ends the session for good at the next renewal. A var so tests can shorten it.
+var renewSaveBackoff = []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second}
+
+// saveRenewed saves a renewed session, retrying only while the store is unavailable.
+func (m *Manager) saveRenewed(next *Session) error {
+	err := m.Sessions.Update(next)
+	for _, wait := range renewSaveBackoff {
+		if !errors.Is(err, ErrStoreUnavailable) {
+			return err
+		}
+		time.Sleep(wait)
+		err = m.Sessions.Update(next)
+	}
+	return err
+}
+
 // ErrAccountGone is what a TokenRenewer returns when the person's Kubernetes account no longer exists.
 var ErrAccountGone = errors.New("the person's Kubernetes account no longer exists")
 
@@ -213,7 +231,7 @@ func (m *Manager) renew(ctx context.Context, sess *Session) *Session {
 		// the ID token is the credential and the provider can't be reached: nothing new to hold
 		return &next
 	}
-	if err := m.Sessions.Update(&next); err != nil {
+	if err := m.saveRenewed(&next); err != nil {
 		if errors.Is(err, ErrNoSession) { // revoked (or ended) while it was being renewed: it stays ended
 			slog.Info("session renewal: the session was ended meanwhile; the renewed credential is dropped")
 			return nil
@@ -231,7 +249,7 @@ func (m *Manager) keep(old, next *Session, providerAnswered bool) *Session {
 	if !providerAnswered {
 		return next
 	}
-	if err := m.Sessions.Update(next); err != nil {
+	if err := m.saveRenewed(next); err != nil {
 		if errors.Is(err, ErrNoSession) {
 			return nil
 		}

@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestValidateCORSOrigins(t *testing.T) {
 	for _, ok := range [][]string{nil, {"https://vinaire.example.com"}, {"http://localhost:3100", "https://a.example:8443/"}} {
@@ -36,5 +39,23 @@ func TestFrontendURLFromTheEnvironmentWins(t *testing.T) {
 	t.Setenv("FRONTEND_URL", "")
 	if got := Load().FrontendURL; got != "/" {
 		t.Errorf("an empty FRONTEND_URL with STATIC_DIR set should be %q, got %q", "/", got)
+	}
+}
+
+// A mistyped SESSION_STALE_LIMIT must stop the start, not quietly switch the protection off (Roadmap Phase 112).
+func TestStaleLimitIsParsedStrictly(t *testing.T) {
+	for in, want := range map[string]time.Duration{"": 0, "0": 0, " 1m ": time.Minute, "90s": 90 * time.Second, "10s": 10 * time.Second} {
+		if got, err := ParseStaleLimit(in); err != nil || got != want {
+			t.Errorf("%q: %v, %v", in, got, err)
+		}
+	}
+	for _, in := range []string{"60sec", "1 minute", "abc", "-1m", "5s", "1", "9.9s"} {
+		if d, err := ParseStaleLimit(in); err == nil {
+			t.Errorf("%q must be refused, got %v", in, d)
+		}
+	}
+	t.Setenv("SESSION_STALE_LIMIT", "60sec")
+	if c := Load(); c.SessionStaleLimitErr == "" || c.SessionStaleLimit != 0 {
+		t.Errorf("Load must report the bad value: %+v", c.SessionStaleLimitErr)
 	}
 }

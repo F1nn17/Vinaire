@@ -13,7 +13,7 @@ func instSnap(i *Installation) *Snapshot {
 }
 
 func TestAHardenedInstallationPassesEveryInstallationCheck(t *testing.T) {
-	rs := RunAll(instSnap(&Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", Chart: true, AuditOnVolume: true, NetworkPolicy: true}))
+	rs := RunAll(instSnap(&Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", StaleLimitSeconds: 60, Chart: true, AuditOnVolume: true, NetworkPolicy: true}))
 	for _, r := range rs {
 		if r.Category == "This installation" && r.Status != Pass {
 			t.Errorf("%s: %s %+v", r.ID, r.Status, r.Findings)
@@ -22,7 +22,7 @@ func TestAHardenedInstallationPassesEveryInstallationCheck(t *testing.T) {
 }
 
 func TestEachInstallationWeaknessIsReportedWithItsReason(t *testing.T) {
-	good := Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", Chart: true, AuditOnVolume: true, NetworkPolicy: true}
+	good := Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", StaleLimitSeconds: 60, Chart: true, AuditOnVolume: true, NetworkPolicy: true}
 	for id, mod := range map[string]func(i *Installation){
 		"inst-auth-disabled":     func(i *Installation) { i.AuthMode = "disabled" },
 		"inst-dev-optouts":       func(i *Installation) { i.DevOptOuts = []string{"OIDC_ALLOW_INSECURE=true", "VAULT_ALLOW_INSECURE=true"} },
@@ -31,6 +31,7 @@ func TestEachInstallationWeaknessIsReportedWithItsReason(t *testing.T) {
 		"inst-http-keycloak":     func(i *Installation) { i.HTTPKeycloakAllowed = true },
 		"inst-audit-ephemeral":   func(i *Installation) { i.AuditOnVolume = false },
 		"inst-session-memory":    func(i *Installation) { i.SessionStore = "memory" },
+		"inst-session-stale-unlimited": func(i *Installation) { i.StaleLimitSeconds = 0 },
 		"inst-no-networkpolicy":  func(i *Installation) { i.NetworkPolicy = false },
 	} {
 		i := good
@@ -43,7 +44,7 @@ func TestEachInstallationWeaknessIsReportedWithItsReason(t *testing.T) {
 }
 
 func TestTwoDevelopmentSwitchesAreTwoFindings(t *testing.T) {
-	r := find(RunAll(instSnap(&Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", Chart: true, DevOptOuts: []string{"A=true", "B=true"}})), "inst-dev-optouts")
+	r := find(RunAll(instSnap(&Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", StaleLimitSeconds: 60, Chart: true, DevOptOuts: []string{"A=true", "B=true"}})), "inst-dev-optouts")
 	if r.Total != 2 {
 		t.Fatalf("%+v", r)
 	}
@@ -81,7 +82,7 @@ func TestAnInstallationWithSignInOffDoesNotAlsoNagAboutItsCookieAndSessions(t *t
 }
 
 func TestAWideTrustedProxyRangeIsReported(t *testing.T) {
-	good := Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", Chart: true, AuditOnVolume: true, NetworkPolicy: true}
+	good := Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", StaleLimitSeconds: 60, Chart: true, AuditOnVolume: true, NetworkPolicy: true}
 	if r := find(RunAll(instSnap(&good)), "inst-proxies-broad"); r.Status != Pass {
 		t.Fatalf("a narrow or empty list must pass: %+v", r)
 	}
@@ -93,7 +94,7 @@ func TestAWideTrustedProxyRangeIsReported(t *testing.T) {
 }
 
 func TestAForwardedForSwitchWithoutAProxyIsReported(t *testing.T) {
-	good := Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", Chart: true, AuditOnVolume: true, NetworkPolicy: true}
+	good := Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", StaleLimitSeconds: 60, Chart: true, AuditOnVolume: true, NetworkPolicy: true}
 	if r := find(RunAll(instSnap(&good)), "inst-forwardedfor-ignored"); r.Status != Pass {
 		t.Fatalf("%+v", r)
 	}
@@ -105,7 +106,7 @@ func TestAForwardedForSwitchWithoutAProxyIsReported(t *testing.T) {
 }
 
 func TestAPolicyThatLetsAnySourceInIsReported(t *testing.T) {
-	good := Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", Chart: true, AuditOnVolume: true, NetworkPolicy: true}
+	good := Installation{AuthMode: "oidc", CookieSecure: true, SessionStore: "secret", StaleLimitSeconds: 60, Chart: true, AuditOnVolume: true, NetworkPolicy: true}
 	if r := find(RunAll(instSnap(&good)), "inst-networkpolicy-open"); r.Status != Pass {
 		t.Fatalf("%+v", r)
 	}
