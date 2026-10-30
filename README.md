@@ -40,7 +40,7 @@ The interface is available in English and Russian.
 On any cluster with `kubectl` and [Helm](https://helm.sh/docs/intro/install/):
 
 ```bash
-helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.4.1 \
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.4.2 \
   --namespace vinaire --create-namespace
 
 kubectl -n vinaire port-forward svc/vinaire 8080:8080      # then open http://localhost:8080
@@ -55,7 +55,7 @@ Every release image and the chart are signed (keyless, with cosign) and carry an
 attestation. To verify before you run:
 
 ```bash
-cosign verify ghcr.io/f1nn17/vinaire:1.4.1 \
+cosign verify ghcr.io/f1nn17/vinaire:1.4.2 \
   --certificate-identity-regexp 'https://github.com/F1nn17/Vinaire/\.github/workflows/release\.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -226,7 +226,7 @@ it through your Ingress controller (the example uses Traefik; use `nginx` etc. a
 has). The released chart and image are public on GitHub's registry:
 
 ```bash
-helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.4.1   --namespace vinaire --create-namespace   --set ingress.enabled=true --set ingress.className=traefik   --set 'ingress.hosts[0].host=vinaire.example.com'
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.4.2   --namespace vinaire --create-namespace   --set ingress.enabled=true --set ingress.className=traefik   --set 'ingress.hosts[0].host=vinaire.example.com'
 ```
 
 To run a build of your own instead, push the image and use the chart from a checkout:
@@ -455,6 +455,11 @@ a replica that has had no traffic for longer than the limit refuses everyone if 
 defaults, and never replaces one you set. Upgrading to **1.3.0** with it failed with
 `nil pointer evaluating interface {}.create` — for that one step use `--reset-then-reuse-values` (or pass your values file
 with `-f`). Releases are checked by CI by upgrading earlier ones with `--reuse-values`.
+
+**Upgrading to 1.4.2 — nothing you have to do.** Defaults are unchanged. If you run more than one replica (`sessions.store: secret`)
+you may now set `sessions.staleLimit` (see above): a replica cut off from the Kubernetes API then refuses sessions past that limit instead
+of admitting the last ones it saw. A value the backend would refuse (`5s`, `60sec`) is now stopped by Helm, and a mistyped
+`SESSION_STALE_LIMIT` stops Vinaire from starting instead of being read as "no limit".
 
 **Upgrading to 1.4.1 — two things to check.** (1) If you set `trustForwardedFor: true`, also name your proxy under
 `trustedProxies`: `X-Forwarded-For` is now believed only from the listed proxies, and with the list empty it is ignored (failed

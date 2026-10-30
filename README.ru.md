@@ -38,7 +38,7 @@ Vinaire — веб-интерфейс для Kubernetes, сделанный с �
 На любом кластере, где есть `kubectl` и [Helm](https://helm.sh/docs/intro/install/):
 
 ```bash
-helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.4.1 \
+helm upgrade --install vinaire oci://ghcr.io/f1nn17/charts/vinaire --version 1.4.2 \
   --namespace vinaire --create-namespace
 
 kubectl -n vinaire port-forward svc/vinaire 8080:8080      # затем откройте http://localhost:8080
@@ -53,7 +53,7 @@ HTTPS и OIDC — в разделе [Установка](#установка-hel
 Проверить перед запуском:
 
 ```bash
-cosign verify ghcr.io/f1nn17/vinaire:1.4.1 \
+cosign verify ghcr.io/f1nn17/vinaire:1.4.2 \
   --certificate-identity-regexp 'https://github.com/F1nn17/Vinaire/\.github/workflows/release\.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -453,6 +453,11 @@ trustedProxies:
 значений чарта по умолчанию и никогда не заменяет заданное вами. Обновление до **1.3.0** с ним падало с
 `nil pointer evaluating interface {}.create` — для этого одного шага используйте `--reset-then-reuse-values` (или
 передайте файл значений через `-f`). CI проверяет релизы, обновляя прежние с `--reuse-values`.
+
+**Обновление до 1.4.2 — делать ничего не нужно.** Значения по умолчанию не менялись. Если у вас больше одной реплики
+(`sessions.store: secret`), можно задать `sessions.staleLimit` (см. выше): реплика, отрезанная от API Kubernetes, тогда отказывает
+сеансам по истечении предела, а не принимает последние виденные. Значение, которое backend отвергнет (`5s`, `60sec`), теперь
+останавливает Helm, а опечатка в `SESSION_STALE_LIMIT` не даёт Vinaire запуститься вместо того, чтобы читаться как «без предела».
 
 **Обновление до 1.4.1 — две вещи, которые нужно проверить.** (1) Если вы включали `trustForwardedFor: true`, назовите
 свой прокси в `trustedProxies`: `X-Forwarded-For` теперь принимается только от перечисленных прокси, а при пустом списке
