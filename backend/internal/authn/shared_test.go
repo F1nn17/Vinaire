@@ -20,6 +20,10 @@ type fakeKV struct {
 	failRemove bool
 	// failClaim makes only Claim fail (Phase 95)
 	failClaim bool
+	// failPut makes only PutIfPresent fail (a renewal that cannot save its result), after hangPut (the store call that hangs)
+	failPut bool
+	hangPut time.Duration
+	putCalls int
 }
 
 func newFakeKV() *fakeKV { return &fakeKV{data: map[string][]byte{}} }
@@ -46,6 +50,14 @@ func (f *fakeKV) Put(_ context.Context, k string, v []byte) error {
 	return nil
 }
 func (f *fakeKV) PutIfPresent(_ context.Context, k string, v []byte) (bool, error) {
+	f.mu.Lock()
+	hang, failing := f.hangPut, f.failPut
+	f.putCalls++
+	f.mu.Unlock()
+	if failing {
+		time.Sleep(hang)
+		return false, errors.New("api down")
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.fail {

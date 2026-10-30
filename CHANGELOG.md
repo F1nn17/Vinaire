@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deleted and nobody signs in again, a pod is cut off from the API and recovers without a new login.
 
 ### Fixed
+- **A slow save of a rotated refresh token can no longer outlast the renewal lease (Phase 114).** The lease that lets one replica present a
+  session's refresh token lasted 40 s, while saving the rotated token to the Secret could take up to about 47 s (five attempts of up to 8 s,
+  with waits) after the calls to Keycloak and the API — a second replica could take the lease meanwhile and present the token Keycloak had
+  just rotated away. The save's retries now stop after a 20 s budget and the lease is computed from the worst case (both provider calls,
+  the save and its last call, plus a margin: about 76 s). A test with a store that hangs and a second replica that keeps asking fails on
+  the old lease.
+- **Helm accepted a `sessions.staleLimit` the backend then refused to start with (Phase 114).** `5s` passed the chart's schema, and the
+  pods crash-looped on "shorter than 10s"; `0` was refused by Helm though the backend takes it. The schema now takes exactly what the
+  backend takes in its plain forms (empty or `0`, or at least 10 s in seconds, minutes and hours, such as `90s`, `1m`, `1h30m`) and stops
+  the rest before the install touches the cluster; a test compares the two through the real `helm template`.
 - **A mistyped `SESSION_STALE_LIMIT` no longer switches the protection off (Phase 112).** `60sec` used to be read as "no limit"; now
   Vinaire refuses to start with a message (a value must be a Go duration of at least 10 s; empty or `0` is off).
 - **A short API outage no longer ends a Keycloak session at renewal (Phase 112).** If the provider had just rotated the refresh token and

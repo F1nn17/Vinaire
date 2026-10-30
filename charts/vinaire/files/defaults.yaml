@@ -51,6 +51,9 @@ sessions:
   # can be read again (nobody is deleted — they work again afterwards), so a revoke holds within about 3 s plus this
   # limit even through an outage. Choose it for a deployment where a revoke must be reliable; the price is that an API
   # outage longer than the limit signs everyone out of the affected replica.
+  # At least 10 seconds, in plain seconds, minutes and hours (90s, 1m, 1h30m) — Helm refuses anything the backend would
+  # refuse (5s, 0s, 1.5m) before the install touches the cluster. "0" or empty means no limit; give "0" as a string
+  # (--set-string sessions.staleLimit=0 or staleLimit: "0" in a file).
   staleLimit: ""
 
 # The audit log (Roadmap Phase 76). By default it is written to an emptyDir: it survives a restart of

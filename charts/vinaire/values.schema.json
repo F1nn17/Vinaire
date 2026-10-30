@@ -59,8 +59,8 @@
         },
         "staleLimit": {
           "type": "string",
-          "pattern": "^$|^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
-          "description": "Empty, or a Go duration (e.g. 1m): how long a replica that cannot read the sessions Secret keeps admitting the sessions it last saw."
+          "pattern": "^$|^0$|^[1-9][0-9]+s$|^[1-9][0-9]*(m|h)$|^[1-9][0-9]*m[0-9]+s$|^[1-9][0-9]*h([0-9]+m)?([0-9]+s)?$",
+          "description": "Empty or 0 (no limit), or a duration of at least 10 seconds written as seconds, minutes and hours (e.g. 90s, 1m, 1h30m): how long a replica that cannot read the sessions Secret keeps admitting the sessions it last saw. A value the backend would refuse (below 10s, 0s, a fraction) is refused here, before anything is installed."
         }
       }
     },

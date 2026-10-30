@@ -169,9 +169,13 @@ func (s *SharedStore) refresh(max time.Duration) {
 	s.load()
 }
 
+// storeCallTimeout bounds each call a replica makes to the shared Secret. A variable so that a test can shorten it; the renewal
+// lease (renew.go) is computed from it, because a renewal that saves its result is made of such calls.
+var storeCallTimeout = 8 * time.Second
+
 // load reads the Secret and replaces the view; on an error it keeps the old one.
 func (s *SharedStore) load() {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), storeCallTimeout)
 	defer cancel()
 	raw, err := s.kv.Snapshot(ctx)
 	if err != nil {
@@ -256,7 +260,7 @@ func (s *SharedStore) Update(sess *Session) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), storeCallTimeout)
 	defer cancel()
 	// The store decides, not this replica's snapshot: another replica may have revoked the session a moment ago.
 	present, err := s.kv.PutIfPresent(ctx, key, s.sealer.Seal(blob))
@@ -296,7 +300,7 @@ func (s *SharedStore) Create(sess *Session) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), storeCallTimeout)
 	defer cancel()
 	key := storeKey(sess.ID)
 	if err := s.kv.Put(ctx, key, s.sealer.Seal(blob)); err != nil {
@@ -339,7 +343,7 @@ func (s *SharedStore) DeleteStrict(id string) error {
 
 // remove deletes the key from the shared Secret and returns the error if that did not happen.
 func (s *SharedStore) remove(key string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), storeCallTimeout)
 	defer cancel()
 	return s.kv.Remove(ctx, key)
 }
@@ -437,14 +441,14 @@ func leaseKey(id string) string { return "l-" + storeKey(id)[2:] }
 
 // AcquireRenewal tries to become the only replica renewing this session. release must be called when done.
 func (s *SharedStore) AcquireRenewal(id string, ttl time.Duration) (release func(), acquired bool, err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), storeCallTimeout)
 	defer cancel()
 	ok, err := s.kv.Claim(ctx, leaseKey(id), s.holder, ttl)
 	if err != nil || !ok {
 		return func() {}, false, err
 	}
 	return func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), storeCallTimeout)
 		defer cancel()
 		if err := s.kv.Release(ctx, leaseKey(id), s.holder); err != nil {
 			slog.Warn("shared session store: couldn't release a renewal lease (it expires by itself)", "error", err)

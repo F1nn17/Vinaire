@@ -46,12 +46,24 @@ var renewTimeout = 15 * time.Second
 // the new one ends the session for good at the next renewal. A var so tests can shorten it.
 var renewSaveBackoff = []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second}
 
-// saveRenewed saves a renewed session, retrying only while the store is unavailable.
+// renewSaveBudget caps the time the retries above may take once the first save has failed: no retry starts after it.
+// Together with the call timeout of the store it bounds how long a renewal can hold the renewal lease (renewLeaseTTL).
+var renewSaveBudget = 20 * time.Second
+
+// renewSaveWorstCase is the longest a saveRenewed can take: the first call, the retries that start within the budget, and
+// the last of them still running to its own timeout.
+func renewSaveWorstCase() time.Duration { return renewSaveBudget + 2*storeCallTimeout }
+
+// saveRenewed saves a renewed session, retrying only while the store is unavailable and only within renewSaveBudget.
 func (m *Manager) saveRenewed(next *Session) error {
+	start := time.Now()
 	err := m.Sessions.Update(next)
 	for _, wait := range renewSaveBackoff {
 		if !errors.Is(err, ErrStoreUnavailable) {
 			return err
+		}
+		if time.Since(start)+wait > renewSaveBudget {
+			break
 		}
 		time.Sleep(wait)
 		err = m.Sessions.Update(next)
@@ -79,13 +91,21 @@ type RenewalCoordinator interface {
 
 // vars so that a test can shorten them
 var (
-	// renewLeaseTTL outlives one renewal (two calls with a deadline each) and then lapses by itself, so a replica that dies
-	// half-way does not block the session for long.
-	renewLeaseTTL = 2*renewTimeout + 10*time.Second
+	// renewLeaseMargin is what the lease allows on top of the longest renewal.
+	renewLeaseMargin = 10 * time.Second
 	// renewWait is how long a replica waits for another one's renewal before carrying on with the credential it has.
 	renewWait     = 20 * time.Second
 	renewWaitStep = 150 * time.Millisecond
 )
+
+// renewLeaseTTL is how long a replica holds the right to present a session's refresh token. It must outlive the WORST renewal —
+// the call to the provider, the call that obtains the new credential and the save of the rotated refresh token with its
+// retries — or a second replica could take the lease while the first is still trying to save, and present the token the
+// provider has just rotated away (Roadmap Phase 114). It then lapses by itself, so a replica that dies half-way does not block
+// the session for long.
+func renewLeaseTTL() time.Duration {
+	return 2*renewTimeout + renewSaveWorstCase() + renewLeaseMargin
+}
 
 // needsRenewal says whether a session should be renewed now.
 func needsRenewal(s *Session, now time.Time, lead time.Duration) bool {
@@ -127,7 +147,7 @@ func (m *Manager) renewIfDue(ctx context.Context, sess *Session) (*Session, bool
 // renewCoordinated renews a session that other replicas may be renewing too: only the replica that holds the lease
 // presents the refresh token; the others wait for its result. nil means the session has ended.
 func (m *Manager) renewCoordinated(ctx context.Context, coord RenewalCoordinator, sess *Session) *Session {
-	release, got, err := coord.AcquireRenewal(sess.ID, renewLeaseTTL)
+	release, got, err := coord.AcquireRenewal(sess.ID, renewLeaseTTL())
 	if err != nil {
 		// the store can't be reached, so a rotated refresh token could not be saved either: don't rotate it
 		slog.Warn("session renewal: couldn't coordinate with the other replicas — trying again on a later request", "error", err)
