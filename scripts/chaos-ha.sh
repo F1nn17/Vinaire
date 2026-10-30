@@ -116,13 +116,13 @@ say "3. pod 2 is cut off from the Kubernetes API"
 # node is a container named like the node. The drill does not go on until the pod itself says it can't read the sessions.
 NODE=$(kubectl -n "$NS" get pod "$POD2" -o jsonpath='{.spec.nodeName}')
 POD2_IP=$(kubectl -n "$NS" get pod "$POD2" -o jsonpath='{.status.podIP}')
-# Everything the pod sends to the node itself is dropped (no protocol or port in the rule: the API server's address is a
-# DNAT of a ClusterIP, and a rule that names a port or one iptables backend has proved too easy to miss). Probes come from the
-# node, not from the pod's address, so they are not affected. Inserted with every iptables front-end the node has, because
-# the kernel runs the legacy and the nft hooks both.
+# Everything the pod sends is dropped in the raw table's PREROUTING chain — the first place a packet is looked at, before
+# conntrack, NAT and kube-router's chains (a DROP in INPUT saw 0 packets on the CI runner: the pod's API traffic never took that
+# path). Probes and `kubectl port-forward` come from the node / the kubelet, not from the pod's address, so they are not
+# affected. Added with every iptables front-end the node has (the one that doesn't work on its kernel just fails).
 IPT=$(docker exec "$NODE" sh -c 'for c in iptables iptables-legacy iptables-nft; do command -v $c > /dev/null 2>&1 && echo $c; done')
-cut_on()  { for c in $IPT; do docker exec "$NODE" $c -I INPUT 1 -s "$POD2_IP" -j DROP; done; }
-cut_off() { for c in $IPT; do docker exec "$NODE" $c -D INPUT -s "$POD2_IP" -j DROP > /dev/null 2>&1; done; }
+cut_on()  { local n=0; for c in $IPT; do docker exec "$NODE" $c -t raw -I PREROUTING 1 -s "$POD2_IP" -j DROP 2> /dev/null && n=$((n+1)); done; [ "$n" -gt 0 ]; }
+cut_off() { for c in $IPT; do docker exec "$NODE" $c -t raw -D PREROUTING -s "$POD2_IP" -j DROP > /dev/null 2>&1; done; }
 cut_on || { echo "could not add the iptables rule on $NODE"; exit 1; }
 trap 'cut_off; cleanup' EXIT
 cut_effective=no
@@ -133,7 +133,7 @@ for _ in $(seq 1 40); do
 done
 if [ "$cut_effective" = no ]; then
   echo "   --- diagnostics: the pod was not cut off ($NODE, pod $POD2_IP, front-ends: $(echo $IPT))"
-  for c in $IPT; do docker exec "$NODE" $c -L INPUT -v -n --line-numbers 2>&1 | head -8; done
+  for c in $IPT; do docker exec "$NODE" $c -t raw -L PREROUTING -v -n --line-numbers 2>&1 | head -8; done
   kubectl -n "$NS" logs "$POD2" --tail=15 2>&1
 fi
 check "the cut took effect (pod 2 reports it cannot read the sessions)" yes "$cut_effective"
