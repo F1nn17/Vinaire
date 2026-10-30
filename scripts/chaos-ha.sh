@@ -4,8 +4,8 @@
 # It installs the chart with two replicas into a scratch namespace of the cluster kubectl points at, then:
 #   1. a login on pod 1 is accepted by pod 2;
 #   2. pod 1 is deleted: the session still works on pod 2 and on the pod that replaces pod 1 — nobody signs in again;
-#   3. pod 2 is cut off from the Kubernetes API (an iptables rule on the k3d node drops what it sends to the API server's
-#      port, connections that already exist included): within SESSION_STALE_LIMIT it keeps working, past it every session is refused (fail closed);
+#   3. pod 2 is cut off from the Kubernetes API (an iptables rule on the k3d node drops what it sends to the node,
+#      connections that already exist included): within SESSION_STALE_LIMIT it keeps working, past it every session is refused (fail closed);
 #      a session revoked on pod 1 during the cut is NOT honoured by pod 2 once the limit has passed;
 #   4. the cut is lifted: pod 2 admits the surviving session again without a new login, the revoked one stays dead.
 #
@@ -116,15 +116,26 @@ say "3. pod 2 is cut off from the Kubernetes API"
 # node is a container named like the node. The drill does not go on until the pod itself says it can't read the sessions.
 NODE=$(kubectl -n "$NS" get pod "$POD2" -o jsonpath='{.spec.nodeName}')
 POD2_IP=$(kubectl -n "$NS" get pod "$POD2" -o jsonpath='{.status.podIP}')
-RULE=(-s "$POD2_IP" -p tcp --dport 6443 -j DROP)
-docker exec "$NODE" iptables -I INPUT 1 "${RULE[@]}" || { echo "could not add the iptables rule on $NODE"; exit 1; }
-trap 'docker exec "$NODE" iptables -D INPUT "${RULE[@]}" > /dev/null 2>&1; cleanup' EXIT
+# Everything the pod sends to the node itself is dropped (no protocol or port in the rule: the API server's address is a
+# DNAT of a ClusterIP, and a rule that names a port or one iptables backend has proved too easy to miss). Probes come from the
+# node, not from the pod's address, so they are not affected. Inserted with every iptables front-end the node has, because
+# the kernel runs the legacy and the nft hooks both.
+IPT=$(docker exec "$NODE" sh -c 'for c in iptables iptables-legacy iptables-nft; do command -v $c > /dev/null 2>&1 && echo $c; done')
+cut_on()  { for c in $IPT; do docker exec "$NODE" $c -I INPUT 1 -s "$POD2_IP" -j DROP; done; }
+cut_off() { for c in $IPT; do docker exec "$NODE" $c -D INPUT -s "$POD2_IP" -j DROP > /dev/null 2>&1; done; }
+cut_on || { echo "could not add the iptables rule on $NODE"; exit 1; }
+trap 'cut_off; cleanup' EXIT
 cut_effective=no
 for _ in $(seq 1 40); do
   me $P2 "$KEEP" > /dev/null
   if kubectl -n "$NS" logs "$POD2" 2>/dev/null | grep -q "couldn't read it"; then cut_effective=yes; break; fi
   sleep 2
 done
+if [ "$cut_effective" = no ]; then
+  echo "   --- diagnostics: the pod was not cut off ($NODE, pod $POD2_IP, front-ends: $(echo $IPT))"
+  for c in $IPT; do docker exec "$NODE" $c -L INPUT -v -n --line-numbers 2>&1 | head -8; done
+  kubectl -n "$NS" logs "$POD2" --tail=15 2>&1
+fi
 check "the cut took effect (pod 2 reports it cannot read the sessions)" yes "$cut_effective"
 cut=$SECONDS
 # the session is revoked on a healthy pod while pod 2 cannot see it
@@ -149,7 +160,7 @@ fi
 check "past the limit the cut pod refuses even the surviving session (fail closed)" 401 "$(me $P2 "$KEEP")"
 
 say "4. the cut is lifted"
-docker exec "$NODE" iptables -D INPUT "${RULE[@]}"
+cut_off
 t=$(until_code $P2 "$KEEP" 200 40)
 [ "$t" = timeout ] && bad "the surviving session did not come back on pod 2" || ok "the surviving session works on pod 2 again after ${t}s, without a new login"
 check "the revoked session stays refused on pod 2" 401 "$(me $P2 "$VICTIM")"
