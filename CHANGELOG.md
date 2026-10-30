@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-10-30
+
 ### Added
 - **A drill of the renewal of a Keycloak session with two real pods and a real Keycloak (Phase 113, `scripts/chaos-keycloak.sh`, a CI
   job).** A person signs in through Keycloak (the form is walked with curl), the credential comes due while one pod is cut off from
