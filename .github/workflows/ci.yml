@@ -358,6 +358,14 @@ jobs:
           bad --set cookie.sameSite=maybe
           bad --set authMode=oidc
           bad --set ingress.enabled=true --set 'ingress.hosts=null'
+          # a stale limit the backend refuses to start with (Roadmap Phase 114) must stop at Helm, not crash-loop the pods
+          bad --set sessions.store=secret --set-string sessions.staleLimit=5s
+          bad --set sessions.store=secret --set-string sessions.staleLimit=0s
+          bad --set sessions.store=secret --set-string sessions.staleLimit=1.5m
+          t() { helm template vinaire charts/vinaire -n vinaire "$@" > /dev/null; }
+          t --set sessions.store=secret --set-string sessions.staleLimit=10s
+          t --set sessions.store=secret --set-string sessions.staleLimit=1m
+          t --set sessions.store=secret --set-string sessions.staleLimit=0
 
   # Roadmap Phase 111: the failure drill of the shared sessions with TWO REAL Vinaire pods (scripts/chaos-ha.sh): a login on
   # one pod works on the other, a pod is deleted and nobody signs in again, a pod is cut off from the Kubernetes API (a

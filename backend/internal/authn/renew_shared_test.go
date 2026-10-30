@@ -29,11 +29,11 @@ func (f *fakeKV) Claim(_ context.Context, key, holder string, ttl time.Duration)
 		h, e, _ := strings.Cut(string(cur), "|")
 		var until int64
 		_, _ = fmt.Sscanf(e, "%d", &until)
-		if h != holder && time.Unix(until, 0).After(time.Now()) {
+		if h != holder && time.UnixMilli(until).After(time.Now()) {
 			return false, nil
 		}
 	}
-	f.data[key] = []byte(fmt.Sprintf("%s|%d", holder, time.Now().Add(ttl).Unix()))
+	f.data[key] = []byte(fmt.Sprintf("%s|%d", holder, time.Now().Add(ttl).UnixMilli()))
 	return true, nil
 }
 
@@ -300,5 +300,93 @@ func TestALongPartitionAfterTheProviderRotatedTheTokenEndsTheSessionAndNothingWo
 	}
 	if _, ok := r.a.Sessions.Get(r.id); ok {
 		t.Fatal("the ended session is still in the store")
+	}
+}
+
+// Roadmap Phase 114: the renewal lease must outlive the WORST renewal, the save of the rotated refresh token with its retries
+// included. Otherwise a replica whose save hangs is still working when its lease lapses, a second replica takes it and
+// presents the refresh token the provider has just rotated away.
+func TestTheRenewalLeaseOutlivesTheWorstRenewal(t *testing.T) {
+	if got := renewLeaseTTL(); got < 2*renewTimeout+renewSaveWorstCase() {
+		t.Fatalf("lease %s is shorter than the provider call, the credential call and a save that takes %s", got, renewSaveWorstCase())
+	}
+	// the retries themselves can never take longer than the budget says (the production values, not the shortened ones)
+	if renewSaveBackoffTotal() > renewSaveBudget {
+		t.Fatalf("the save backoffs add up to %s, more than the budget %s — the budget would cut them off", renewSaveBackoffTotal(), renewSaveBudget)
+	}
+}
+
+func renewSaveBackoffTotal() time.Duration {
+	var d time.Duration
+	for _, w := range renewSaveBackoff {
+		d += w
+	}
+	return d
+}
+
+func TestASaveThatHangsIsCutOffByTheBudgetAndNeverOutlivesTheLease(t *testing.T) {
+	defer func(a, b time.Duration, c []time.Duration) { renewSaveBudget, storeCallTimeout, renewSaveBackoff = a, b, c }(renewSaveBudget, storeCallTimeout, renewSaveBackoff)
+	renewSaveBudget, storeCallTimeout = 300*time.Millisecond, 100*time.Millisecond
+	renewSaveBackoff = []time.Duration{50 * time.Millisecond, 50 * time.Millisecond, 50 * time.Millisecond, 50 * time.Millisecond, 50 * time.Millisecond, 50 * time.Millisecond, 50 * time.Millisecond}
+	kv := newFakeKV()
+	kv.failPut, kv.hangPut = true, 100*time.Millisecond
+	m := newTokenManager(t)
+	m.UseStore(NewSharedStore(kv, fakeSealer{}))
+	s := &Session{ID: NewSessionID(), K8sToken: "t", Username: "u", ExpiresAt: time.Now().Add(time.Hour)}
+	m.Sessions.(*SharedStore).snap[storeKey(s.ID)] = s
+	start := time.Now()
+	if err := m.saveRenewed(s); !errors.Is(err, ErrStoreUnavailable) {
+		t.Fatalf("saveRenewed: %v", err)
+	}
+	if took := time.Since(start); took > renewSaveWorstCase() {
+		t.Fatalf("the save took %s, longer than its stated worst case %s", took, renewSaveWorstCase())
+	}
+	if kv.putCalls >= 7 {
+		t.Fatalf("%d attempts: the budget did not cut the retries off", kv.putCalls)
+	}
+}
+
+func TestAReplicaCannotTakeTheLeaseWhileTheOtherIsStillTryingToSaveTheRotatedToken(t *testing.T) {
+	defer func(a, b, c, d, e, f time.Duration, g []time.Duration) {
+		renewSaveBudget, storeCallTimeout, renewTimeout, renewLeaseMargin, renewWait, renewWaitStep, renewSaveBackoff = a, b, c, d, e, f, g
+	}(renewSaveBudget, storeCallTimeout, renewTimeout, renewLeaseMargin, renewWait, renewWaitStep, renewSaveBackoff)
+	renewSaveBudget, storeCallTimeout, renewTimeout, renewLeaseMargin = 600*time.Millisecond, 100*time.Millisecond, 100*time.Millisecond, 0
+	renewWait, renewWaitStep = 40*time.Millisecond, 10*time.Millisecond
+	renewSaveBackoff = []time.Duration{50 * time.Millisecond, 50 * time.Millisecond, 50 * time.Millisecond, 50 * time.Millisecond, 50 * time.Millisecond}
+	r := newReplicas(t)
+	r.due(t)
+	r.kv.mu.Lock()
+	r.kv.failPut, r.kv.hangPut = true, 100*time.Millisecond // A's saves hang, then fail; everything else works
+	r.kv.mu.Unlock()
+	done := make(chan struct{})
+	go func() { defer close(done); r.a.Authenticate(r.request()) }()
+	// B starts only once A holds the lease (otherwise B could win the race and the roles would be swapped)
+	for i := 0; ; i++ {
+		r.kv.mu.Lock()
+		_, held := r.kv.data[leaseKey(r.id)]
+		r.kv.mu.Unlock()
+		if held {
+			break
+		}
+		if i > 500 {
+			t.Fatal("A never took the lease")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	// B asks again and again while A is still trying to save: it must neither take the lease nor touch the refresh token
+	deadline := time.After(5 * time.Second)
+	for running := true; running; {
+		select {
+		case <-done:
+			running = false
+		case <-deadline:
+			t.Fatal("A's renewal never finished")
+		default:
+			r.b.Authenticate(r.request())
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	if got := r.ctl.refreshCalls.Load(); got != 1 {
+		t.Fatalf("the provider was asked %d times: a second replica presented the refresh token the first had just rotated", got)
 	}
 }
